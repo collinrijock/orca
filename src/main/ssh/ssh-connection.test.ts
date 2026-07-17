@@ -1264,7 +1264,7 @@ describe('SshConnection', () => {
 
     try {
       const connect = expect(conn.connect()).rejects.toThrow(
-        'System SSH connection timed out (sentinel=true, stdoutEnded=true, processExit=0, channelClosed=false)'
+        'System SSH connection timed out (launchMode=unknown, sentinel=true, stdoutEnded=true, processExit=0, channelClosed=false)'
       )
       await vi.advanceTimersByTimeAsync(0)
       channel.emit('data', Buffer.from('ORCA-SYSTEM-SSH-OK\r\n'))

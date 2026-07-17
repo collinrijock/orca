@@ -10,14 +10,15 @@ A checked box means the work has evidence in the detailed ledger. Design approva
 complete a box.
 
 Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — explicit Windows
-no-input launcher-path adapter locally green, exact-head native rerun next, 2026-07-17, Codex implementation owner.** Exact head
-`a6feb8c3be0e15ae45fc6b431c1665e5fd84d2c9`, run `29554814775`, and Windows x64/ARM64 jobs
-`87804630533`/`87804630504` prove the strict-trust diagnostic naturally completes through the
-private-console launcher while the unchanged direct-spawn product probe still hangs after remote
-session close. The candidate is constructor-injected only into the native full-size purpose test;
-`E-M6-WINDOWS-NOINPUT-LAUNCHER-ADAPTER-LOCAL-001` records syntax, 124 focused cases, 285 release
-contracts, typecheck, lint/reliability/max-lines, formatting, diff, and protected-resolver isolation
-green. Exact-head native x64/ARM64 full-size and teardown gates remain before any product/default caller.
+no-input launcher adapter native selection diagnostic next, 2026-07-17, Codex implementation owner.**
+Exact head `42098d1b1393a97c03fec6e7b685859f8296b90d`, run `29555939964`, and Windows x64/ARM64 jobs
+`87807875088`/`87807875112` pass every artifact/launcher/cache gate and the standalone strict-trust
+launcher in 944.6233/852.6974 ms. The injected `SshConnection` probe still times out in
+32211/32140 ms with no lifecycle events before transfer; both teardowns retain locked
+`UsrClass.dat`. `E-M6-WINDOWS-NOINPUT-ARGUMENT-MATRIX-LOCAL-001` records non-secret launch-mode
+telemetry plus a bounded production/strict/verbose argument matrix locally green with 124 focused
+cases, 285 release contracts, typecheck, lint/reliability/max-lines, diff, and resolver isolation.
+Commit/push this diagnostic next; no adapter change or product/default caller is authorized yet.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the portable-fixture
 correction locally green: the no-Orca-publication workflow oracle permits the one exact pinned
 Microsoft fixture release URL while Orca release URLs, `gh release`, and `contents: write` remain

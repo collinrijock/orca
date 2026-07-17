@@ -8,7 +8,11 @@ import type { SshTarget } from '../../shared/ssh-types'
 import { buildSshArgs } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
 
-type DiagnosticMode = 'private-console-regular-output-verbose-timeout'
+type DiagnosticMode =
+  | 'private-console-regular-output-production-args'
+  | 'private-console-regular-output-strict-trust'
+  | 'private-console-regular-output-verbose'
+  | 'private-console-regular-output-verbose-strict-trust'
 
 type DiagnosticResult = {
   mode: DiagnosticMode
@@ -48,36 +52,33 @@ function createTarget(): SshTarget {
   }
 }
 
-function buildDiagnosticSshArgs(target: SshTarget, knownHostsPath: string): string[] {
+function buildDiagnosticSshArgs(
+  target: SshTarget,
+  knownHostsPath: string,
+  options: { strictTrust: boolean; verbose: boolean } = { strictTrust: true, verbose: true }
+): string[] {
   const sshArgs = buildSshArgs(target)
   const destinationSeparator = sshArgs.indexOf('--')
   if (destinationSeparator < 0) {
     throw new Error('Windows OpenSSH diagnostic arguments lost the destination separator')
   }
   // Why: Win32-OpenSSH ignores overridden profile variables; use only the fixture's pinned trust.
-  sshArgs.splice(
-    destinationSeparator,
-    0,
-    '-vvv',
-    '-o',
-    'StrictHostKeyChecking=yes',
-    '-o',
-    `UserKnownHostsFile=${knownHostsPath}`
-  )
+  const diagnosticArgs = [
+    ...(options.verbose ? ['-vvv'] : []),
+    ...(options.strictTrust
+      ? ['-o', 'StrictHostKeyChecking=yes', '-o', `UserKnownHostsFile=${knownHostsPath}`]
+      : [])
+  ]
+  sshArgs.splice(destinationSeparator, 0, ...diagnosticArgs)
   return sshArgs
 }
 
-async function runDiagnostic(): Promise<DiagnosticResult> {
+async function runDiagnostic(mode: DiagnosticMode, sshArgs: string[]): Promise<DiagnosticResult> {
   const sshPath = findSystemSsh()
   if (!sshPath) {
     throw new Error('Native Windows OpenSSH client is unavailable')
   }
-  const mode: DiagnosticMode = 'private-console-regular-output-verbose-timeout'
   const startedAt = performance.now()
-  const sshArgs = buildDiagnosticSshArgs(
-    createTarget(),
-    join(clientHome as string, '.ssh', 'known_hosts')
-  )
   const child = spawn(
     launcherPath as string,
     ['--diagnostic-timeout-ms', '6000', sshPath, ...sshArgs, 'echo ORCA-SYSTEM-SSH-OK'],
@@ -204,16 +205,38 @@ describe('Windows OpenSSH no-input diagnostic trust arguments', () => {
 
 describe.skipIf(!hasLiveInput)('Windows OpenSSH no-input child-handle diagnostic', () => {
   it(
-    'captures the verbose client phase after a bounded private-console diagnostic timeout',
-    { timeout: 15_000 },
+    'isolates production, strict-trust, and verbose launcher argument effects',
+    { timeout: 40_000 },
     async () => {
       expect(process.platform).toBe('win32')
-      const privateConsoleRegularOutputVerboseTimeout = await runDiagnostic()
+      const target = createTarget()
+      const knownHostsPath = join(clientHome as string, '.ssh', 'known_hosts')
+      const production = await runDiagnostic(
+        'private-console-regular-output-production-args',
+        buildSshArgs(target)
+      )
+      const strictTrust = await runDiagnostic(
+        'private-console-regular-output-strict-trust',
+        buildDiagnosticSshArgs(target, knownHostsPath, { strictTrust: true, verbose: false })
+      )
+      const verbose = await runDiagnostic(
+        'private-console-regular-output-verbose',
+        buildDiagnosticSshArgs(target, knownHostsPath, { strictTrust: false, verbose: true })
+      )
+      const verboseStrictTrust = await runDiagnostic(
+        'private-console-regular-output-verbose-strict-trust',
+        buildDiagnosticSshArgs(target, knownHostsPath)
+      )
       console.log(
-        `ssh_windows_no_input_handle_diagnostic=${JSON.stringify({ privateConsoleRegularOutputVerboseTimeout })}`
+        `ssh_windows_no_input_argument_matrix=${JSON.stringify({ production, strictTrust, verbose, verboseStrictTrust })}`
       )
 
-      expect(privateConsoleRegularOutputVerboseTimeout.success).toBe(true)
+      expect({
+        production: production.success,
+        strictTrust: strictTrust.success,
+        verbose: verbose.success,
+        verboseStrictTrust: verboseStrictTrust.success
+      }).toEqual({ production: true, strictTrust: true, verbose: true, verboseStrictTrust: true })
     }
   )
 })

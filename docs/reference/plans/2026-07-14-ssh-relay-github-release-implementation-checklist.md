@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-17<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — explicit Windows no-input launcher-path adapter exact-head native qualification, 2026-07-17, Codex implementation owner**. Exact head `a6feb8c3be0e15ae45fc6b431c1665e5fd84d2c9`, run `29554814775`, and x64/ARM64 jobs `87804630533`/`87804630504` prove strict pinned trust, public-key authentication, command execution, and natural launcher settlement on both architectures. `E-M6-WINDOWS-NOINPUT-LAUNCHER-ADAPTER-LOCAL-001` records the adapter package locally green behind constructor injection for the no-input probe only. Commit/push and exact-head x64/ARM64 full-size transfer and teardown proof remain required. Keep the path absent from every product/default caller and keep legacy as the sole production path. Real Apple/SignPath rehearsals remain deferred.<br>
-Session checkpoint: **ADAPTER LOCAL GREEN / NATIVE RERUN NEXT — 2026-07-17, Codex implementation owner** — the candidate preserves direct spawn when no path is supplied, ignores the Windows-only path on POSIX, does not infer it from the runner environment, and injects it only from the native full-size purpose test. Syntax, 124 focused cases with ten declared native/live skips, 285 release contracts with eight declared Windows skips, typecheck, full lint/reliability/max-lines, formatting, diff, and protected-resolver isolation pass. No product caller, full-size Windows transfer claim, upload, default/fallback, Beta, tuple publication, or signing behavior changed.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — Windows launcher adapter argument-matrix native qualification, 2026-07-17, Codex implementation owner**. Exact head `42098d1b1393a97c03fec6e7b685859f8296b90d`, run `29555939964`, and x64/ARM64 jobs `87807875088`/`87807875112` preserve every artifact/launcher/cache gate and independently prove the standalone strict-trust launcher, but the injected `SshConnection` probe still times out with no lifecycle events before any full-size transfer. `E-M6-WINDOWS-NOINPUT-ARGUMENT-MATRIX-LOCAL-001` adds non-secret launch-mode telemetry and a bounded four-vector native comparison without changing behavior. Commit/push only that diagnostic. Keep the path absent from every product/default caller and keep legacy as the sole production path. Real Apple/SignPath rehearsals remain deferred.<br>
+Session checkpoint: **ADAPTER NATIVE RED / ARGUMENT MATRIX LOCAL GREEN — 2026-07-17, Codex implementation owner** — the next diagnostic compares production args, strict trust only, verbosity only, and strict plus verbose under the same launcher deadline, while timeout errors report only `direct`, `windows-no-input-launcher`, or `unknown`. Syntax, 124 focused cases with ten declared skips, 285 release contracts with eight declared skips, typecheck, lint/reliability/max-lines, formatting, diff, and protected-resolver isolation pass. The prior x64/ARM64 full-size and teardown gates remain red; no launch behavior, product caller, upload, default/fallback, Beta, tuple publication, or signing behavior changed.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -20116,6 +20116,85 @@ lint` passes in 18.59 seconds real with the 26 existing warnings, all 41 reliabi
   cancellation settlement, connection reuse, and exact profile/directory teardown. Do not check
   the broad Milestone 6 Windows cell or add any product/default caller until both jobs pass.
 
+### E-M6-WINDOWS-NOINPUT-LAUNCHER-ADAPTER-CI-RED-001 — injected connection probe still does not settle
+
+- Date/owner/source/run: 2026-07-17, Codex implementation owner; exact head
+  `42098d1b1393a97c03fec6e7b685859f8296b90d`, artifact run
+  [29555939964](https://github.com/stablyai/orca/actions/runs/29555939964), Windows x64 job
+  [87807875088](https://github.com/stablyai/orca/actions/runs/29555939964/job/87807875088) on
+  `windows-2022`, and native ARM64 job
+  [87807875112](https://github.com/stablyai/orca/actions/runs/29555939964/job/87807875112) on
+  `windows-11-arm64`; both use Node 24.18.0.
+- Preserved gates: both Windows jobs pass 101 artifact files, 863 runnable cases, and 19 declared
+  skips, including legacy .NET compilation, every launcher argv/EOF/binary/overflow/cleanup/
+  cancellation contract, exact clean-build identity, runtime smoke, and both full-size cache gates.
+  Darwin x64/ARM64 jobs `87807875081`/`87807875114`, Linux x64/ARM64 jobs
+  `87807875099`/`87807875105`, and Linux oldest-userland supplements
+  `87808435117`/`87808435146` pass at the same exact head.
+- Standalone launcher control: x64 completes in 944.6233 ms and ARM64 in 852.6974 ms. Both report
+  `success=true`, `timedOut=false`, `sentinel=true`, `stdoutEnded=true`, `processExit=0`,
+  `channelClosed=true`, `closeCode=0`, and `stderrBytes=11090`; their verbose traces prove exact
+  pinned host trust, public-key authentication, command completion, output drain, and natural
+  OpenSSH exit.
+- Injected connection RED: the immediately following full-size purpose test supplies the same
+  runner-built launcher path through the new `SshConnection` constructor. X64 still times out in
+  32,211 ms and ARM64 in 32,140 ms before transfer with `sentinel=false`, `stdoutEnded=false`,
+  `processExit=not-observed`, and `channelClosed=false`. Both server logs prove the separate attempt
+  authenticates, starts its command session, closes that remote session, and then loses the client
+  connection. No serial/concurrent/collision/cancellation/reuse metrics run.
+- Teardown/residual: both fixture teardowns fail visibly after bounded retries because unloading the
+  owned SID's `_Classes` hive returns exit 1 and `UsrClass.dat` remains locked. This remains a
+  separate teardown gate and is not hidden by the probe failure.
+- Classification/next boundary: unit and source contracts prove intended option propagation, but
+  this native result does not prove that the spawned full-size probe actually selected the launcher
+  or explain why its argv differs from the standalone control. Add only non-secret launch-mode
+  telemetry plus a bounded standalone comparison of the production and strict/verbose argument
+  vectors. Do not change handles, enable fallback, package the launcher, add a product/default
+  caller, or claim the broad Windows cell until the exact difference is selected on both
+  architectures.
+
+### E-M6-WINDOWS-NOINPUT-ARGUMENT-MATRIX-LOCAL-001 — bounded launch-mode and argv diagnostics are locally green
+
+- Date/owner/base/runner: 2026-07-17, Codex implementation owner; uncommitted diagnostic atop exact
+  red head `42098d1b1393a97c03fec6e7b685859f8296b90d` on Apple arm64, macOS 26.2 build 25C56, Node
+  26.5.0, and pnpm 10.24.0. The repository requests Node 24; native jobs remain authoritative.
+- Boundary: each wrapped system-SSH command now carries only a non-secret
+  `direct`/`windows-no-input-launcher` launch-mode label. Probe timeouts include that label beside
+  the existing sentinel/stdout/process/channel booleans; no path or argv content is logged. The
+  native purpose diagnostic runs four sequential launcher children with the same 6,000 ms internal
+  deadline: exact production args, strict fixture trust only, verbosity only, and strict trust plus
+  verbosity. Each child retains the same private-console/bounded-output handles, pinned target,
+  command, identity, and external settlement bounds. The matrix deliberately expects every vector
+  to settle so a native failure selects the exact differing vector without hiding RED.
+- Behavior isolation: the launcher selection, handles, OpenSSH `-n` policy, connection timeout,
+  transfer code, fixture, production/default callers, Beta mode, fallback, tuple, publication, and
+  signing remain unchanged. Unit contracts prove explicit Windows injection reports
+  `windows-no-input-launcher`, while POSIX ignores the supplied Windows path and reports `direct`.
+- Syntax/focused evidence: both launcher scripts pass `node --check`. `/usr/bin/time -l pnpm exec
+  vitest run --config config/vitest.config.ts --maxWorkers=1
+  src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
+  src/main/ssh/system-ssh-command-launcher.test.ts
+  src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
+  src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+  config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
+  config/scripts/ssh-relay-runtime-workflow.test.mjs` passes six files with one skipped, 124
+  runnable cases, and ten declared native/live skips in 18.18 seconds real; maximum RSS is
+  139,968,512 bytes and peak footprint is 97,785,640 bytes.
+- Release/static evidence: the exact unquoted release-contract command passes 51 files and 285
+  runnable cases with eight declared Windows skips in 383.15 seconds real; maximum RSS is
+  189,906,944 bytes and peak footprint is 97,523,424 bytes. The machine was under sustained load,
+  so this timing is retained as observed evidence rather than a performance baseline. `/usr/bin/time
+  -l pnpm typecheck` passes in 110.83 seconds real with 1,795,964,928-byte maximum RSS and
+  98,195,288-byte peak footprint. `/usr/bin/time -l pnpm lint` passes in 199.22 seconds real with
+  the same 26 existing warnings, all 41 reliability gates, and the 355-entry max-lines ratchet;
+  maximum RSS is 2,102,296,576 bytes and peak footprint is 97,589,080 bytes.
+- Formatting/isolation: `pnpm exec oxfmt --write` passes for every modified TypeScript file;
+  `git diff --check` and exact protected-resolver comparison pass. No Milestone 0 resolver byte
+  changed.
+- Residual gate: local Darwin skips do not classify the native argument matrix or prove launch-mode
+  selection in the failing connection probe. Commit/push this diagnostic and require exact-head
+  x64/ARM64 matrix plus timeout-label evidence before any behavior correction.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -20174,11 +20253,11 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push only the explicit Windows no-input launcher-path adapter recorded by
-`E-M6-WINDOWS-NOINPUT-LAUNCHER-ADAPTER-LOCAL-001`, then require exact-head Windows x64/ARM64
-launcher-backed probe, full-size transfer, cancellation, concurrency, connection
-reuse, and exact profile/directory teardown evidence. Do not check the broad Milestone 6 Windows
-system-SSH item or add an
+Commit and push only the launch-mode and bounded argument-matrix diagnostic recorded by
+`E-M6-WINDOWS-NOINPUT-ARGUMENT-MATRIX-LOCAL-001`, then require exact-head Windows x64/ARM64 evidence
+before changing the adapter. The full-size transfer, cancellation, concurrency,
+connection reuse, and exact profile/directory teardown gates remain open. Do not check the broad
+Milestone 6 Windows system-SSH item or add an
 Electron/startup/product importer, per-target mode wiring, fallback, tuple
 enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets

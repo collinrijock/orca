@@ -14,6 +14,7 @@ import {
   writeBufferViaSystemSsh,
   writeFileViaSystemSsh,
   type SystemSshBuildArgsOptions,
+  type SystemSshCommandChannel,
   type SystemSshCommandOptions,
   type SystemSshProcess
 } from './ssh-system-fallback'
@@ -774,9 +775,11 @@ export class SshConnection {
             channel.close()
             // Why: native Windows can separate process exit from inherited
             // stdio closure; these booleans diagnose that boundary safely.
+            const launchMode =
+              (channel as SystemSshCommandChannel)._systemSshLaunchMode ?? 'unknown'
             reject(
               new Error(
-                `System SSH connection timed out (sentinel=${sentinelObserved}, stdoutEnded=${stdoutEnded}, processExit=${processExit}, channelClosed=false)`
+                `System SSH connection timed out (launchMode=${launchMode}, sentinel=${sentinelObserved}, stdoutEnded=${stdoutEnded}, processExit=${processExit}, channelClosed=false)`
               )
             )
           })

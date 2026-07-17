@@ -17,7 +17,10 @@ export type SystemSshProcess = {
 
 export type SystemSshCommandChannel = ClientChannel & {
   _process?: ChildProcess
+  _systemSshLaunchMode?: SystemSshCommandLaunchMode
 }
+
+export type SystemSshCommandLaunchMode = 'direct' | 'windows-no-input-launcher'
 
 export type SystemSshCommandOptions = SshExecOptions &
   SystemSshBuildArgsOptions & {
@@ -87,7 +90,11 @@ export function spawnSystemSshCommand(
   if (noInput && process.platform === 'win32' && !windowsNoInputLauncherPath) {
     proc.stdin?.destroy()
   }
-  return wrapCommandProcess(proc, !noInput)
+  return wrapCommandProcess(
+    proc,
+    !noInput,
+    windowsNoInputLauncherPath ? 'windows-no-input-launcher' : 'direct'
+  )
 }
 
 function wrapChildProcess(proc: ChildProcess): SystemSshProcess {
@@ -109,7 +116,11 @@ function wrapChildProcess(proc: ChildProcess): SystemSshProcess {
   }
 }
 
-function wrapCommandProcess(proc: ChildProcess, acceptsInput: boolean): SystemSshCommandChannel {
+function wrapCommandProcess(
+  proc: ChildProcess,
+  acceptsInput: boolean,
+  launchMode: SystemSshCommandLaunchMode
+): SystemSshCommandChannel {
   const duplex = new Duplex({
     read() {
       proc.stdout?.resume()
@@ -128,6 +139,7 @@ function wrapCommandProcess(proc: ChildProcess, acceptsInput: boolean): SystemSs
     stdin: NodeJS.WritableStream
     stderr: NodeJS.ReadableStream
     _process?: ChildProcess
+    _systemSshLaunchMode?: SystemSshCommandLaunchMode
     close: () => void
   }
   mutableChannel.stdin =
@@ -141,6 +153,7 @@ function wrapCommandProcess(proc: ChildProcess, acceptsInput: boolean): SystemSs
     })
   mutableChannel.stderr = proc.stderr!
   mutableChannel._process = proc
+  mutableChannel._systemSshLaunchMode = launchMode
   mutableChannel.close = () => {
     try {
       proc.kill('SIGTERM')

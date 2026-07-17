@@ -7,6 +7,8 @@ export {
 export {
   spawnSystemSsh,
   spawnSystemSshCommand,
+  type SystemSshCommandChannel,
+  type SystemSshCommandLaunchMode,
   type SystemSshCommandOptions,
   type SystemSshProcess
 } from './system-ssh-command'

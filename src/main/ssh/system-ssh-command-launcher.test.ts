@@ -63,8 +63,9 @@ describe('system SSH Windows no-input launcher selection', () => {
     const windowsSshPath = 'C:\\Windows\\System32\\OpenSSH\\ssh.exe'
     const previousSystemSshPath = process.env.ORCA_SYSTEM_SSH_PATH
     process.env.ORCA_SYSTEM_SSH_PATH = windowsSshPath
+    let channel: ReturnType<typeof spawnSystemSshCommand>
     try {
-      spawnSystemSshCommand(createTarget(), 'echo ready', {
+      channel = spawnSystemSshCommand(createTarget(), 'echo ready', {
         noInput: true,
         windowsNoInputLauncherPath: launcherPath
       })
@@ -89,12 +90,14 @@ describe('system SSH Windows no-input launcher selection', () => {
       expect.objectContaining({ stdio: ['ignore', 'pipe', 'pipe'] })
     )
     expect(args).not.toContain('-n')
+    expect(channel._systemSshLaunchMode).toBe('windows-no-input-launcher')
   })
 
   it('ignores a supplied launcher on POSIX and preserves OpenSSH no-input handling', () => {
     const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    let channel: ReturnType<typeof spawnSystemSshCommand>
     try {
-      spawnSystemSshCommand(createTarget(), 'echo ready', {
+      channel = spawnSystemSshCommand(createTarget(), 'echo ready', {
         noInput: true,
         windowsNoInputLauncherPath: '/tmp/not-a-posix-launcher'
       })
@@ -107,5 +110,6 @@ describe('system SSH Windows no-input launcher selection', () => {
       expect.arrayContaining(['-n', '--', 'deploy@example.com']),
       expect.objectContaining({ stdio: ['ignore', 'pipe', 'pipe'] })
     )
+    expect(channel._systemSshLaunchMode).toBe('direct')
   })
 })
