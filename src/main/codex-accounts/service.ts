@@ -16,6 +16,9 @@ import type {
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import { writeFileAtomically } from './fs-utils'
 import { rewriteRelativePathConfigValues } from '../codex/codex-config-path-reference-rewrite'
+import { stripCodexManagedHookTrustEntriesFromConfig } from '../codex/codex-managed-trust-reconciliation'
+import { getCodexManagedHookInstallMaterial } from '../codex/hook-service'
+import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../agent-hooks/installer-utils'
 import { resolveCodexCommand } from '../codex-cli/command'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
@@ -58,6 +61,7 @@ type CanonicalCodexConfig = {
   /** Home the config was read from, in the path style Codex sees at runtime
    *  (Linux-side for WSL); relative path-valued settings resolve against it. */
   sourceHomePath: string
+  sourceHooksPath: string
 }
 
 export type CodexAccountAddTarget = {
@@ -468,9 +472,18 @@ export class CodexAccountService {
     // account while preserving consistent Codex behavior. Managed homes are
     // real CODEX_HOMEs for `codex login`, so relative path-valued settings
     // must keep resolving against the home the config was read from.
+    const material = getCodexManagedHookInstallMaterial()
+    // Why: source-home Orca trust is foreign to each managed home's hooks.json.
+    const sanitizedConfig = stripCodexManagedHookTrustEntriesFromConfig(canonicalConfig.contents, {
+      runtimeHomePath: canonicalConfig.sourceHomePath,
+      sourcePath: canonicalConfig.sourceHooksPath,
+      command: material.command,
+      managedEventLabels: new Set(Object.values(material.eventLabel)),
+      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+    })
     this.writeManagedConfig(
       trustedManagedHomePath,
-      rewriteRelativePathConfigValues(canonicalConfig.contents, canonicalConfig.sourceHomePath)
+      rewriteRelativePathConfigValues(sanitizedConfig, canonicalConfig.sourceHomePath)
     )
   }
 
@@ -482,7 +495,11 @@ export class CodexAccountService {
     }
 
     try {
-      return { contents: readFileSync(primaryConfigPath, 'utf-8'), sourceHomePath }
+      return {
+        contents: readFileSync(primaryConfigPath, 'utf-8'),
+        sourceHomePath,
+        sourceHooksPath: join(sourceHomePath, 'hooks.json')
+      }
     } catch (error) {
       console.warn('[codex-accounts] Failed to read canonical config:', error)
       return null
@@ -509,7 +526,11 @@ export class CodexAccountService {
     try {
       // Why: the config is read over UNC but consumed by Codex inside WSL, so
       // path rewrites must anchor to the Linux-side ~/.codex, not the UNC path.
-      return { contents: readFileSync(configPath, 'utf-8'), sourceHomePath: `${wslHome}/.codex` }
+      return {
+        contents: readFileSync(configPath, 'utf-8'),
+        sourceHomePath: `${wslHome}/.codex`,
+        sourceHooksPath: `${wslHome}/.codex/hooks.json`
+      }
     } catch (error) {
       console.warn('[codex-accounts] Failed to read WSL canonical config:', error)
       return null

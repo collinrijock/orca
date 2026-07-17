@@ -876,14 +876,18 @@ export function removeHookTrustEntries(configPath: string, keys: readonly string
     return
   }
   const existing = readTomlFile(configPath)
-  let updated = existing
-  for (const key of keys) {
-    updated = removeTrustBlock(updated, key)
-  }
+  const updated = removeHookTrustEntriesFromContent(existing, keys)
   if (updated === existing) {
     return
   }
   writeConfigAtomically(configPath, updated)
+}
+
+export function removeHookTrustEntriesFromContent(
+  content: string,
+  keys: readonly string[]
+): string {
+  return keys.reduce((updated, key) => removeTrustBlock(updated, key), content)
 }
 
 function removeTrustBlock(content: string, key: string): string {
@@ -902,11 +906,14 @@ function removeTrustBlock(content: string, key: string): string {
 }
 
 export function readHookTrustEntries(configPath: string): Map<string, CodexHookTrustState> {
-  const result = new HookTrustEntryMap()
   if (!existsSync(configPath)) {
-    return result
+    return new HookTrustEntryMap()
   }
-  const content = readTomlFile(configPath)
+  return readHookTrustEntriesFromContent(readTomlFile(configPath))
+}
+
+export function readHookTrustEntriesFromContent(content: string): Map<string, CodexHookTrustState> {
+  const result = new HookTrustEntryMap()
   // Why: walk line-by-line so `[hooks.state."..."]` inside a `"""..."""` or
   // `'''...'''` multi-line string isn't mistaken for a real header.
   let cursor = 0
