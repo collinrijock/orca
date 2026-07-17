@@ -8,9 +8,16 @@ import { RIGHT_SIDEBAR_EDGE_PEEK_TIP_VISIBLE_MS } from './right-sidebar-edge-pee
 
 const initialAppState = useAppStore.getInitialState()
 
+function clearToggleAnchors(): void {
+  for (const el of document.querySelectorAll('[data-right-sidebar-toggle]')) {
+    el.remove()
+  }
+}
+
 beforeEach(() => {
   vi.useFakeTimers()
   cleanup()
+  clearToggleAnchors()
   useAppStore.setState({
     ...initialAppState,
     rightSidebarOpen: true,
@@ -25,12 +32,33 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  clearToggleAnchors()
   vi.useRealTimers()
   useAppStore.setState(initialAppState, true)
 })
 
+function mountToggleAnchor(): void {
+  clearToggleAnchors()
+  const btn = document.createElement('button')
+  btn.setAttribute('data-right-sidebar-toggle', '')
+  btn.getBoundingClientRect = () =>
+    ({
+      top: 8,
+      left: 1600,
+      width: 32,
+      height: 24,
+      bottom: 32,
+      right: 1632,
+      x: 1600,
+      y: 8,
+      toJSON: () => ({})
+    }) as DOMRect
+  document.body.appendChild(btn)
+}
+
 describe('RightSidebarEdgePeekTipHost', () => {
-  it('shows a brief edge tip on the first open→closed transition', () => {
+  it('shows a brief tip under the toggle on the first open→closed transition', () => {
+    mountToggleAnchor()
     const { rerender } = render(<RightSidebarEdgePeekTipHost />)
     expect(screen.queryByTestId('right-sidebar-edge-peek-tip')).toBeNull()
 
@@ -39,12 +67,13 @@ describe('RightSidebarEdgePeekTipHost', () => {
     })
     rerender(<RightSidebarEdgePeekTipHost />)
 
-    expect(screen.getByTestId('right-sidebar-edge-peek-tip').textContent).toContain(
-      'Hover the right edge to peek'
-    )
+    const tip = screen.getByTestId('right-sidebar-edge-peek-tip')
+    expect(tip.textContent).toContain('Hover the right edge to peek')
+    expect(tip.textContent).toContain('Turn this off in Settings')
   })
 
   it('auto-hides after the visible duration and marks the tip dismissed', () => {
+    mountToggleAnchor()
     const updateSettings = vi.fn().mockResolvedValue(undefined)
     useAppStore.setState({ updateSettings })
     const { rerender } = render(<RightSidebarEdgePeekTipHost />)
@@ -64,12 +93,24 @@ describe('RightSidebarEdgePeekTipHost', () => {
   })
 
   it('does not show when the tip was already dismissed', () => {
+    mountToggleAnchor()
     useAppStore.setState({
       settings: {
         rightSidebarEdgePeekEnabled: true,
         rightSidebarEdgePeekTipDismissed: true
       } as never
     })
+    const { rerender } = render(<RightSidebarEdgePeekTipHost />)
+
+    act(() => {
+      useAppStore.setState({ rightSidebarOpen: false })
+    })
+    rerender(<RightSidebarEdgePeekTipHost />)
+
+    expect(screen.queryByTestId('right-sidebar-edge-peek-tip')).toBeNull()
+  })
+
+  it('does not show without a measurable toggle anchor', () => {
     const { rerender } = render(<RightSidebarEdgePeekTipHost />)
 
     act(() => {

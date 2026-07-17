@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type JSX } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type JSX } from 'react'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import {
@@ -8,8 +8,24 @@ import {
 } from './right-sidebar-edge-peek-tip'
 import { isRightSidebarEdgePeekEnabled } from './right-sidebar-edge-peek-preference'
 
+const TOGGLE_SELECTOR = '[data-right-sidebar-toggle]'
+
+type AnchorRect = { top: number; left: number; width: number; height: number }
+
+function measureToggleAnchor(): AnchorRect | null {
+  const el = document.querySelector(TOGGLE_SELECTOR)
+  if (!(el instanceof HTMLElement)) {
+    return null
+  }
+  const rect = el.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0) {
+    return null
+  }
+  return { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
+}
+
 /**
- * One-shot tip: a quiet tooltip-style chip on the right edge after the first
+ * One-shot tip anchored under the right-sidebar titlebar toggle after the first
  * close while peek is enabled. Auto-hides after ~1s. Successful peeks also mark
  * the tip seen.
  */
@@ -19,6 +35,7 @@ export function RightSidebarEdgePeekTipHost(): JSX.Element | null {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const [visible, setVisible] = useState(false)
+  const [anchor, setAnchor] = useState<AnchorRect | null>(null)
   // Why: only fire on a true open→closed transition, not on first mount when
   // the sidebar happens to start closed (no prior close gesture to teach from).
   const prevOpenRef = useRef(rightSidebarOpen)
@@ -79,8 +96,40 @@ export function RightSidebarEdgePeekTipHost(): JSX.Element | null {
     }
   }, [settings, visible])
 
-  if (!visible) {
+  // Why: measure after paint so the closed-state titlebar toggle has laid out;
+  // re-measure on resize while the tip is up so a window drag doesn't leave it
+  // floating off the icon.
+  useLayoutEffect(() => {
+    if (!visible) {
+      setAnchor(null)
+      return
+    }
+    const update = (): void => {
+      setAnchor(measureToggleAnchor())
+    }
+    update()
+    // Titlebar toggle mounts in the same close transition; retry once if the
+    // first paint still has the open-sidebar control (which unmounts).
+    const retry = window.setTimeout(update, 0)
+    window.addEventListener('resize', update)
+    return () => {
+      window.clearTimeout(retry)
+      window.removeEventListener('resize', update)
+    }
+  }, [visible, rightSidebarOpen])
+
+  if (!visible || !anchor) {
     return null
+  }
+
+  // Why: hang left from the toggle so a near-edge titlebar icon doesn't clip
+  // the tip off-screen; caret sits under the icon center.
+  const caretOffsetPx = 14
+  const style: CSSProperties = {
+    position: 'fixed',
+    top: anchor.top + anchor.height + 8,
+    left: anchor.left + anchor.width / 2 + caretOffsetPx,
+    transform: 'translateX(-100%)'
   }
 
   return (
@@ -88,19 +137,27 @@ export function RightSidebarEdgePeekTipHost(): JSX.Element | null {
       role="status"
       aria-live="polite"
       data-testid="right-sidebar-edge-peek-tip"
-      // Why: fixed to the right edge mid-window so the hint points at the
-      // gesture target (not the titlebar toggle the user just used).
-      className="pointer-events-none fixed top-1/2 right-3 z-[90] -translate-y-1/2 animate-in fade-in-0 zoom-in-95 slide-in-from-right-2 duration-150 motion-reduce:animate-none"
+      style={style}
+      className="pointer-events-none z-[90] w-max max-w-[240px] animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 duration-150 motion-reduce:animate-none"
     >
-      <div className="relative rounded-md bg-foreground px-3 py-1.5 text-xs text-balance text-background shadow-xs">
-        {translate(
-          'auto.components.right.sidebar.edge.peek.tip.title',
-          'Hover the right edge to peek'
-        )}
-        {/* Tooltip-style caret pointing at the window edge. */}
+      <div className="relative rounded-md bg-foreground px-3 py-1.5 text-xs leading-snug text-background shadow-xs">
+        <div className="whitespace-nowrap">
+          {translate(
+            'auto.components.right.sidebar.edge.peek.tip.title',
+            'Hover the right edge to peek'
+          )}
+        </div>
+        <div className="whitespace-nowrap opacity-80">
+          {translate(
+            'auto.components.right.sidebar.edge.peek.tip.settings',
+            'Turn this off in Settings'
+          )}
+        </div>
+        {/* Tooltip-style caret pointing up at the toggle icon. */}
         <span
           aria-hidden
-          className="absolute top-1/2 -right-1 size-2 -translate-y-1/2 rotate-45 rounded-[2px] bg-foreground"
+          className="absolute -top-1 size-2 rotate-45 rounded-[2px] bg-foreground"
+          style={{ right: caretOffsetPx - 4 }}
         />
       </div>
     </div>

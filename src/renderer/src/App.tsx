@@ -2161,6 +2161,9 @@ function App(): React.JSX.Element {
           className="sidebar-toggle mr-2"
           onClick={actions.toggleRightSidebar}
           aria-label={translate('auto.App.9e0b441a91', 'Toggle right sidebar')}
+          // Why: one-shot edge-peek tip anchors to this titlebar control after
+          // the first close (the control reappears when the sidebar is closed).
+          data-right-sidebar-toggle=""
         >
           <PanelRight size={16} />
         </button>
