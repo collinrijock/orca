@@ -1270,6 +1270,9 @@ async function listQueriedWorkItems(
     query.reviewedBy !== null
   const issueScope = query.scope !== 'pr' && !hasPrOnlyFilter
   const prScope = query.scope !== 'issue'
+  let successfulRequestCount = 0
+  let nonAvailabilityFailureCount = 0
+  let availabilityError: unknown
 
   // Why: run the issue and PR fetches in parallel but surface the
   // issue-side error separately so the IPC envelope can carry it up. PR-side
@@ -1292,17 +1295,17 @@ async function listQueriedWorkItems(
       const { stdout } = issueOwnerRepo
         ? await ghExecFileAsync(request.args, ghOptions)
         : await ghCwdResolvedExec(repoContext, request.args, ghOptions)
-      return {
-        items: (JSON.parse(stdout) as Record<string, unknown>[])
-          .filter((item) => !('pull_request' in item))
-          .map(mapIssueWorkItem)
-      }
+      const items = (JSON.parse(stdout) as Record<string, unknown>[])
+        .filter((item) => !('pull_request' in item))
+        .map(mapIssueWorkItem)
+      successfulRequestCount += 1
+      return { items }
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
-      if (!prScope && classifyGitHubUnavailable(stderr)) {
-        // Why: a scoped issue query has no successful side to preserve. Let the
-        // cross-repo caller attribute the empty result to GitHub instead.
-        throw err
+      if (classifyGitHubUnavailable(stderr)) {
+        availabilityError ??= err
+      } else {
+        nonAvailabilityFailureCount += 1
       }
       return { items: [], issuesError: classifyListIssuesError(stderr) }
     }
@@ -1330,6 +1333,7 @@ async function listQueriedWorkItems(
         .slice(request.offset, request.offset + limit)
         .map((item) => mapPullRequestWorkItem(item, prOwnerRepo))
       const hydrated = await hydrateWorkItemRepositoryMergeMetadata(mapped, prOwnerRepo, ghOptions)
+      successfulRequestCount += 1
       if (query.state === 'closed') {
         return hydrated.filter((item) => item.state !== 'merged')
       }
@@ -1337,16 +1341,22 @@ async function listQueriedWorkItems(
     } catch (err) {
       console.warn('listQueriedWorkItems PRs partial failure:', err)
       const stderr = err instanceof Error ? err.message : String(err)
-      if (!issueScope && classifyGitHubUnavailable(stderr)) {
-        // Why: Tasks scopes every query to one work-item kind. Propagate an
-        // outage instead of converting the only failed source into an empty list.
-        throw err
+      if (classifyGitHubUnavailable(stderr)) {
+        availabilityError ??= err
+      } else {
+        nonAvailabilityFailureCount += 1
       }
       return []
     }
   })()
 
   const [issueResult, prItems] = await Promise.all([issueFetch, prFetch])
+  if (availabilityError && successfulRequestCount === 0 && nonAvailabilityFailureCount === 0) {
+    // Why: combined queries normally preserve either successful half. When
+    // every attempted half hit the same availability class, propagate one of
+    // those existing failures so Tasks can distinguish an outage from no data.
+    throw availabilityError
+  }
   return {
     items: sortWorkItemsByNumber([...issueResult.items, ...prItems]).slice(0, limit),
     issuesError: issueResult.issuesError

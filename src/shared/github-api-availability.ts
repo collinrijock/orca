@@ -23,7 +23,7 @@ const SERVER_ERROR_PATTERN =
 // both Node (ENOTFOUND/ECONNRESET) and the gh Go client ("dial tcp", "i/o
 // timeout", "no such host") shapes.
 const NETWORK_PATTERN =
-  /timeout|\btimed out\b|\bno such host\b|could not resolve host|could not resolve to a host|\bnetwork(?:error| (?:error|unavailable|unreachable|request failed))\b|\bconnection (?:refused|reset)\b|\bdial tcp\b|\bi\/o timeout\b|\bfetch failed\b|\bsocket hang up\b|ENOTFOUND|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ENETUNREACH/i
+  /timeout|\btimed out\b|\bno such host\b|could not resolve host|could not resolve to a host|\bnetwork(?:error| (?:error|unavailable|unreachable|request failed))\b|\bconnection (?:refused|reset)\b|\berror connecting to\b|\bfailed to connect to\b|\bdial tcp\b|\bi\/o timeout\b|\bfetch failed\b|\bsocket hang up\b|ENOTFOUND|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ENETUNREACH/i
 
 /**
  * Classify a gh/Octokit error message as a GitHub-reachability problem, or

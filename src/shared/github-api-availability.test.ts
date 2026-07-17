@@ -16,6 +16,7 @@ describe('classifyGitHubUnavailable', () => {
   it('classifies transport failures as network', () => {
     for (const message of [
       'request to https://api.github.com failed, reason: getaddrinfo ENOTFOUND api.github.com',
+      'error connecting to api.github.com\ncheck your internet connection or GitHub status',
       'dial tcp: lookup api.github.com: no such host',
       'connect ETIMEDOUT 140.82.112.5:443',
       'TimeoutError: request aborted',

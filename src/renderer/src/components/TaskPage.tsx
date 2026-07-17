@@ -9310,7 +9310,7 @@ export default function TaskPage(): React.JSX.Element {
                   // over the generic count banner below.
                   <div
                     role="alert"
-                    className="border-b border-border/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-200"
+                    className="border-b border-border/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
                   >
                     {translate(
                       'auto.components.TaskPage.75a38d7df8',
