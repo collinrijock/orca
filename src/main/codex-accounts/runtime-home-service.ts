@@ -786,7 +786,7 @@ export class CodexRuntimeHomeService {
       }
       // Why: the canonical file is gone, so the exact in-memory bytes Orca
       // previously mirrored are the only safe identity baseline for recovery.
-      if (!this.runtimeAuthMatchesAccount(runtimeContents, account, this.lastWrittenAuthJson)) {
+      if (!codexAuthMatchesManagedAccount(runtimeContents, account, this.lastWrittenAuthJson)) {
         return 'rejected'
       }
       writeFileAtomically(join(account.managedHomePath, 'auth.json'), runtimeContents, {
