@@ -66,6 +66,7 @@ import {
 import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { createPtySpawnTiming } from './pty-spawn-timing'
 import { mintPtySessionId, isSafePtySessionId } from '../daemon/pty-session-id'
+import { resolveWslSessionContext } from '../daemon/wsl-session-context'
 import { addNodePtyRecoveryHint } from '../daemon/node-pty-error-hints'
 import { recordDaemonStreamBacklogEvent } from '../daemon/daemon-stream-backlog-probe'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
@@ -3034,6 +3035,14 @@ export function registerPtyHandlers(
       const effectiveSessionAppId =
         sessionId !== undefined ? getAppPtyId(args.connectionId, sessionId) : undefined
       const isMintedSessionId = requestedSessionId === undefined && isDaemonHostSpawn
+      const expectedWslDistro = !args.connectionId
+        ? (resolveWslSessionContext({
+            cwd,
+            sessionId,
+            shellOverride: terminalRuntimeOptions.shellOverride,
+            terminalWindowsWslDistro: terminalRuntimeOptions.terminalWindowsWslDistro
+          })?.distro ?? null)
+        : null
       const shouldPersistHostSessionBinding = args.persistHostSessionBinding === true
       let hostSessionBinding: {
         store: NonNullable<typeof store>
@@ -3189,12 +3198,20 @@ export function registerPtyHandlers(
         ? reservePaneSpawn(materializedPaneKey)
         : null
       let result: PtySpawnResult
+      let preparedProvisionalExecutionContext = false
       try {
         try {
           if (args.preAllocatedHandle) {
             trustedTerminalHandleEnv.add(args.preAllocatedHandle)
           }
           const expectedPtyId = effectiveSessionAppId ?? sessionId
+          if (isDaemonHostSpawn && expectedPtyId) {
+            preparedProvisionalExecutionContext =
+              runtime?.preparePtyExecutionContext?.(expectedPtyId, expectedWslDistro, {
+                resetIncarnation: isMintedSessionId,
+                preserveExisting: !isMintedSessionId
+              }) ?? false
+          }
           const sequenceBeforeProviderSpawn = expectedPtyId
             ? (runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
             : 0
@@ -3206,7 +3223,16 @@ export function registerPtyHandlers(
               sequenceBeforeProviderSpawn
             )
           }
+          runtime?.preparePtyExecutionContext?.(
+            result.id,
+            args.connectionId ? null : (result.wslDistro ?? expectedWslDistro)
+          )
         } catch (err) {
+          if ((isMintedSessionId || preparedProvisionalExecutionContext) && effectiveSessionAppId) {
+            runtime?.preparePtyExecutionContext?.(effectiveSessionAppId, null, {
+              resetIncarnation: true
+            })
+          }
           const rawMessage = err instanceof Error ? err.message : String(err)
           const spawnError = normalizeNodePtySpawnError(err)
           const isIdentityMismatch =
@@ -3841,6 +3867,14 @@ export function registerPtyHandlers(
         effectiveSessionId !== undefined
           ? getRelayPtyId(args.connectionId, effectiveSessionId)
           : undefined
+      const expectedWslDistro = !args.connectionId
+        ? (resolveWslSessionContext({
+            cwd,
+            sessionId: effectiveSessionId,
+            shellOverride: terminalRuntimeOptions.shellOverride,
+            terminalWindowsWslDistro: terminalRuntimeOptions.terminalWindowsWslDistro
+          })?.distro ?? null)
+        : null
       const startupTerminalColorQueryReplyColors = getStartupTerminalColorQueryReplyColors(args)
       const preSpawnStartupTerminalColorReplyPtyId =
         startupTerminalColorQueryReplyColors && effectiveSessionId !== undefined
@@ -4134,6 +4168,7 @@ export function registerPtyHandlers(
         markHiddenRendererPty(preSpawnHiddenMarkId)
       }
       let result: PtySpawnResult
+      let preparedProvisionalExecutionContext = false
       try {
         try {
           if (preAllocatedHandle) {
@@ -4149,6 +4184,13 @@ export function registerPtyHandlers(
           }
           spawnTiming.mark('options')
           const expectedPtyId = effectiveSessionAppId ?? effectiveSessionId
+          if (isDaemonHostSpawn && expectedPtyId) {
+            preparedProvisionalExecutionContext =
+              runtime?.preparePtyExecutionContext?.(expectedPtyId, expectedWslDistro, {
+                resetIncarnation: isMintedSessionId,
+                preserveExisting: !isMintedSessionId
+              }) ?? false
+          }
           const sequenceBeforeProviderSpawn = expectedPtyId
             ? (runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
             : 0
@@ -4160,8 +4202,17 @@ export function registerPtyHandlers(
               sequenceBeforeProviderSpawn
             )
           }
+          runtime?.preparePtyExecutionContext?.(
+            result.id,
+            args.connectionId ? null : (result.wslDistro ?? expectedWslDistro)
+          )
           spawnTiming.mark('provider_spawn')
         } catch (err) {
+          if ((isMintedSessionId || preparedProvisionalExecutionContext) && effectiveSessionAppId) {
+            runtime?.preparePtyExecutionContext?.(effectiveSessionAppId, null, {
+              resetIncarnation: true
+            })
+          }
           // Why: a failed spawn must not leave a stale hidden mark on a session
           // id a later visible attach may reuse.
           if (preSpawnHiddenMarkId !== null) {

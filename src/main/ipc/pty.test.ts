@@ -2288,13 +2288,24 @@ describe('registerPtyHandlers', () => {
           listProcesses: vi.fn(async () => []),
           getForegroundProcess: vi.fn(async () => null)
         } as never)
+        const runtime = {
+          setPtyController: vi.fn(),
+          createPreAllocatedTerminalHandle: vi.fn(() => null),
+          preAllocateHandleForPty: vi.fn(),
+          preparePtyExecutionContext: vi.fn().mockReturnValue(true)
+        }
         handlers.clear()
-        registerPtyHandlers(mainWindow as never)
+        registerPtyHandlers(mainWindow as never, runtime as never)
         await expect(
           handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
         ).rejects.toThrow(/spawn boom/)
         expect(openCodeClearPtyMock).toHaveBeenCalled()
         expect(piClearPtyMock).toHaveBeenCalled()
+        expect(runtime.preparePtyExecutionContext).toHaveBeenLastCalledWith(
+          expect.any(String),
+          null,
+          { resetIncarnation: true }
+        )
       })
 
       it('does NOT sweep per-PTY state on provider.spawn failure for CALLER-supplied sessionId', async () => {
@@ -2316,8 +2327,14 @@ describe('registerPtyHandlers', () => {
           listProcesses: vi.fn(async () => []),
           getForegroundProcess: vi.fn(async () => null)
         } as never)
+        const runtime = {
+          setPtyController: vi.fn(),
+          createPreAllocatedTerminalHandle: vi.fn(() => null),
+          preAllocateHandleForPty: vi.fn(),
+          preparePtyExecutionContext: vi.fn().mockReturnValue(true)
+        }
         handlers.clear()
-        registerPtyHandlers(mainWindow as never)
+        registerPtyHandlers(mainWindow as never, runtime as never)
         await expect(
           handlers.get('pty:spawn')!(null, {
             cols: 80,
@@ -2328,6 +2345,11 @@ describe('registerPtyHandlers', () => {
         ).rejects.toThrow(/spawn boom/)
         expect(openCodeClearPtyMock).not.toHaveBeenCalled()
         expect(piClearPtyMock).not.toHaveBeenCalled()
+        expect(runtime.preparePtyExecutionContext).toHaveBeenLastCalledWith(
+          'caller-owned-session',
+          null,
+          { resetIncarnation: true }
+        )
       })
 
       it('does NOT inject host-local env on SSH spawns (connectionId set)', async () => {
