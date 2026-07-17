@@ -12,16 +12,18 @@ internal static class WindowsSshChildProcess
     private const uint JobObjectLimitKillOnJobClose = 0x00002000;
     private const int JobObjectExtendedLimitInformationClass = 9;
     private const int ProcThreadAttributeHandleList = 0x00020002;
-    private const uint Infinite = 0xffffffff;
     private const uint WaitObject0 = 0x00000000;
     private const uint WaitFailed = 0xffffffff;
+    private const uint WaitTimeout = 0x00000102;
+    private const uint OutputLimitPollMilliseconds = 50;
+    private const uint JobSettlementTimeoutMilliseconds = 5000;
 
     internal static int Run(string executablePath, string[] args)
     {
         Stream launcherStdout = Console.OpenStandardOutput();
         Stream launcherStderr = Console.OpenStandardError();
         using (WindowsPrivateConsoleInput console = WindowsPrivateConsoleInput.Create())
-        using (WindowsSshChildIo pipes = WindowsSshChildIo.Create(
+        using (WindowsBoundedOutputFiles outputs = WindowsBoundedOutputFiles.Create(
             console.InputHandle,
             launcherStdout,
             launcherStderr
@@ -36,7 +38,7 @@ internal static class WindowsSshChildProcess
             try
             {
                 job = CreateKillOnCloseJob();
-                StartupInfoEx startup = CreateStartupInfo(pipes, out attributeList, out inheritedHandles);
+                StartupInfoEx startup = CreateStartupInfo(outputs, out attributeList, out inheritedHandles);
                 StringBuilder commandLine = WindowsCommandLine.Build(executablePath, args);
                 // Why: the SSH child must share the hidden private console for CONIN$ to remain a
                 // real console handle; CREATE_NO_WINDOW would detach it from that console.
@@ -57,53 +59,31 @@ internal static class WindowsSshChildProcess
                     throw LastWin32("CreateProcessW failed.");
                 }
                 processStarted = true;
-                pipes.CloseChildEndsInParent();
-
+                outputs.CloseChildEndsInParent();
                 if (!AssignProcessToJobObject(job, process.Process))
                 {
                     throw LastWin32("AssignProcessToJobObject failed.");
                 }
                 assignedToJob = true;
-                pipes.StartPumps();
                 if (ResumeThread(process.Thread) == UInt32.MaxValue)
                 {
                     throw LastWin32("ResumeThread failed.");
                 }
 
-                IntPtr[] waitHandles = new IntPtr[] { process.Process, pipes.PumpFailureHandle };
-                uint waitResult = WaitForMultipleObjects(
-                    (uint)waitHandles.Length,
-                    waitHandles,
-                    false,
-                    Infinite
-                );
-                if (waitResult == WaitObject0 + 1)
-                {
-                    pipes.ThrowIfPumpFailed();
-                    throw new IOException("SSH output pump failed without an error detail.");
-                }
-                if (waitResult == WaitFailed)
-                {
-                    throw LastWin32("WaitForMultipleObjects failed.");
-                }
-                if (waitResult != WaitObject0)
-                {
-                    throw new Win32Exception("Unexpected child-process wait result.");
-                }
+                WaitForChildWithinOutputLimits(process.Process, outputs);
                 uint exitCode;
                 if (!GetExitCodeProcess(process.Process, out exitCode))
                 {
                     throw LastWin32("GetExitCodeProcess failed.");
                 }
-                // Why: descendants must not retain output writers and turn normal completion into
-                // an unbounded pump wait after the SSH process itself exits.
-                CloseOwnedHandle(ref job);
-                pipes.CompletePumps();
+                // Why: descendants must release inherited writers before replay can trust the bytes.
+                TerminateAndSettleJob(ref job);
+                outputs.ReplayOutputs();
                 return unchecked((int)exitCode);
             }
             finally
             {
-                pipes.CloseChildEndsInParent();
+                outputs.CloseChildEndsInParent();
                 if (process.Thread != IntPtr.Zero)
                 {
                     CloseHandle(process.Thread);
@@ -117,8 +97,8 @@ internal static class WindowsSshChildProcess
                     }
                     CloseHandle(process.Process);
                 }
-                // Why: closing the owned job also kills a still-running SSH child on cancellation.
-                CloseOwnedHandle(ref job);
+                // Why: managed failures must not outlive their capture files or SSH child job.
+                TerminateAndSettleJob(ref job);
                 if (attributeList != IntPtr.Zero)
                 {
                     DeleteProcThreadAttributeList(attributeList);
@@ -133,7 +113,7 @@ internal static class WindowsSshChildProcess
     }
 
     private static StartupInfoEx CreateStartupInfo(
-        WindowsSshChildIo pipes,
+        WindowsBoundedOutputFiles outputs,
         out IntPtr attributeList,
         out IntPtr inheritedHandles
     )
@@ -155,9 +135,9 @@ internal static class WindowsSshChildProcess
             }
 
             inheritedHandles = Marshal.AllocHGlobal(IntPtr.Size * 3);
-            Marshal.WriteIntPtr(inheritedHandles, 0, pipes.StdinRead);
-            Marshal.WriteIntPtr(inheritedHandles, IntPtr.Size, pipes.StdoutWrite);
-            Marshal.WriteIntPtr(inheritedHandles, IntPtr.Size * 2, pipes.StderrWrite);
+            Marshal.WriteIntPtr(inheritedHandles, 0, outputs.StdinRead);
+            Marshal.WriteIntPtr(inheritedHandles, IntPtr.Size, outputs.StdoutWrite);
+            Marshal.WriteIntPtr(inheritedHandles, IntPtr.Size * 2, outputs.StderrWrite);
             if (!UpdateProcThreadAttribute(
                 attributeList,
                 0,
@@ -174,9 +154,9 @@ internal static class WindowsSshChildProcess
             StartupInfoEx startup = new StartupInfoEx();
             startup.StartupInfo.Size = Marshal.SizeOf(typeof(StartupInfoEx));
             startup.StartupInfo.Flags = StartfUseStdHandles;
-            startup.StartupInfo.StandardInput = pipes.StdinRead;
-            startup.StartupInfo.StandardOutput = pipes.StdoutWrite;
-            startup.StartupInfo.StandardError = pipes.StderrWrite;
+            startup.StartupInfo.StandardInput = outputs.StdinRead;
+            startup.StartupInfo.StandardOutput = outputs.StdoutWrite;
+            startup.StartupInfo.StandardError = outputs.StderrWrite;
             startup.AttributeList = attributeList;
             return startup;
         }
@@ -194,6 +174,31 @@ internal static class WindowsSshChildProcess
                 inheritedHandles = IntPtr.Zero;
             }
             throw;
+        }
+    }
+
+    private static void WaitForChildWithinOutputLimits(
+        IntPtr process,
+        WindowsBoundedOutputFiles outputs
+    )
+    {
+        while (true)
+        {
+            uint waitResult = WaitForSingleObject(process, OutputLimitPollMilliseconds);
+            if (waitResult == WaitObject0)
+            {
+                outputs.EnsureWithinLimits();
+                return;
+            }
+            if (waitResult == WaitFailed)
+            {
+                throw LastWin32("WaitForSingleObject failed.");
+            }
+            if (waitResult != WaitTimeout)
+            {
+                throw new Win32Exception("Unexpected child-process wait result.");
+            }
+            outputs.EnsureWithinLimits();
         }
     }
 
@@ -241,6 +246,38 @@ internal static class WindowsSshChildProcess
         {
             CloseHandle(handle);
             handle = IntPtr.Zero;
+        }
+    }
+
+    private static void TerminateAndSettleJob(ref IntPtr job)
+    {
+        if (job == IntPtr.Zero)
+        {
+            return;
+        }
+        try
+        {
+            if (!TerminateJobObject(job, 1))
+            {
+                throw LastWin32("TerminateJobObject failed.");
+            }
+            uint waitResult = WaitForSingleObject(job, JobSettlementTimeoutMilliseconds);
+            if (waitResult == WaitTimeout)
+            {
+                throw new TimeoutException("SSH child job did not settle within 5 seconds.");
+            }
+            if (waitResult == WaitFailed)
+            {
+                throw LastWin32("Waiting for the SSH child job failed.");
+            }
+            if (waitResult != WaitObject0)
+            {
+                throw new Win32Exception("Unexpected SSH child job wait result.");
+            }
+        }
+        finally
+        {
+            CloseOwnedHandle(ref job);
         }
     }
 
@@ -385,15 +422,14 @@ internal static class WindowsSshChildProcess
     private static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
 
     [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool TerminateJobObject(IntPtr job, uint exitCode);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
     private static extern uint ResumeThread(IntPtr thread);
 
     [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern uint WaitForMultipleObjects(
-        uint count,
-        [In] IntPtr[] handles,
-        [MarshalAs(UnmanagedType.Bool)] bool waitAll,
-        uint milliseconds
-    );
+    private static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

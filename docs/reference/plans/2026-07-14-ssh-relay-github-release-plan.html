@@ -1665,11 +1665,17 @@
                     evidence proves that launcher compiles and passes all of those contracts, but
                     Win32-OpenSSH still remains alive after authenticated remote command-session
                     closure. This falsifies Node's pipe type and broad inherited-handle leakage. The
-                    next artifact-only diagnostic uses a hidden launcher-owned private real console,
-                    queues console EOF before child creation, and shares that console with the SSH
+                    next artifact-only diagnostic used a hidden launcher-owned private real console,
+                    queued console EOF before child creation, and shared that console with the SSH
                     child while retaining private output pipes, exact handle inheritance, job
-                    ownership, and bounded cancellation. Build and live-test it on native x64/arm64
-                    before packaging, signing, or adding a product caller. POSIX retains ignored
+                    ownership, and bounded cancellation. Native x64/arm64 prove the console handle
+                    and zero-byte cooked EOF but the live client still hangs, falsifying stdin alone.
+                    The next one-variable diagnostic retains that console stdin and replaces only
+                    child stdout/stderr pipes with unique delete-on-close regular files under an
+                    explicit per-stream byte ceiling, bounded polling/cancellation, incremental
+                    post-exit replay, and exact cleanup. Build and live-test it on native x64/arm64
+                    before considering ConPTY, another SSH client, packaging, signing, or a product
+                    caller. POSIX retains ignored
                     stdin plus <code>-n</code>; fixture-owned Windows session processes settle
                     before profile hives are boundedly unloaded and native profile deletion begins;
                     <code>MaxSessions=1</code>; interrupted upload; stale lock

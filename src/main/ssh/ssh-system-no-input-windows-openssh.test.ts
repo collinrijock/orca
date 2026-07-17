@@ -7,7 +7,7 @@ import type { SshTarget } from '../../shared/ssh-types'
 import { buildSshArgs } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
 
-type DiagnosticMode = 'private-console-launcher-no-n'
+type DiagnosticMode = 'private-console-regular-output-launcher-no-n'
 
 type DiagnosticResult = {
   mode: DiagnosticMode
@@ -48,10 +48,10 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
   if (!sshPath) {
     throw new Error('Native Windows OpenSSH client is unavailable')
   }
-  const mode: DiagnosticMode = 'private-console-launcher-no-n'
+  const mode: DiagnosticMode = 'private-console-regular-output-launcher-no-n'
   const startedAt = performance.now()
-  // Why: redirected stdio hangs in Win32-OpenSSH even with private pipes; this diagnostic gives
-  // only stdin a hidden real-console boundary with EOF queued before CreateProcessW.
+  // Why: Win32-OpenSSH still hangs with proven console EOF plus piped output, so this diagnostic
+  // isolates stdout/stderr as bounded regular files without changing production transport.
   const child = spawn(
     launcherPath as string,
     [sshPath, ...buildSshArgs(createTarget()), 'echo ORCA-SYSTEM-SSH-OK'],
@@ -138,16 +138,16 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
 
 describe.skipIf(!hasLiveInput)('Windows OpenSSH no-input child-handle diagnostic', () => {
   it(
-    'qualifies private-console stdin EOF without the Windows null-input option',
+    'qualifies private-console EOF plus regular-file output without the Windows null-input option',
     { timeout: 15_000 },
     async () => {
       expect(process.platform).toBe('win32')
-      const privateConsoleLauncherNoN = await runDiagnostic()
+      const privateConsoleRegularOutputLauncherNoN = await runDiagnostic()
       console.log(
-        `ssh_windows_no_input_handle_diagnostic=${JSON.stringify({ privateConsoleLauncherNoN })}`
+        `ssh_windows_no_input_handle_diagnostic=${JSON.stringify({ privateConsoleRegularOutputLauncherNoN })}`
       )
 
-      expect(privateConsoleLauncherNoN.success).toBe(true)
+      expect(privateConsoleRegularOutputLauncherNoN.success).toBe(true)
     }
   )
 })

@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
@@ -92,14 +92,20 @@ describe('Windows SSH no-input launcher', () => {
   it('keeps the artifact source scoped to the reviewed Win32 boundary', () => {
     const processSource = readFileSync(join(sourceRoot, 'WindowsSshChildProcess.cs'), 'utf8')
     const consoleSource = readFileSync(join(sourceRoot, 'WindowsPrivateConsoleInput.cs'), 'utf8')
-    const pipeSource = readFileSync(join(sourceRoot, 'WindowsSshChildIo.cs'), 'utf8')
+    const outputSource = readFileSync(join(sourceRoot, 'WindowsBoundedOutputFiles.cs'), 'utf8')
 
     expect(processSource).toContain('ProcThreadAttributeHandleList')
     expect(processSource).toContain('IntPtr.Size * 3')
     expect(processSource).toContain('CreateSuspended')
     expect(processSource).not.toContain('CreateNoWindow')
     expect(processSource).toContain('JobObjectLimitKillOnJobClose')
-    expect(processSource).toContain('WaitForMultipleObjects')
+    expect(processSource).toContain('WaitForSingleObject')
+    expect(processSource).toContain('OutputLimitPollMilliseconds = 50')
+    expect(processSource).toContain('JobSettlementTimeoutMilliseconds = 5000')
+    expect(processSource).toContain('TerminateJobObject')
+    expect(processSource).toContain('outputs.EnsureWithinLimits()')
+    expect(processSource).toContain('outputs.ReplayOutputs()')
+    expect(processSource).not.toContain('WaitForMultipleObjects')
     expect(processSource).toContain('if (processStarted && !assignedToJob)')
     expect(consoleSource).toContain('AllocConsole()')
     expect(consoleSource).toContain('"CONIN$"')
@@ -113,8 +119,12 @@ describe('Windows SSH no-input launcher', () => {
     expect(processSource.indexOf('WindowsPrivateConsoleInput.Create()')).toBeLessThan(
       processSource.indexOf('CreateProcess(')
     )
-    expect(pipeSource).toContain('PumpCompletionTimeoutMilliseconds')
-    expect(pipeSource).toContain('pumpFailureSignal.Set()')
+    expect(outputSource).toContain('MaxCapturedBytes = 16 * 1024 * 1024')
+    expect(outputSource).toContain('FileOptions.DeleteOnClose')
+    expect(outputSource).toContain('FileMode.CreateNew')
+    expect(outputSource).toContain('ReplayBufferBytes = 64 * 1024')
+    expect(outputSource).toContain('SetHandleInformation')
+    expect(processSource).toContain('outputs.CloseChildEndsInParent()')
   })
 
   it.skipIf(process.platform === 'win32')(
@@ -165,6 +175,26 @@ describe('Windows SSH no-input launcher', () => {
     expect(exited.status).toBe(37)
   })
 
+  itWindows('fails closed above the output ceiling and removes capture files', () => {
+    const capturesBefore = listCaptureFiles()
+    const result = runLauncher('overflow-output')
+
+    expect(result.status).toBe(1)
+    expect(result.stdout).toEqual(Buffer.alloc(0))
+    expect(result.stderr.toString('utf8')).toContain(
+      'SSH stdout exceeded the 16 MiB diagnostic capture limit.'
+    )
+    expect(listCaptureFiles()).toEqual(capturesBefore)
+  })
+
+  itWindows('removes successful capture files after exact binary replay', () => {
+    const capturesBefore = listCaptureFiles()
+    const result = runLauncher('binary-output')
+
+    expect(result.status).toBe(0)
+    expect(listCaptureFiles()).toEqual(capturesBefore)
+  })
+
   itWindows('does not leak an unrelated inheritable parent handle into the child', () => {
     const result = spawnSync(handleProbePath, [launcherPath], {
       cwd: fixtureRoot,
@@ -182,17 +212,20 @@ describe('Windows SSH no-input launcher', () => {
     { timeout: 15_000 },
     async () => {
       const startedAt = performance.now()
-      const child = spawn(launcherPath, [process.execPath, childFixturePath, 'hold'], {
+      const capturesBefore = listCaptureFiles()
+      const pidPath = join(fixtureRoot, 'held-child.pid')
+      const child = spawn(launcherPath, [process.execPath, childFixturePath, 'hold', pidPath], {
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true
       })
-      const childPid = await readFirstLine(child.stdout, 5_000)
+      const childPid = await readPidFile(pidPath, 5_000)
       expect(Number.isInteger(childPid)).toBe(true)
 
       const closePromise = waitForClose(child, 5_000)
       expect(child.kill('SIGKILL')).toBe(true)
       await closePromise
       await waitForProcessExit(childPid, 5_000)
+      await waitForCaptureFiles(capturesBefore, 5_000)
       expect(performance.now() - startedAt).toBeLessThan(10_000)
     }
   )
@@ -204,8 +237,15 @@ function runLauncher(mode, args = [], options = {}) {
     encoding: null,
     timeout: 10_000,
     windowsHide: true,
+    maxBuffer: 32 * 1024 * 1024,
     ...options
   })
+}
+
+function listCaptureFiles() {
+  return readdirSync(tmpdir())
+    .filter((name) => name.startsWith('orca-ssh-no-input-') && name.endsWith('.capture'))
+    .sort()
 }
 
 function findFrameworkCompiler(env) {
@@ -221,23 +261,26 @@ function findFrameworkCompiler(env) {
   )
 }
 
-function readFirstLine(stream, timeoutMs) {
-  return new Promise((resolveLine, reject) => {
-    let output = ''
-    const timeout = setTimeout(
-      () => reject(new Error('Timed out waiting for child PID.')),
-      timeoutMs
-    )
-    stream.on('data', (chunk) => {
-      output += chunk.toString('utf8')
-      const newline = output.indexOf('\n')
-      if (newline >= 0) {
-        clearTimeout(timeout)
-        resolveLine(Number.parseInt(output.slice(0, newline), 10))
-      }
-    })
-    stream.on('error', reject)
-  })
+async function readPidFile(path, timeoutMs) {
+  const deadline = performance.now() + timeoutMs
+  while (performance.now() < deadline) {
+    if (existsSync(path)) {
+      return Number.parseInt(readFileSync(path, 'utf8'), 10)
+    }
+    await new Promise((resolveWait) => setTimeout(resolveWait, 25))
+  }
+  throw new Error('Timed out waiting for child PID file.')
+}
+
+async function waitForCaptureFiles(expected, timeoutMs) {
+  const deadline = performance.now() + timeoutMs
+  while (performance.now() < deadline) {
+    if (JSON.stringify(listCaptureFiles()) === JSON.stringify(expected)) {
+      return
+    }
+    await new Promise((resolveWait) => setTimeout(resolveWait, 25))
+  }
+  throw new Error('Launcher capture files survived bounded cancellation cleanup.')
 }
 
 function waitForClose(child, timeoutMs) {
@@ -278,8 +321,13 @@ if (mode === 'arguments-and-stdin') {
   process.stderr.write(Buffer.from([0xfe, 0x00, 0x7f, 0x0d, 0x0a]))
 } else if (mode === 'exit-code') {
   process.exit(Number.parseInt(process.argv[3], 10))
+} else if (mode === 'overflow-output') {
+  const chunk = Buffer.alloc(1024 * 1024, 0xa5)
+  for (let index = 0; index < 17; index += 1) {
+    process.stdout.write(chunk)
+  }
 } else if (mode === 'hold') {
-  process.stdout.write(String(process.pid) + '\n')
+  require('node:fs').writeFileSync(process.argv[3], String(process.pid))
   setInterval(() => {}, 1000)
 } else {
   process.exit(99)

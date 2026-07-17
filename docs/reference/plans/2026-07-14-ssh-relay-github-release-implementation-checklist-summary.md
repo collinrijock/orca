@@ -10,7 +10,8 @@ A checked box means the work has evidence in the detailed ledger. Design approva
 complete a box.
 
 Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected private-
-console Windows diagnostic, 2026-07-16, Codex implementation owner.**
+console plus bounded regular-output Windows diagnostic locally green; exact-head native proof
+required, 2026-07-16, Codex implementation owner.**
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the portable-fixture
 correction locally green: the no-Orca-publication workflow oracle permits the one exact pinned
 Microsoft fixture release URL while Orca release URLs, `gh release`, and `contents: write` remain
@@ -188,6 +189,27 @@ full lint/reliability/max-lines, formatting, diff, and protected-resolver isolat
 this artifact-only package and require fresh x64/ARM64 compiler, console/EOF, launcher, live SSH, and
 exact teardown proof; no product, Beta, fallback, tuple, publication, default, or SignPath work is
 included.
+Exact head `5841b12bc`, run `29552101635`, and native x64/ARM64 jobs
+`87796673326`/`87796673353` prove the console prerequisites on both architectures: each passes 101
+files/860 runnable cases with 19 skips, legacy compilation, character-device `CONIN$`, zero-byte
+cooked `ReadFile`, argv/binary/exit/handle-exclusion/cancellation, unchanged runtime reproducibility,
+and full-size cache gates. The live client still times out after 8025.1553/8034.6943 milliseconds
+with the same no-sentinel/no-exit lifecycle, and both exact teardowns catch locked `UsrClass.dat`.
+`E-M6-WINDOWS-PRIVATE-CONSOLE-CI-RED-001` therefore falsifies stdin alone and leaves private output
+pipes as the next isolated handle variable. Keep console EOF, replace only child stdout/stderr with
+per-stream size-bounded delete-on-close regular files, replay bytes incrementally after exit, and
+prove overflow/cleanup/cancellation plus live x64/ARM64 behavior. ConPTY and alternate SSH clients
+remain later decisions; all production/Beta/fallback/tuple/publication/default/signing paths remain
+untouched.
+`E-M6-WINDOWS-PRIVATE-CONSOLE-REGULAR-OUTPUT-LOCAL-001` records that replacement locally green:
+distinct parent-read and inheritable child-write regular-file handles avoid shared seek state; each
+stream has a 16 MiB ceiling with 50 ms polling, delete-on-close plus explicit cleanup, and 64 KiB
+post-exit binary replay after bounded job settlement. Syntax, focused 119/119, all 285 release
+contracts, typecheck, full lint/reliability/max-lines, formatting, diff, and protected-resolver
+isolation pass. Seven native
+launcher cases plus live/full-size behavior remain honest local skips. Commit/push only this
+runner-temp diagnostic and require fresh exact-head Windows x64/ARM64 compilation, overflow,
+cleanup, cancellation, live lifecycle, and fixture-teardown proof. SignPath remains deferred.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown
