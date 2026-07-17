@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import {
   PEEK_CLOSE_DELAY_MS,
+  PEEK_GESTURE_SUPPRESS_MS,
   PEEK_OPEN_DELAY_MS,
   RightSidebarEdgePeekZone,
+  isPointerOverVerticalScrollbar,
   useRightSidebarEdgePeekDismiss
 } from './right-sidebar-edge-peek'
 
@@ -109,6 +111,97 @@ describe('RightSidebarEdgePeekZone', () => {
     expect(useAppStore.getState().rightSidebarPeek).toBe(false)
   })
 
+  it('does not re-arm immediately after mouseup (scrollbar release cool-down)', () => {
+    render(<RightSidebarEdgePeekZone />)
+
+    moveMouse(RIGHT_EDGE_X, BELOW_TITLEBAR_Y)
+    fireEvent.mouseDown(window, { buttons: 1 })
+    fireEvent.mouseUp(window, { buttons: 0 })
+    // Hover still on the edge after releasing a drag.
+    moveMouse(RIGHT_EDGE_X, BELOW_TITLEBAR_Y)
+    vi.advanceTimersByTime(PEEK_OPEN_DELAY_MS)
+    expect(useAppStore.getState().rightSidebarPeek).toBe(false)
+
+    // After the cool-down, intentional edge hover can arm again.
+    vi.advanceTimersByTime(PEEK_GESTURE_SUPPRESS_MS)
+    moveMouse(RIGHT_EDGE_X, BELOW_TITLEBAR_Y)
+    vi.advanceTimersByTime(PEEK_OPEN_DELAY_MS)
+    expect(useAppStore.getState().rightSidebarPeek).toBe(true)
+  })
+
+  it('does not arm while the pointer is over a vertical scrollbar gutter', () => {
+    const scrollPort = document.createElement('div')
+    Object.defineProperty(scrollPort, 'scrollHeight', { configurable: true, value: 2000 })
+    Object.defineProperty(scrollPort, 'clientHeight', { configurable: true, value: 400 })
+    scrollPort.getBoundingClientRect = () =>
+      ({
+        top: 0,
+        left: window.innerWidth - 20,
+        right: window.innerWidth,
+        bottom: 400,
+        width: 20,
+        height: 400,
+        x: window.innerWidth - 20,
+        y: 0,
+        toJSON: () => ({})
+      }) as DOMRect
+    document.body.appendChild(scrollPort)
+    const styleSpy = vi.spyOn(window, 'getComputedStyle').mockImplementation((el) => {
+      if (el === scrollPort) {
+        return { overflowY: 'auto' } as CSSStyleDeclaration
+      }
+      return { overflowY: 'visible' } as CSSStyleDeclaration
+    })
+
+    render(<RightSidebarEdgePeekZone />)
+    act(() => {
+      fireEvent.mouseMove(scrollPort, {
+        clientX: RIGHT_EDGE_X,
+        clientY: BELOW_TITLEBAR_Y,
+        buttons: 0,
+        target: scrollPort
+      })
+    })
+    vi.advanceTimersByTime(PEEK_OPEN_DELAY_MS)
+    expect(useAppStore.getState().rightSidebarPeek).toBe(false)
+
+    styleSpy.mockRestore()
+    scrollPort.remove()
+  })
+
+  it('does not arm while the pointer is over a Monaco/custom scrollbar node', () => {
+    const thumb = document.createElement('div')
+    thumb.className = 'slider'
+    const host = document.createElement('div')
+    host.className = 'monaco-scrollable-element'
+    host.appendChild(thumb)
+    document.body.appendChild(host)
+
+    render(<RightSidebarEdgePeekZone />)
+    act(() => {
+      fireEvent.mouseMove(thumb, {
+        clientX: RIGHT_EDGE_X,
+        clientY: BELOW_TITLEBAR_Y,
+        buttons: 0
+      })
+    })
+    vi.advanceTimersByTime(PEEK_OPEN_DELAY_MS)
+    expect(useAppStore.getState().rightSidebarPeek).toBe(false)
+
+    host.remove()
+  })
+
+  it('does not arm during wheel/scroll near the edge', () => {
+    render(<RightSidebarEdgePeekZone />)
+
+    act(() => {
+      fireEvent.wheel(window, { clientX: RIGHT_EDGE_X, clientY: BELOW_TITLEBAR_Y })
+    })
+    moveMouse(RIGHT_EDGE_X, BELOW_TITLEBAR_Y)
+    vi.advanceTimersByTime(PEEK_OPEN_DELAY_MS)
+    expect(useAppStore.getState().rightSidebarPeek).toBe(false)
+  })
+
   it.each([
     ['the window loses focus', () => fireEvent.blur(window)],
     ['the pointer leaves the window', () => fireEvent.mouseLeave(document.documentElement)]
@@ -194,6 +287,50 @@ describe('RightSidebarEdgePeekZone', () => {
 
     // The pending open timer must not flip peek on after the sidebar opened.
     expect(useAppStore.getState().rightSidebarPeek).toBe(false)
+  })
+})
+
+describe('isPointerOverVerticalScrollbar', () => {
+  it('detects the classic overflow scrollbar gutter on the right of a scrollport', () => {
+    const scrollPort = document.createElement('div')
+    Object.defineProperty(scrollPort, 'scrollHeight', { configurable: true, value: 2000 })
+    Object.defineProperty(scrollPort, 'clientHeight', { configurable: true, value: 400 })
+    scrollPort.getBoundingClientRect = () =>
+      ({
+        top: 0,
+        left: 100,
+        right: 500,
+        bottom: 400,
+        width: 400,
+        height: 400,
+        x: 100,
+        y: 0,
+        toJSON: () => ({})
+      }) as DOMRect
+    document.body.appendChild(scrollPort)
+    const styleSpy = vi.spyOn(window, 'getComputedStyle').mockImplementation((el) => {
+      if (el === scrollPort) {
+        return { overflowY: 'scroll' } as CSSStyleDeclaration
+      }
+      return { overflowY: 'visible' } as CSSStyleDeclaration
+    })
+
+    const over = {
+      target: scrollPort,
+      clientX: 495,
+      clientY: 100
+    } as unknown as MouseEvent
+    const notOver = {
+      target: scrollPort,
+      clientX: 200,
+      clientY: 100
+    } as unknown as MouseEvent
+
+    expect(isPointerOverVerticalScrollbar(over)).toBe(true)
+    expect(isPointerOverVerticalScrollbar(notOver)).toBe(false)
+
+    styleSpy.mockRestore()
+    scrollPort.remove()
   })
 })
 

@@ -7,9 +7,24 @@ import { isRightSidebarEdgePeekEnabled } from './right-sidebar-edge-peek-prefere
 // The enter delay keeps edge scrollbar grabs from flashing the sidebar open.
 export const PEEK_OPEN_DELAY_MS = 250
 export const PEEK_CLOSE_DELAY_MS = 300
+// Why: mousedown alone is not enough — users hover the edge to aim at a
+// scrollbar, then press. Without a post-gesture cool-down the 250ms dwell
+// re-arms the moment they release (or after a short hover before the press).
+export const PEEK_GESTURE_SUPPRESS_MS = 600
 // The rightmost band that arms the peek, and the top zone it excludes.
 const PEEK_EDGE_TRIGGER_PX = 6
 const PEEK_TITLEBAR_ZONE_PX = 36
+// Native + common custom scrollbar hit targets near a scrollport's right edge.
+const PEEK_SCROLLBAR_HIT_PX = 16
+const PEEK_CUSTOM_SCROLLBAR_SELECTOR = [
+  '.monaco-scrollable-element > .scrollbar',
+  '.monaco-scrollable-element .slider',
+  '.xterm-viewport',
+  '[data-slot="scroll-area-scrollbar"]',
+  '[data-slot="scroll-area-thumb"]',
+  '[data-radix-scroll-area-scrollbar]',
+  '[data-radix-scroll-area-thumb]'
+].join(',')
 const PEEK_INTERACTIVE_PORTAL_SELECTOR = [
   '[data-slot="context-menu-content"]',
   '[data-slot="context-menu-sub-content"]',
@@ -20,6 +35,46 @@ const PEEK_INTERACTIVE_PORTAL_SELECTOR = [
   '[data-slot="popover-content"]',
   '[data-slot="select-content"]'
 ].join(',')
+
+/**
+ * True when the pointer is on (or in the gutter of) a vertical scrollbar of a
+ * scrollable ancestor. Only cheap geometry walks when already inside the edge
+ * band — callers must gate that first.
+ */
+export function isPointerOverVerticalScrollbar(event: MouseEvent): boolean {
+  const target = event.target
+  if (!(target instanceof Element)) {
+    return false
+  }
+  if (target.closest(PEEK_CUSTOM_SCROLLBAR_SELECTOR)) {
+    return true
+  }
+  let node: Element | null = target
+  // Cap the walk: deep trees (Monaco/xterm) still resolve within a few levels.
+  for (let depth = 0; depth < 16 && node && node !== document.documentElement; depth++) {
+    if (node instanceof HTMLElement) {
+      const style = window.getComputedStyle(node)
+      const overflowY = style.overflowY
+      if (
+        (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') &&
+        node.scrollHeight > node.clientHeight + 1
+      ) {
+        const rect = node.getBoundingClientRect()
+        // Why: clientWidth excludes classic scrollbars; overlay scrollbars still
+        // live against the box's right edge. Either way the interactive gutter
+        // is the last ~16px of the scrollport.
+        if (
+          event.clientX >= rect.right - PEEK_SCROLLBAR_HIT_PX &&
+          event.clientX <= rect.right + 2
+        ) {
+          return true
+        }
+      }
+    }
+    node = node.parentElement
+  }
+  return false
+}
 
 /**
  * Arms the edge peek while the sidebar is fully hidden. Detection is
@@ -58,16 +113,27 @@ export function RightSidebarEdgePeekZone(): React.JSX.Element | null {
       return
     }
     let openTimer: number | null = null
+    // Why: wall-clock suppress window for button/scroll gestures so a timer
+    // armed on pure hover cannot fire after (or during) scrollbar use.
+    let suppressUntilMs = 0
     const clearOpenTimer = (): void => {
       if (openTimer !== null) {
         window.clearTimeout(openTimer)
         openTimer = null
       }
     }
+    const suppressArming = (): void => {
+      clearOpenTimer()
+      suppressUntilMs = performance.now() + PEEK_GESTURE_SUPPRESS_MS
+    }
     const onMouseMove = (event: MouseEvent): void => {
       // Why: scrollbar and resize drags can remain in the edge band longer
       // than the hover delay; pressed buttons must never arm an overlay.
       if (event.buttons !== 0) {
+        suppressArming()
+        return
+      }
+      if (performance.now() < suppressUntilMs) {
         clearOpenTimer()
         return
       }
@@ -80,21 +146,42 @@ export function RightSidebarEdgePeekZone(): React.JSX.Element | null {
         clearOpenTimer()
         return
       }
+      // Why: the right edge is exactly where vertical scrollbars live. Pure
+      // hover over a scrollbar (before mousedown) used to open the peek and
+      // cover the thumb mid-drag aim.
+      if (isPointerOverVerticalScrollbar(event)) {
+        suppressArming()
+        return
+      }
       if (openTimer === null) {
         openTimer = window.setTimeout(() => {
           openTimer = null
+          // Why: re-check suppress at fire time — a mousedown/scroll during the
+          // dwell window must still win even if mousemove stopped.
+          if (performance.now() < suppressUntilMs) {
+            return
+          }
           setRightSidebarPeek(true)
         }, PEEK_OPEN_DELAY_MS)
       }
     }
     window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mousedown', clearOpenTimer)
+    // Why: mousedown clears an armed dwell; mouseup starts the cool-down so
+    // release-after-scrollbar-drag cannot immediately re-arm.
+    window.addEventListener('mousedown', suppressArming)
+    window.addEventListener('mouseup', suppressArming)
+    window.addEventListener('wheel', suppressArming, { passive: true })
+    // Capture: scroll can fire on nested containers, not the window.
+    window.addEventListener('scroll', suppressArming, { capture: true, passive: true })
     window.addEventListener('blur', clearOpenTimer)
     document.documentElement.addEventListener('mouseleave', clearOpenTimer)
     return () => {
       clearOpenTimer()
       window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('mousedown', clearOpenTimer)
+      window.removeEventListener('mousedown', suppressArming)
+      window.removeEventListener('mouseup', suppressArming)
+      window.removeEventListener('wheel', suppressArming)
+      window.removeEventListener('scroll', suppressArming, true)
       window.removeEventListener('blur', clearOpenTimer)
       document.documentElement.removeEventListener('mouseleave', clearOpenTimer)
     }
