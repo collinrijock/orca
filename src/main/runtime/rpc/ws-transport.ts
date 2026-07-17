@@ -14,6 +14,15 @@ const MAX_WS_MESSAGE_BYTES = 1024 * 1024
 // streams (session tabs, terminals, file watches, browser streams). Keep the
 // cap high enough that leaked/stale streams do not starve short control RPCs.
 const MAX_WS_CONNECTIONS = 128
+// Why: hard bound on TCP-level sockets, set ABOVE the WS-upgrade cap so it only
+// bites under a genuine leak/abuse. When the http server is at this cap Node
+// accepts-then-immediately-closes each new socket, so the accept loop KEEPS
+// DRAINING — the listener can never stall with SYNs stuck in SYN_RCVD the way
+// an unbounded server does once leaked/half-open sockets exhaust the process
+// file-descriptor budget (EMFILE). The WS-upgrade cap alone runs only after a
+// socket is already accepted, so it cannot prevent that FD wedge. See the
+// :6768 accept-wedge post-mortem.
+const MAX_TCP_CONNECTIONS = MAX_WS_CONNECTIONS * 2
 const PRE_AUTH_TIMEOUT_MS = 10_000
 type WebSocketMessagePayload = string | Uint8Array<ArrayBufferLike>
 type WebSocketMessageHandler = {
@@ -224,14 +233,28 @@ export class WebSocketTransport implements RpcTransport {
       })
     })
 
+    // Why: bound TCP-level sockets so a leak/flood cannot exhaust the process
+    // FD budget and stall accept() with EMFILE (the :6768 accept-wedge: SYNs
+    // pile up in SYN_RCVD, zero ESTABLISHED, even localhost times out, no
+    // self-heal). At this cap Node accepts-then-closes new sockets, keeping the
+    // accept loop draining instead of silently wedging.
+    httpServer.maxConnections = MAX_TCP_CONNECTIONS
+
     const wss = new WebSocketServer({
       server: httpServer,
       maxPayload: MAX_WS_MESSAGE_BYTES
     })
 
+    // Why: an accept()-level failure (EMFILE/ENFILE) is emitted as 'error' on
+    // the http server, which `ws` forwards onto the WebSocketServer. With no
+    // listener Node rethrows it as an uncaught exception that can silently tear
+    // the transport down. Log and keep listening so the accept path is
+    // observable and recovers as descriptors free up.
+    wss.on('error', (error) => console.warn('[ws-transport] listener error on accept path:', error))
+
     wss.on('connection', (ws) => {
       if (wss.clients.size > MAX_WS_CONNECTIONS) {
-        ws.close(1013, 'Maximum connections reached')
+        this.rejectOverCapacity(ws)
         return
       }
       this.handleConnection(ws)
@@ -240,6 +263,22 @@ export class WebSocketTransport implements RpcTransport {
     this.httpServer = httpServer
     this.wss = wss
     this.startHeartbeat()
+  }
+
+  // Why: over the WS-upgrade cap, request a graceful 1013 close but force the
+  // socket down shortly after. A backgrounded/half-open phone may never ack the
+  // close frame, so a bare ws.close() would leave the socket in wss.clients (and
+  // holding a descriptor) at >cap forever, permanently rejecting every client
+  // after it. The 'error' listener keeps an ECONNRESET-while-closing from
+  // surfacing as an unhandled 'error' event (which would throw).
+  private rejectOverCapacity(ws: WebSocket): void {
+    ws.on('error', () => {})
+    ws.close(1013, 'Maximum connections reached')
+    // Why: give the 1013 close a brief window, then hard-terminate so the
+    // descriptor is freed even if the client never acks the close frame.
+    const terminateTimer = setTimeout(() => ws.terminate(), 1_000)
+    terminateTimer.unref?.()
+    ws.once('close', () => clearTimeout(terminateTimer))
   }
 
   // Why: ping every live socket on a fixed cadence and terminate any that
@@ -255,12 +294,14 @@ export class WebSocketTransport implements RpcTransport {
       if (!wss) {
         return
       }
+      let reaped = 0
       for (const ws of wss.clients) {
         if (!this.wsAlive.has(ws)) {
           // Why: terminate() (vs close()) skips the close handshake and
           // immediately fires the 'close' event, freeing the slot. close()
           // on an already-dead socket can hang for the OS-level TCP timeout.
           ws.terminate()
+          reaped++
           continue
         }
         this.wsAlive.delete(ws)
@@ -270,6 +311,12 @@ export class WebSocketTransport implements RpcTransport {
           // Why: ping() can throw on a socket that's mid-tear-down; the
           // close handler will run regardless, so swallow the throw.
         }
+      }
+      // Why: make the accept path observable. Steady reaping or a client count
+      // riding the cap are the early signs of the half-open-socket leak that
+      // used to wedge :6768 silently — surface them instead of failing dark.
+      if (reaped > 0 || wss.clients.size >= MAX_WS_CONNECTIONS) {
+        console.warn(`[ws-transport] heartbeat reaped ${reaped}; ${wss.clients.size} live sockets`)
       }
     }, this.heartbeatIntervalMs)
     if (typeof this.heartbeatTimer.unref === 'function') {

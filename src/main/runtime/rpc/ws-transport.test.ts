@@ -327,6 +327,75 @@ describe('WebSocketTransport', () => {
     liveClient.close()
   })
 
+  it('bounds TCP-level sockets so a leak cannot wedge the accept loop', async () => {
+    // Why: the :6768 accept-wedge — unbounded sockets exhausted the FD budget,
+    // accept() started failing with EMFILE, and new SYNs stalled in SYN_RCVD
+    // with zero ESTABLISHED and no self-heal. A TCP-level maxConnections makes
+    // Node accept-then-close past the cap so the listener never stops draining.
+    const { transport } = await createTransport()
+    await transport.start()
+
+    const httpServer = (transport as unknown as { httpServer: { maxConnections: number } })
+      .httpServer
+    expect(httpServer.maxConnections).toBeGreaterThan(128)
+    expect(Number.isFinite(httpServer.maxConnections)).toBe(true)
+  })
+
+  it('keeps listening after an accept-level error and still accepts new clients', async () => {
+    // Why: an EMFILE/ENFILE from accept() surfaces as an 'error' on the http
+    // server, which `ws` forwards onto the WebSocketServer. Without a listener
+    // Node rethrows it as an uncaught exception that can silently kill the
+    // transport. The handler must swallow it and leave the listener able to
+    // accept the next connection.
+    const { transport } = await createTransport((msg, reply) => {
+      const request = JSON.parse(msg)
+      reply(JSON.stringify({ id: request.id, ok: true }))
+    })
+    await transport.start()
+
+    const httpServer = (
+      transport as unknown as { httpServer: { emit: (event: string, err: Error) => void } }
+    ).httpServer
+    // Why: emit on the http server (not wss) to exercise the real forwarding
+    // path — libuv raises accept errors on the underlying net server.
+    expect(() =>
+      httpServer.emit('error', Object.assign(new Error('accept EMFILE'), { code: 'EMFILE' }))
+    ).not.toThrow()
+
+    const ws = await connectWs(transport)
+    const response = await sendAndReceive(ws, JSON.stringify({ id: 'after-error', method: 'test' }))
+    expect(JSON.parse(response)).toMatchObject({ id: 'after-error', ok: true })
+    ws.close()
+  })
+
+  it('force-terminates an over-capacity socket that ignores the close frame', async () => {
+    // Why: a backgrounded/half-open phone may never ack the 1013 close, so a
+    // bare ws.close() would leave the socket in wss.clients at >cap forever and
+    // permanently reject everyone after it. rejectOverCapacity must hard-close.
+    const { transport } = await createTransport()
+    await transport.start()
+
+    const ws = await connectWs(transport)
+    const wss = (transport as unknown as { wss: { clients: Set<WebSocket> } }).wss
+    const serverSocket = Array.from(wss.clients)[0]
+    expect(serverSocket).toBeDefined()
+    const terminateSpy = vi.spyOn(serverSocket!, 'terminate')
+
+    vi.useFakeTimers()
+    try {
+      ;(transport as unknown as { rejectOverCapacity(ws: WebSocket): void }).rejectOverCapacity(
+        serverSocket!
+      )
+      vi.advanceTimersByTime(1_000)
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(terminateSpy).toHaveBeenCalled()
+    terminateSpy.mockRestore()
+    ws.close()
+  })
+
   it('is idempotent on double start', async () => {
     const { transport } = await createTransport()
 
