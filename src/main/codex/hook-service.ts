@@ -35,6 +35,7 @@ import {
   POSIX_HOOK_STDIN_DRAIN_COMMAND
 } from '../agent-hooks/hook-stdin-contract'
 import {
+  codexHookSourcePathsEqual,
   computeTrustKey,
   computeTrustedHash,
   escapeTomlString,
@@ -268,7 +269,7 @@ function removeStaleRuntimeHookTrustEntries(
   const staleKeys: string[] = []
   for (const [key, state] of readHookTrustEntries(tomlPath)) {
     const parsed = parseTrustKey(key)
-    if (!parsed || normalizeCodexHookSourcePath(parsed.sourcePath) !== canonicalRuntimeHooksPath) {
+    if (!parsed || !codexHookSourcePathsEqual(parsed.sourcePath, canonicalRuntimeHooksPath)) {
       continue
     }
     if (expectedHashes.get(normalizeHookTrustKeyForLookup(key)) === state.trustedHash) {
@@ -442,7 +443,7 @@ function getTrustedSystemHookHashesByEvent(
     if (!parsed || !state.trustedHash) {
       continue
     }
-    if (normalizeCodexHookSourcePath(parsed.sourcePath) !== canonicalSystemConfigPath) {
+    if (!codexHookSourcePathsEqual(parsed.sourcePath, canonicalSystemConfigPath)) {
       continue
     }
     let hashes = trustedHashesByEvent.get(parsed.eventLabel)

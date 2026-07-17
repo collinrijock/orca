@@ -46,20 +46,24 @@ describe('Codex trust config rollback', () => {
     expect(() => readFileSync(configPath)).toThrowError(/ENOENT/)
   })
 
-  it('removes an RPC-created dangling-symlink target without deleting the user link', () => {
-    const configPath = tempConfigPath()
-    const targetDir = join(configPath, '..', 'dotfiles')
-    const targetPath = join(targetDir, 'codex-config.toml')
-    mkdirSync(targetDir)
-    symlinkSync(join('dotfiles', 'codex-config.toml'), configPath)
-    const snapshot = captureCodexTrustConfig(configPath)
-    writeFileSync(targetPath, 'rpc mutation')
+  // Why: ordinary Windows CI tokens cannot create file symlinks without Developer Mode.
+  it.skipIf(process.platform === 'win32')(
+    'removes an RPC-created dangling-symlink target without deleting the user link',
+    () => {
+      const configPath = tempConfigPath()
+      const targetDir = join(configPath, '..', 'dotfiles')
+      const targetPath = join(targetDir, 'codex-config.toml')
+      mkdirSync(targetDir)
+      symlinkSync(join('dotfiles', 'codex-config.toml'), configPath)
+      const snapshot = captureCodexTrustConfig(configPath)
+      writeFileSync(targetPath, 'rpc mutation')
 
-    restoreCodexTrustConfig(configPath, snapshot)
+      restoreCodexTrustConfig(configPath, snapshot)
 
-    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
-    expect(() => readFileSync(targetPath)).toThrowError(/ENOENT/)
-  })
+      expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+      expect(() => readFileSync(targetPath)).toThrowError(/ENOENT/)
+    }
+  )
 
   it('atomically recreates exact contents and mode after the file disappears', () => {
     const configPath = tempConfigPath()
@@ -77,21 +81,24 @@ describe('Codex trust config rollback', () => {
     }
   })
 
-  it('restores a symlink target without replacing the config.toml symlink', () => {
-    const configPath = tempConfigPath()
-    const targetDir = join(configPath, '..', 'dotfiles')
-    const targetPath = join(targetDir, 'codex-config.toml')
-    mkdirSync(targetDir)
-    writeFileSync(targetPath, '# original\n')
-    symlinkSync(targetPath, configPath)
-    const snapshot = captureCodexTrustConfig(configPath)
-    rmSync(targetPath)
+  it.skipIf(process.platform === 'win32')(
+    'restores a symlink target without replacing the config.toml symlink',
+    () => {
+      const configPath = tempConfigPath()
+      const targetDir = join(configPath, '..', 'dotfiles')
+      const targetPath = join(targetDir, 'codex-config.toml')
+      mkdirSync(targetDir)
+      writeFileSync(targetPath, '# original\n')
+      symlinkSync(targetPath, configPath)
+      const snapshot = captureCodexTrustConfig(configPath)
+      rmSync(targetPath)
 
-    restoreCodexTrustConfig(configPath, snapshot)
+      restoreCodexTrustConfig(configPath, snapshot)
 
-    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
-    expect(readFileSync(targetPath, 'utf8')).toBe('# original\n')
-  })
+      expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+      expect(readFileSync(targetPath, 'utf8')).toBe('# original\n')
+    }
+  )
 
   it.skipIf(process.platform === 'win32')(
     'restores the captured mode when the contents already match',

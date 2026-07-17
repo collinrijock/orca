@@ -7,6 +7,7 @@ import {
 } from '../agent-hooks/installer-utils'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import {
+  codexHookSourcePathsEqual,
   getCodexExplicitHomeHookSourcePath,
   normalizeCodexHookSourcePath,
   normalizeHookTrustKeyForLookup,
@@ -87,10 +88,7 @@ export function snapshotCodexRuntimeHookTrustProvenance(
     const entries: Record<string, HookTrustProvenanceEntry> = {}
     for (const [key, state] of readHookTrustEntries(join(runtimeHomePath, 'config.toml'))) {
       const parsed = parseTrustKey(key)
-      if (
-        !parsed ||
-        normalizeCodexHookSourcePath(parsed.sourcePath) !== canonicalRuntimeHooksPath
-      ) {
+      if (!parsed || !codexHookSourcePathsEqual(parsed.sourcePath, canonicalRuntimeHooksPath)) {
         continue
       }
       entries[normalizeHookTrustKeyForLookup(key)] = {
@@ -170,7 +168,7 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
       continue
     }
     const parsed = parseTrustKey(key)
-    if (!parsed || normalizeCodexHookSourcePath(parsed.sourcePath) !== canonicalRuntimeHooksPath) {
+    if (!parsed || !codexHookSourcePathsEqual(parsed.sourcePath, canonicalRuntimeHooksPath)) {
       continue
     }
     const previous = provenance.get(normalizeHookTrustKeyForLookup(key))

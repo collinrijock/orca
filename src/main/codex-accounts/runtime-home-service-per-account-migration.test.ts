@@ -96,7 +96,7 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
       expect(config).not.toContain('[hooks.state')
       expect(hookService.install(account.managedHomePath).state).toBe('installed')
       expect(readFileSync(join(account.managedHomePath, 'hooks.json'), 'utf8')).toContain(
-        'codex-hook.sh'
+        process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
       )
       expect(readFileSync(join(account.managedHomePath, 'config.toml'), 'utf8')).toContain(
         '[hooks.state."'

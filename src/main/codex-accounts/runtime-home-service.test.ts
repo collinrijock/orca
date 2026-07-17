@@ -1033,14 +1033,20 @@ describe('CodexRuntimeHomeService', () => {
       getRuntimeCodexHomePath()
     )
     expect(existsSync(markerPath)).toBe(true)
-    writeFileSync(
-      join(testState.fakeHomeDir, '.zshrc'),
-      'export CODEX_HOME="$HOME/shell-custom-codex-home"\n',
-      'utf-8'
-    )
-    const shellLaunchEnv = { HOME: testState.fakeHomeDir, SHELL: '/bin/zsh' }
-    expect(service.isHostSystemDefaultRealHome(shellLaunchEnv)).toBe(false)
-    expect(service.prepareForCodexLaunch(undefined, shellLaunchEnv)).toBe(getRuntimeCodexHomePath())
+    if (process.platform !== 'win32') {
+      // Why: shell startup CODEX_HOME discovery is a POSIX-shell lane; Windows
+      // must not invoke an ambient WSL bash while evaluating this contract.
+      writeFileSync(
+        join(testState.fakeHomeDir, '.zshrc'),
+        'export CODEX_HOME="$HOME/shell-custom-codex-home"\n',
+        'utf-8'
+      )
+      const shellLaunchEnv = { HOME: testState.fakeHomeDir, SHELL: '/bin/zsh' }
+      expect(service.isHostSystemDefaultRealHome(shellLaunchEnv)).toBe(false)
+      expect(service.prepareForCodexLaunch(undefined, shellLaunchEnv)).toBe(
+        getRuntimeCodexHomePath()
+      )
+    }
     const previousCodexHome = process.env.CODEX_HOME
     const previousOrcaCodexHome = process.env.ORCA_CODEX_HOME
     process.env.CODEX_HOME = getRuntimeCodexHomePath()

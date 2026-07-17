@@ -1,4 +1,5 @@
 import {
+  codexHookSourcePathsEqual,
   computeTrustKey,
   computeTrustedHash,
   getCodexExplicitHomeHookSourcePath,
@@ -78,7 +79,7 @@ function getCodexManagedHookTrustEntryKeys(
     const parts = parseTrustKey(key)
     if (
       !parts ||
-      normalizeCodexHookSourcePath(parts.sourcePath) !== expectedSourcePath ||
+      !codexHookSourcePathsEqual(parts.sourcePath, expectedSourcePath) ||
       !options.managedEventLabels.has(parts.eventLabel)
     ) {
       continue

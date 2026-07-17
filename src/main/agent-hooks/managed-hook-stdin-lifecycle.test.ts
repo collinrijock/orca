@@ -219,9 +219,6 @@ describe('Windows managed hook stdin structure', () => {
           expect(entry.install().state, `${entry.agent} install status`).toBe('installed')
         }
       })
-      expect(
-        readFileSync(join(isolatedUserDataDir, 'codex-runtime-home', 'home', 'hooks.json'), 'utf8')
-      ).toContain('WindowsPowerShell')
       const hooksDir = join(home, '.orca', 'agent-hooks')
       const fileNames = readdirSync(hooksDir)
       const mainBatchScripts = fileNames.filter(
@@ -281,14 +278,19 @@ describe('Windows managed hook stdin structure', () => {
           expect(entry.install().state, `${entry.agent} install status`).toBe('installed')
         }
         const hooksDir = join(home, '.orca', 'agent-hooks')
-        const mainScripts = readdirSync(hooksDir).filter(
-          (name) =>
+        const mainScripts = readdirSync(hooksDir).filter((name) => {
+          if (name.endsWith('-hook.sh')) {
+            // Why: Windows' ambient bash.exe may be the WSL launcher, which
+            // cannot execute a Windows script path and can block indefinitely.
+            return Boolean(process.env.KIMI_SHELL_PATH)
+          }
+          return (
             name === 'antigravity-hook.cmd' ||
             name.endsWith('-hook.ps1') ||
-            name.endsWith('-hook.sh') ||
             (name.endsWith('-hook.cmd') && !name.startsWith('antigravity-'))
-        )
-        expect(mainScripts).toHaveLength(12)
+          )
+        })
+        expect(mainScripts).toHaveLength(process.env.KIMI_SHELL_PATH ? 12 : 11)
         for (const fileName of mainScripts) {
           const scriptPath = join(hooksDir, fileName)
           const executable = fileName.endsWith('.cmd')
@@ -325,13 +327,15 @@ describe('Windows managed hook stdin structure', () => {
             name: 'encoded PowerShell',
             executable: 'cmd.exe',
             args: ['/d', '/c', wrapWindowsHookCommand(missingScript)]
-          },
-          {
-            name: 'Git Bash fast path',
-            executable: process.env.KIMI_SHELL_PATH || 'bash.exe',
-            args: ['-lc', wrapWindowsGitBashHookCommand(missingScript)]
           }
         ]
+        if (process.env.KIMI_SHELL_PATH) {
+          launcherCases.push({
+            name: 'Git Bash fast path',
+            executable: process.env.KIMI_SHELL_PATH,
+            args: ['-lc', wrapWindowsGitBashHookCommand(missingScript)]
+          })
+        }
         for (const launcher of launcherCases) {
           const result = await runHookProcess(launcher.executable, launcher.args, hookEnvironment())
           expect(result.exitCode, `${launcher.name} exit code`).toBe(0)

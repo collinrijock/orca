@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  codexHookSourcePathsEqual,
   computeTrustKey,
   normalizeCodexHookSourcePath,
   normalizeHookTrustKeyForLookup,
@@ -39,9 +40,12 @@ describe('Codex hook trust source path normalization', () => {
     )
   })
 
-  it('normalizes POSIX doubles, dot segments, repeated separators, and trailing slashes', () => {
-    expect(normalizeCodexHookSourcePath('//tmp/a//b/../hooks.json/')).toBe('/tmp/a/hooks.json')
-  })
+  it.skipIf(process.platform === 'win32')(
+    'normalizes POSIX doubles, dot segments, repeated separators, and trailing slashes',
+    () => {
+      expect(normalizeCodexHookSourcePath('//tmp/a//b/../hooks.json/')).toBe('/tmp/a/hooks.json')
+    }
+  )
 
   it('resolves relative native paths to the absolute discovery shape', () => {
     expect(normalizeCodexHookSourcePath('relative/../hooks.json')).toBe(resolve('hooks.json'))
@@ -66,6 +70,28 @@ describe('Codex hook trust source path normalization', () => {
 })
 
 describe('Codex hook trust key lookup normalization', () => {
+  it('compares mixed-case Windows hook sources by lookup identity', () => {
+    expect(
+      codexHookSourcePathsEqual(
+        'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json',
+        'c:/users/rod/appdata/roaming/orca/hooks.json'
+      )
+    ).toBe(true)
+    expect(codexHookSourcePathsEqual('/home/User/hooks.json', '/home/user/hooks.json')).toBe(false)
+    expect(
+      codexHookSourcePathsEqual(
+        '\\\\wsl.localhost\\Ubuntu\\home\\User\\.codex\\hooks.json',
+        '//wsl$/ubuntu/home/User/.codex/hooks.json'
+      )
+    ).toBe(true)
+    expect(
+      codexHookSourcePathsEqual(
+        '\\\\wsl.localhost\\Ubuntu\\home\\User\\.codex\\hooks.json',
+        '//wsl$/ubuntu/home/user/.codex/hooks.json'
+      )
+    ).toBe(false)
+  })
+
   it('folds Windows separator and case variants without changing the persisted key', () => {
     const native = 'C:\\Users\\Rod\\.codex\\hooks.json:stop:2:3'
     const slash = 'c:/users/rod/.codex/hooks.json:stop:2:3'

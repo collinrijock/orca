@@ -297,22 +297,26 @@ describe('computeTrustKey', () => {
     ).toBe(`${join(tmpDir, 'hooks.json')}:user_prompt_submit:0:0`)
   })
 
-  it('preserves a hooks.json leaf symlink in the trust key', () => {
-    const hooksPath = join(tmpDir, 'hooks.json')
-    const targetPath = join(tmpDir, 'dotfiles-hooks.json')
-    writeFileSync(targetPath, '{"hooks":{}}\n', 'utf-8')
-    symlinkSync(targetPath, hooksPath)
+  // Why: ordinary Windows CI tokens cannot create file symlinks without Developer Mode.
+  it.skipIf(process.platform === 'win32')(
+    'preserves a hooks.json leaf symlink in the trust key',
+    () => {
+      const hooksPath = join(tmpDir, 'hooks.json')
+      const targetPath = join(tmpDir, 'dotfiles-hooks.json')
+      writeFileSync(targetPath, '{"hooks":{}}\n', 'utf-8')
+      symlinkSync(targetPath, hooksPath)
 
-    expect(
-      computeTrustKey({
-        sourcePath: hooksPath,
-        eventLabel: 'stop',
-        groupIndex: 0,
-        handlerIndex: 0,
-        command: 'irrelevant'
-      })
-    ).toBe(`${hooksPath}:stop:0:0`)
-  })
+      expect(
+        computeTrustKey({
+          sourcePath: hooksPath,
+          eventLabel: 'stop',
+          groupIndex: 0,
+          handlerIndex: 0,
+          command: 'irrelevant'
+        })
+      ).toBe(`${hooksPath}:stop:0:0`)
+    }
+  )
 
   it.skipIf(process.platform === 'win32')(
     'canonicalizes an existing POSIX path with two leading slashes',
@@ -347,19 +351,22 @@ describe('computeTrustKey', () => {
     )
   })
 
-  it('resolves an explicit home parent while preserving its hooks.json leaf symlink', () => {
-    const logicalHome = join(tmpDir, 'logical-home')
-    const targetHome = join(tmpDir, 'target-home')
-    const targetHooks = join(tmpDir, 'target-hooks.json')
-    mkdirSync(targetHome)
-    writeFileSync(targetHooks, '{"hooks":{}}\n', 'utf-8')
-    symlinkSync(targetHome, logicalHome)
-    symlinkSync(targetHooks, join(targetHome, 'hooks.json'))
+  it.skipIf(process.platform === 'win32')(
+    'resolves an explicit home parent while preserving its hooks.json leaf symlink',
+    () => {
+      const logicalHome = join(tmpDir, 'logical-home')
+      const targetHome = join(tmpDir, 'target-home')
+      const targetHooks = join(tmpDir, 'target-hooks.json')
+      mkdirSync(targetHome)
+      writeFileSync(targetHooks, '{"hooks":{}}\n', 'utf-8')
+      symlinkSync(targetHome, logicalHome)
+      symlinkSync(targetHooks, join(targetHome, 'hooks.json'))
 
-    expect(getCodexExplicitHomeHookSourcePath(join(logicalHome, 'hooks.json'))).toBe(
-      join(realpathSync.native(targetHome), 'hooks.json')
-    )
-  })
+      expect(getCodexExplicitHomeHookSourcePath(join(logicalHome, 'hooks.json'))).toBe(
+        join(realpathSync.native(targetHome), 'hooks.json')
+      )
+    }
+  )
 })
 
 describe('upsertHookTrustEntries', () => {
@@ -545,7 +552,7 @@ describe('upsertHookTrustEntries', () => {
     expect(readFileSync(`${configPath}.bak`, 'utf-8')).toBe('model = "old"\n')
   })
 
-  it('does not follow an existing .bak symlink', () => {
+  it.skipIf(process.platform === 'win32')('does not follow an existing .bak symlink', () => {
     const original = 'model = "old"\n'
     const backupTarget = join(tmpDir, 'dotfiles-config-backup.toml')
     writeFileSync(configPath, original, 'utf-8')
@@ -1388,25 +1395,28 @@ describe('removeHookTrustEntries', () => {
     expect(statSync(configPath).mode & 0o777).toBe(0o600)
   })
 
-  it('updates a symlink target without replacing config.toml', () => {
-    const targetPath = join(tmpDir, 'dotfiles-config.toml')
-    const entry: CodexTrustEntry = {
-      sourcePath: '/x/hooks.json',
-      eventLabel: 'stop',
-      groupIndex: 0,
-      handlerIndex: 0,
-      command: 'echo trusted'
+  it.skipIf(process.platform === 'win32')(
+    'updates a symlink target without replacing config.toml',
+    () => {
+      const targetPath = join(tmpDir, 'dotfiles-config.toml')
+      const entry: CodexTrustEntry = {
+        sourcePath: '/x/hooks.json',
+        eventLabel: 'stop',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'echo trusted'
+      }
+      upsertHookTrustEntries(targetPath, [entry])
+      symlinkSync(targetPath, configPath)
+
+      removeHookTrustEntries(configPath, [computeTrustKey(entry)])
+
+      expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+      expect(readHookTrustEntries(targetPath).has(computeTrustKey(entry))).toBe(false)
     }
-    upsertHookTrustEntries(targetPath, [entry])
-    symlinkSync(targetPath, configPath)
+  )
 
-    removeHookTrustEntries(configPath, [computeTrustKey(entry)])
-
-    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
-    expect(readHookTrustEntries(targetPath).has(computeTrustKey(entry))).toBe(false)
-  })
-
-  it('does not replace a dangling config.toml symlink', () => {
+  it.skipIf(process.platform === 'win32')('does not replace a dangling config.toml symlink', () => {
     const targetPath = join(tmpDir, 'missing-dotfiles-config.toml')
     symlinkSync(targetPath, configPath)
 

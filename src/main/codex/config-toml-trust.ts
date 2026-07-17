@@ -267,6 +267,16 @@ export function normalizeCodexProjectPathForLookup(projectPath: string): string 
   return foldWslUncPathCaseInsensitiveParts(slashedPath) ?? slashedPath.toLowerCase()
 }
 
+export function codexHookSourcePathsEqual(left: string, right: string): boolean {
+  // Why: TrustMap iteration yields lookup-normalized keys, so Windows paths
+  // may be lowercase even when the live filesystem preserves mixed casing.
+  const normalizeForLookup = (sourcePath: string): string =>
+    normalizeCodexProjectPathForLookup(
+      sourcePath.startsWith('//') ? sourcePath : normalizeCodexHookSourcePath(sourcePath)
+    )
+  return normalizeForLookup(left) === normalizeForLookup(right)
+}
+
 // Why: trust revocations recorded before WSL tails compared case-sensitively
 // can carry drifted casing; fold fully so matching errs toward revoked.
 export function normalizeCodexProjectPathForRevocationLookup(projectPath: string): string {

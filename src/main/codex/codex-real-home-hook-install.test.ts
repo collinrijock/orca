@@ -127,7 +127,7 @@ describe('ensureRealHomeCodexHookState (install)', () => {
     const targetHome = join(fakeHomeDir, 'dotfiles-codex')
     rmSync(logicalHome, { recursive: true })
     mkdirSync(targetHome)
-    symlinkSync(targetHome, logicalHome)
+    symlinkSync(targetHome, logicalHome, process.platform === 'win32' ? 'junction' : 'dir')
 
     expect(ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })).toBe(
       'installed'
@@ -187,25 +187,29 @@ describe('ensureRealHomeCodexHookState (install)', () => {
     ).toBe(original)
   })
 
-  it('updates a symlinked hooks.json target without replacing the symlink', () => {
-    grantSucceeds()
-    const dotfilesDir = join(fakeHomeDir, 'dotfiles')
-    const targetPath = join(dotfilesDir, 'hooks.json')
-    mkdirSync(dotfilesDir, { recursive: true })
-    writeFileSync(
-      targetPath,
-      `${JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: 'mine.sh' }] }] } }, null, 2)}\n`,
-      'utf-8'
-    )
-    symlinkSync(targetPath, getRealHooksJsonPath())
+  // Why: ordinary Windows CI tokens cannot create file symlinks without Developer Mode.
+  it.skipIf(process.platform === 'win32')(
+    'updates a symlinked hooks.json target without replacing the symlink',
+    () => {
+      grantSucceeds()
+      const dotfilesDir = join(fakeHomeDir, 'dotfiles')
+      const targetPath = join(dotfilesDir, 'hooks.json')
+      mkdirSync(dotfilesDir, { recursive: true })
+      writeFileSync(
+        targetPath,
+        `${JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: 'mine.sh' }] }] } }, null, 2)}\n`,
+        'utf-8'
+      )
+      symlinkSync(targetPath, getRealHooksJsonPath())
 
-    expect(ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })).toBe(
-      'installed'
-    )
+      expect(ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })).toBe(
+        'installed'
+      )
 
-    expect(lstatSync(getRealHooksJsonPath()).isSymbolicLink()).toBe(true)
-    expect(JSON.parse(readFileSync(targetPath, 'utf-8')).hooks.Stop).toHaveLength(2)
-  })
+      expect(lstatSync(getRealHooksJsonPath()).isSymbolicLink()).toBe(true)
+      expect(JSON.parse(readFileSync(targetPath, 'utf-8')).hooks.Stop).toHaveLength(2)
+    }
+  )
 
   it('keeps the managed lane and original bytes when the pristine backup cannot be created', () => {
     grantSucceeds()

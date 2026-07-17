@@ -228,55 +228,59 @@ describe('CodexHookService app-server trust grant lane', () => {
     expect(readCodexTrustGrantLedgerHome(systemHome)).toBeNull()
   })
 
-  it('keeps a real-home symlink and rebases later user trust during flag-off cleanup', () => {
-    prepareSystemHome()
-    const systemHome = join(tmpHome, '.codex')
-    const hooksPath = join(systemHome, 'hooks.json')
-    const targetPath = join(tmpHome, 'dotfiles-hooks.json')
-    const material = getCodexManagedHookInstallMaterial()
-    const userHook = { type: 'command' as const, command: 'after-orca.sh' }
-    writeFileSync(
-      targetPath,
-      `${JSON.stringify(
-        {
-          hooks: {
-            Stop: [
-              { hooks: [{ type: 'command', command: material.command }] },
-              { hooks: [userHook] }
-            ]
+  // Why: ordinary Windows CI tokens cannot create file symlinks without Developer Mode.
+  it.skipIf(process.platform === 'win32')(
+    'keeps a real-home symlink and rebases later user trust during flag-off cleanup',
+    () => {
+      prepareSystemHome()
+      const systemHome = join(tmpHome, '.codex')
+      const hooksPath = join(systemHome, 'hooks.json')
+      const targetPath = join(tmpHome, 'dotfiles-hooks.json')
+      const material = getCodexManagedHookInstallMaterial()
+      const userHook = { type: 'command' as const, command: 'after-orca.sh' }
+      writeFileSync(
+        targetPath,
+        `${JSON.stringify(
+          {
+            hooks: {
+              Stop: [
+                { hooks: [{ type: 'command', command: material.command }] },
+                { hooks: [userHook] }
+              ]
+            }
+          },
+          null,
+          2
+        )}\n`
+      )
+      symlinkSync(targetPath, hooksPath)
+      const operations: string[] = []
+      rebaseInternals.setSessionRunnerSync((request) => {
+        operations.push(request.operation)
+        if (request.operation === 'inspect-user-hook-trust') {
+          return {
+            outcome: 'inspected',
+            moves: request.moves.map((move) => ({
+              ...move,
+              reportedOldKey: move.oldKey,
+              wasTrusted: true,
+              enabled: true
+            }))
           }
-        },
-        null,
-        2
-      )}\n`
-    )
-    symlinkSync(targetPath, hooksPath)
-    const operations: string[] = []
-    rebaseInternals.setSessionRunnerSync((request) => {
-      operations.push(request.operation)
-      if (request.operation === 'inspect-user-hook-trust') {
-        return {
-          outcome: 'inspected',
-          moves: request.moves.map((move) => ({
-            ...move,
-            reportedOldKey: move.oldKey,
-            wasTrusted: true,
-            enabled: true
-          }))
         }
-      }
-      return { outcome: 'repaired', repaired: 1 }
-    })
-    installCodexLikeGrantRunner()
+        return { outcome: 'repaired', repaired: 1 }
+      })
+      installCodexLikeGrantRunner()
 
-    expect(new CodexHookService().install().state).toBe('installed')
+      expect(new CodexHookService().install().state).toBe('installed')
 
-    expect(lstatSync(hooksPath).isSymbolicLink()).toBe(true)
-    expect(JSON.parse(readFileSync(targetPath, 'utf-8')).hooks.Stop).toEqual([
-      { hooks: [userHook] }
-    ])
-    expect(operations).toEqual(['inspect-user-hook-trust', 'repair-user-hook-trust'])
-  })
+      expect(lstatSync(hooksPath).isSymbolicLink()).toBe(true)
+      expect(JSON.parse(readFileSync(targetPath, 'utf-8')).hooks.Stop).toEqual([
+        { hooks: [userHook] }
+      ])
+      expect(operations).toEqual(['inspect-user-hook-trust', 'repair-user-hook-trust'])
+    }
+  )
 
   it.skipIf(process.platform === 'win32')(
     'preserves restrictive real-home hooks permissions during flag-off cleanup',
