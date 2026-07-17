@@ -11,7 +11,6 @@ import {
   readNativeChatTranscriptTail,
   type NativeChatTranscriptSubscription
 } from '../native-chat/transcript-watch'
-import { supportsNativeChatTranscriptTurnLifecycle } from '../native-chat/transcript-turn-lifecycle'
 
 // Re-export so existing test imports of `clearNativeChatTranscriptCache` from
 // this module keep working after the cache moved to transcript-read-cache.ts.
@@ -36,18 +35,12 @@ async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscr
   const { agent, sessionId } = args
   // Clamp to a positive window; default to the desktop window for the first page.
   const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DESKTOP_READ_WINDOW
-  const result = await readNativeChatTranscriptTail({
+  return readNativeChatTranscriptTail({
     agent,
     sessionId,
     transcriptPath: args.transcriptPath,
     limit
   })
-  return 'messages' in result
-    ? {
-        ...result,
-        turnLifecycleCapable: supportsNativeChatTranscriptTurnLifecycle(agent)
-      }
-    : result
 }
 
 export type NativeChatSubscribeArgs = {
@@ -70,20 +63,17 @@ export type NativeChatAppendedPayload = {
         hasMore: boolean
         error?: string
         lifecycle?: NativeChatTurnLifecycle
-        turnLifecycleCapable: boolean
       }
     | {
         type: 'replacement'
         messages: NativeChatMessage[]
         hasMore: boolean
         lifecycle?: NativeChatTurnLifecycle
-        turnLifecycleCapable: boolean
       }
     | {
         type: 'appended'
         messages: NativeChatMessage[]
         lifecycle?: NativeChatTurnLifecycle
-        turnLifecycleCapable: boolean
       }
 }
 
@@ -168,7 +158,6 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
     return
   }
   const { subscriptionId, agent, sessionId, transcriptPath } = args
-  const turnLifecycleCapable = supportsNativeChatTranscriptTurnLifecycle(agent)
   const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DESKTOP_READ_WINDOW
   // Replace any prior subscription under the same id (session change/resubscribe).
   const pendingToken = beginPendingSubscription(sender.id, subscriptionId)
@@ -193,7 +182,6 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
             type: 'snapshot',
             messages,
             hasMore,
-            turnLifecycleCapable,
             ...(error ? { error } : {}),
             ...(lifecycle ? { lifecycle } : {})
           }
@@ -210,7 +198,6 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
             type: 'replacement',
             messages,
             hasMore,
-            turnLifecycleCapable,
             ...(lifecycle ? { lifecycle } : {})
           }
         } satisfies NativeChatAppendedPayload)
@@ -224,7 +211,6 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
           frame: {
             type: 'appended',
             messages,
-            turnLifecycleCapable,
             ...(lifecycle ? { lifecycle } : {})
           }
         }
@@ -258,7 +244,6 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
         type: 'snapshot',
         messages: [],
         hasMore: false,
-        turnLifecycleCapable,
         error: 'Transcript unavailable'
       }
     }

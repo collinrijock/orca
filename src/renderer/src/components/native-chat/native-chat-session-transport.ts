@@ -134,10 +134,8 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                   hasMore?: boolean
                   error?: string
                   lifecycle?: unknown
-                  turnLifecycleCapable?: unknown
                 }
                 const lifecycle = parseRuntimeNativeChatTurnLifecycle(frame?.lifecycle)
-                const turnLifecycleCapable = frame?.turnLifecycleCapable === true
                 if (
                   (frame?.type === 'appended' ||
                     frame?.type === 'snapshot' ||
@@ -150,7 +148,6 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                       type: 'snapshot',
                       messages: frame.messages,
                       hasMore: frame.hasMore ?? frame.messages.length >= (limit ?? 300),
-                      turnLifecycleCapable,
                       ...(frame.error ? { error: frame.error } : {}),
                       ...(lifecycle ? { lifecycle } : {})
                     })
@@ -159,7 +156,6 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                       type: 'snapshot',
                       messages: frame.messages,
                       hasMore: frame.hasMore ?? false,
-                      turnLifecycleCapable,
                       ...(frame.error ? { error: frame.error } : {}),
                       ...(lifecycle ? { lifecycle } : {})
                     })
@@ -170,13 +166,11 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                             type: 'replacement',
                             messages: frame.messages,
                             hasMore: frame.hasMore ?? false,
-                            turnLifecycleCapable,
                             ...(lifecycle ? { lifecycle } : {})
                           }
                         : {
                             type: 'appended',
                             messages: frame.messages,
-                            turnLifecycleCapable,
                             ...(lifecycle ? { lifecycle } : {})
                           }
                     )

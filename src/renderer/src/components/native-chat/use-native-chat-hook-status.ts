@@ -10,11 +10,18 @@ export function useNativeChatHookStatus(
   const stateStartedAt = useAppStore(
     (store) => store.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null
   )
-  const hasWorkingSubagents = useAppStore(
-    (store) =>
-      store.agentStatusByPaneKey[paneKey]?.subagents?.some(
-        (subagent) => subagent.state === 'working'
+  // Why: only children that started during the current parent working epoch can
+  // keep the session working after lead completion. Prior-turn roster leftovers
+  // (missed SubagentStop, pane reuse) must not veto settle forever.
+  const hasWorkingSubagents = useAppStore((store) => {
+    const entry = store.agentStatusByPaneKey[paneKey]
+    const epochStart = entry?.stateStartedAt
+    return (
+      entry?.subagents?.some(
+        (subagent) =>
+          subagent.state === 'working' && (epochStart == null || subagent.startedAt >= epochStart)
       ) ?? false
-  )
+    )
+  })
   return [state, stateStartedAt, hasWorkingSubagents]
 }

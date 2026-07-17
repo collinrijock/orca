@@ -18,7 +18,6 @@ export type ReadTranscriptResult =
   | {
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
-      turnLifecycleCapable?: boolean
     }
   // notFound marks a retry-worthy miss (transcript not flushed to disk yet,
   // #8401) as opposed to a real parse/IO error callers surface immediately.

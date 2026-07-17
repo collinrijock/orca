@@ -5,7 +5,6 @@ import {
   readNativeChatTranscriptTail,
   subscribeNativeChatTranscript
 } from '../../../native-chat/transcript-watch'
-import { supportsNativeChatTranscriptTurnLifecycle } from '../../../native-chat/transcript-turn-lifecycle'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
 
 // Why: native chat renders an agent's own transcript (Claude/Codex JSONL). The
@@ -184,7 +183,6 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
     params: NativeChatSession,
     handler: async (params, { clientKind }) => {
       const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
-      const turnLifecycleCapable = supportsNativeChatTranscriptTurnLifecycle(params.agent)
       const result = await readNativeChatTranscriptTail({
         agent: params.agent,
         sessionId: params.sessionId,
@@ -197,7 +195,6 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
             messages: windowForClient(result.messages, clientKind, limit),
             hasMore: result.hasMore,
             beforeOffset: result.beforeOffset,
-            turnLifecycleCapable,
             ...(result.lifecycle ? { lifecycle: result.lifecycle } : {})
           }
         : result
@@ -219,7 +216,6 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       const cleanupToken = params.subscriptionId ?? `${params.agent}:${params.sessionId}`
       const subscriptionId = `nativeChat:${connectionId ?? 'local'}:${cleanupToken}`
       const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
-      const turnLifecycleCapable = supportsNativeChatTranscriptTurnLifecycle(params.agent)
       runtime.registerSubscriptionCleanup(
         subscriptionId,
         () => {
@@ -248,7 +244,6 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
             messages: windowForClient(messages, clientKind, limit),
             hasMore,
             beforeOffset,
-            turnLifecycleCapable,
             ...(error ? { error } : {}),
             ...(lifecycle ? { lifecycle } : {})
           })
@@ -262,7 +257,6 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
             messages: windowForClient(messages, clientKind, limit),
             hasMore,
             beforeOffset,
-            turnLifecycleCapable,
             ...(lifecycle ? { lifecycle } : {})
           })
         },
@@ -273,7 +267,6 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
           emit({
             type: 'appended',
             messages: sanitizeAppendForClient(messages, clientKind),
-            turnLifecycleCapable,
             ...(lifecycle ? { lifecycle } : {})
           })
         }
@@ -288,7 +281,6 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
           type: 'snapshot',
           messages: [],
           hasMore: false,
-          turnLifecycleCapable,
           error: 'Transcript unavailable'
         })
       }

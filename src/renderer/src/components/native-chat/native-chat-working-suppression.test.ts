@@ -29,4 +29,23 @@ describe('native chat working suppression', () => {
     expect(shouldClearNativeChatWorkingSuppression({ working: true })).toBe(false)
     expect(shouldClearNativeChatWorkingSuppression({ working: false })).toBe(true)
   })
+
+  it('clears suppression when a newer working epoch starts while interrupted', () => {
+    expect(
+      shouldClearNativeChatWorkingSuppression({
+        working: true,
+        interrupted: true,
+        workingEpoch: 20,
+        previousWorkingEpoch: 10
+      })
+    ).toBe(true)
+    expect(
+      shouldClearNativeChatWorkingSuppression({
+        working: true,
+        interrupted: true,
+        workingEpoch: 10,
+        previousWorkingEpoch: 10
+      })
+    ).toBe(false)
+  })
 })

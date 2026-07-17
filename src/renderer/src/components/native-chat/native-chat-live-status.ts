@@ -22,8 +22,6 @@ export type NativeChatLiveMergeInput = {
   stateStartedAt?: number | null
   /** Latest provider-authored turn boundary recovered from the transcript. */
   transcriptLifecycle?: NativeChatTurnLifecycle
-  /** Whether the serving host can decode explicit transcript turn boundaries. */
-  turnLifecycleCapable?: boolean
   /** Claude can finish its lead turn while background children remain active. */
   hookHasWorkingSubagents?: boolean
   /** True before the initial snapshot resolves; forces 'loading'. */
@@ -41,6 +39,8 @@ export type NativeChatLiveMergeInput = {
  *   - errors win outright; live work wins over transcript loading.
  *   - hook 'working' stays authoritative until the hook exits that state OR an
  *     explicit terminal marker for this turn lands.
+ *   - design is hook-first: lifecycle is a terminal suppressor for dropped
+ *     Stop hooks, not a full authority for active-turn reconstruction.
  */
 export function mergeNativeChatLiveSession(input: NativeChatLiveMergeInput): NativeChatSession {
   const {
@@ -50,7 +50,6 @@ export function mergeNativeChatLiveSession(input: NativeChatLiveMergeInput): Nat
     hookState,
     stateStartedAt,
     transcriptLifecycle,
-    turnLifecycleCapable,
     hookHasWorkingSubagents,
     loading,
     error
@@ -64,7 +63,6 @@ export function mergeNativeChatLiveSession(input: NativeChatLiveMergeInput): Nat
     sources,
     stateStartedAt,
     transcriptLifecycle,
-    turnLifecycleCapable ?? false,
     hookHasWorkingSubagents ?? false
   )
   if (loading && status !== 'working') {
@@ -78,12 +76,14 @@ export function mergeNativeChatLiveSession(input: NativeChatLiveMergeInput): Nat
   })
 }
 
+/** Slack for comparing transcript timestamps to hook receipt times across hosts. */
+const LIFECYCLE_CLOCK_SKEW_SLACK_MS = 2_000
+
 function liveStatusOverride(
   hookState: AgentStatusState | null,
   sources: NativeChatSources,
   stateStartedAt: number | null | undefined,
   transcriptLifecycle: NativeChatTurnLifecycle | undefined,
-  turnLifecycleCapable: boolean,
   hookHasWorkingSubagents: boolean
 ): NativeChatSessionStatus | undefined {
   // Only 'working' drives a live override; blocked/waiting/done leave the
@@ -98,18 +98,21 @@ function liveStatusOverride(
     return undefined
   }
   // Why: a lead completion does not end Claude's aggregate turn while a
-  // background child still runs; the hook roster owns that extra lifetime.
+  // background child still runs; callers must already scope the roster to the
+  // current working epoch so prior-turn children cannot veto forever.
   if (hookHasWorkingSubagents) {
     return 'working'
   }
   if (terminatesCurrentTurn) {
     return undefined
   }
-  // Why: Grok and older remote hosts have no explicit boundary decoder. Keep
-  // their degraded recovery without letting prose override capable providers.
+  // Why: prose recovery stays available whenever the latest lifecycle is not an
+  // explicit in-progress generation. That covers incapable hosts and capable
+  // hosts whose transcript never emitted a terminal marker for this window.
+  // Mid-turn (lifecycle === working) keeps prose off so partial assistant rows
+  // do not settle early on capable providers.
   if (
-    !turnLifecycleCapable &&
-    transcriptLifecycle === undefined &&
+    transcriptLifecycle?.state !== 'working' &&
     trailingAssistantPostDates(sources, stateStartedAt)
   ) {
     return undefined
@@ -124,12 +127,22 @@ function lifecycleTerminatesCurrentTurn(
   if (lifecycle?.state !== 'completed' && lifecycle?.state !== 'interrupted') {
     return false
   }
+  // Why: omit/null timestamps are valid on the wire. Prefer the terminal marker
+  // over a stuck spinner — the latest lifecycle is already last-wins from the
+  // watcher, so a newer user generation would have replaced it with working.
   if (stateStartedAt == null || lifecycle.timestamp == null) {
-    // Why: without comparable timing, a replayed terminal marker could belong to
-    // the prior turn and must not hide a newer live working signal.
-    return false
+    return true
   }
-  return lifecycle.timestamp >= stateStartedAt
+  if (lifecycle.timestamp >= stateStartedAt) {
+    return true
+  }
+  // Why: transcript clocks and hook receipt times can skew over SSH/runtime.
+  // Only apply slack to real epoch timestamps so small logical clocks used in
+  // tests (and any non-wall-clock ids) keep strict ordering.
+  if (lifecycle.timestamp > 1e11 && stateStartedAt > 1e11) {
+    return lifecycle.timestamp + LIFECYCLE_CLOCK_SKEW_SLACK_MS >= stateStartedAt
+  }
+  return false
 }
 
 function trailingAssistantPostDates(

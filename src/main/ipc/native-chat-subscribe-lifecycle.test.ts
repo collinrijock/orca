@@ -262,7 +262,6 @@ describe('nativeChat subscribe lifecycle', () => {
         type: 'snapshot',
         messages: [],
         hasMore: false,
-        turnLifecycleCapable: true,
         error: 'Transcript unavailable'
       }
     })
@@ -281,8 +280,7 @@ describe('nativeChat subscribe lifecycle', () => {
       frame: {
         type: 'snapshot',
         messages: [],
-        hasMore: false,
-        turnLifecycleCapable: true
+        hasMore: false
       }
     })
   })
@@ -302,7 +300,6 @@ describe('nativeChat subscribe lifecycle', () => {
         type: 'snapshot',
         messages: [],
         hasMore: false,
-        turnLifecycleCapable: true,
         lifecycle
       }
     })

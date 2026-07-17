@@ -162,11 +162,17 @@ function NativeChatResolvedView({
   // The agent's in-progress reply preview (hook), shown as a live streaming
   // bubble while it works — before the completed turn flushes to the transcript.
   const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
+  // Why: Stop suppression must clear on a newer working epoch even when status
+  // never leaves 'working' (interrupt + immediate next turn coalesced).
+  const hookWorkingEpoch = useAppStore(
+    (s) => s.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null
+  )
   const canSend = useNativeChatCanSend(targetPtyId)
   // Reuse the verified composer send path for interactive cards and composer
   // stop (Stop sends ESC, the agent-TUI interrupt key).
   const interactiveSend = useNativeChatInteractiveSend(terminalTabId, targetPtyId, agent)
   const [workingInterrupted, setWorkingInterrupted] = useState(false)
+  const previousWorkingEpochRef = useRef<number | null>(null)
   // True while a question card owns the input region, so the composer is hidden.
   const [questionActive, setQuestionActive] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -331,10 +337,23 @@ function NativeChatResolvedView({
 
   const isConversation = viewState.kind === 'ready'
   useEffect(() => {
-    if (shouldClearNativeChatWorkingSuppression({ working: liveWorking })) {
+    if (
+      shouldClearNativeChatWorkingSuppression({
+        working: liveWorking,
+        interrupted: workingInterrupted,
+        workingEpoch: hookWorkingEpoch,
+        previousWorkingEpoch: previousWorkingEpochRef.current
+      })
+    ) {
       setWorkingInterrupted(false)
     }
-  }, [liveWorking])
+    if (liveWorking && hookWorkingEpoch != null) {
+      previousWorkingEpochRef.current = hookWorkingEpoch
+    }
+    if (!liveWorking) {
+      previousWorkingEpochRef.current = null
+    }
+  }, [liveWorking, workingInterrupted, hookWorkingEpoch])
   const isWorking = shouldShowNativeChatWorking({
     isConversation,
     working: liveWorking,
@@ -343,8 +362,12 @@ function NativeChatResolvedView({
 
   const stopAgent = useCallback(() => {
     setWorkingInterrupted(true)
+    // Why: Stop after a submitted turn drops the delayed-write handle once it
+    // settles, so cancelPendingSends no longer sees the optimistic id. Clear
+    // the echo cache here so a cancelled prompt cannot stick as a ghost bubble.
+    setPending(writePendingSendCache(pendingScope, []))
     interactiveSend.cancel()
-  }, [interactiveSend])
+  }, [interactiveSend, pendingScope])
   const nativeChatFileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
 
   // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so

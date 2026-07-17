@@ -12,6 +12,7 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
+import { CODEX_EVENT_TURN_ABORTED } from './transcript-turn-markers'
 
 export function decodeCodexTranscriptLine(
   line: string,
@@ -91,7 +92,7 @@ function codexEventMessage(
   id: string,
   timestamp: number | null
 ): NativeChatMessage | null {
-  if (payload.type === 'turn_aborted') {
+  if (payload.type === CODEX_EVENT_TURN_ABORTED) {
     return {
       id,
       role: 'system',

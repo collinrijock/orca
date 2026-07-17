@@ -373,7 +373,6 @@ describe('nativeChat.subscribe initial snapshot', () => {
         type: 'snapshot',
         messages: [],
         hasMore: false,
-        turnLifecycleCapable: true,
         error: 'Transcript unavailable'
       }
     ])
@@ -397,7 +396,6 @@ describe('nativeChat.subscribe initial snapshot', () => {
         messages: [],
         hasMore: false,
         beforeOffset: 0,
-        turnLifecycleCapable: true,
         error: 'Transcript unavailable'
       }
     ])
@@ -420,8 +418,7 @@ describe('nativeChat.subscribe initial snapshot', () => {
         type: 'snapshot',
         messages: [expect.objectContaining({ id: 'a-1' })],
         hasMore: false,
-        beforeOffset: 7,
-        turnLifecycleCapable: true
+        beforeOffset: 7
       }
     ])
   })
@@ -452,13 +449,11 @@ describe('nativeChat.subscribe initial snapshot', () => {
         messages: [expect.objectContaining({ id: 'a-1' })],
         hasMore: false,
         beforeOffset: 3,
-        turnLifecycleCapable: true,
         lifecycle: completed
       },
       {
         type: 'appended',
         messages: [],
-        turnLifecycleCapable: true,
         lifecycle: completed
       },
       {
@@ -466,7 +461,6 @@ describe('nativeChat.subscribe initial snapshot', () => {
         messages: [expect.objectContaining({ id: 'a-1' })],
         hasMore: false,
         beforeOffset: 9,
-        turnLifecycleCapable: true,
         lifecycle: completed
       }
     ])
@@ -488,7 +482,6 @@ describe('nativeChat.readSession lifecycle payload', () => {
     expect(result).toMatchObject({
       hasMore: false,
       beforeOffset: 123,
-      turnLifecycleCapable: true,
       lifecycle
     })
     expect((result as { messages: NativeChatMessage[] }).messages).toHaveLength(1)

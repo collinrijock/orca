@@ -228,6 +228,39 @@ describe('subscribeNativeChatTranscript', () => {
     expect(result).toMatchObject({ lifecycle: { state: 'working', turnId: 'turn-2' } })
   })
 
+  it('recovers a completion marker even when trailing non-boundary rows follow it', async () => {
+    // The lifecycle scan walks newest-first; rows that decode to no boundary
+    // (tool-results, harness noise) must not hide an earlier real completion
+    // within the window, or a reconnect snapshot would fail to settle.
+    const toolResult = `${JSON.stringify({
+      type: 'user',
+      uuid: 'tool-result-1',
+      timestamp: '2026-06-01T10:00:02.000Z',
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }]
+      }
+    })}\n`
+    const noise = `${JSON.stringify({
+      type: 'user',
+      uuid: 'note-1',
+      timestamp: '2026-06-01T10:00:03.000Z',
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: '<system-reminder>continue</system-reminder>' }]
+      }
+    })}\n`
+    const filePath = await tempFile(claudeEndTurnLine('a-1', 'done') + toolResult + noise)
+    const result = await readNativeChatTranscriptTail({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      limit: 40
+    })
+
+    expect(result).toMatchObject({ lifecycle: { state: 'completed', turnId: 'a-1' } })
+  })
+
   it('emits a bulk append in bounded ordered batches', async () => {
     const filePath = await tempFile('')
     const batches: NativeChatMessage[][] = []

@@ -12,6 +12,7 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { claudeContentBlocks } from './transcript-record-blocks'
+import { claudeInterruptedMessageId } from './transcript-turn-markers'
 
 export function decodeClaudeTranscriptLine(
   line: string,
@@ -27,7 +28,7 @@ export function decodeClaudeTranscriptLine(
   }
   const timestamp = parseTimestamp(record.timestamp)
   const recordMessageId = extractString(record.uuid) ?? fallbackId
-  if (role === 'user' && extractString(record.interruptedMessageId)) {
+  if (claudeInterruptedMessageId(record)) {
     // Why: keep Claude's injected boilerplate out of the user-bubble path while
     // preserving the interruption as a quiet, replayable conversation status.
     return {

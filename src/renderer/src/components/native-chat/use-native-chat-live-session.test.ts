@@ -99,16 +99,27 @@ describe('mergeNativeChatLiveSession', () => {
     expect(session.status).toBe('working')
   })
 
-  it('does not treat assistant prose as turn completion', () => {
+  it('does not treat assistant prose as turn completion while lifecycle is mid-generation', () => {
     const session = mergeNativeChatLiveSession({
       sources: { transcript: [user('u-1', 'go'), assistant('a-1', 'done')] },
       sessionId: 'sess',
       agent: 'claude',
       hookState: 'working',
       stateStartedAt: 1,
-      turnLifecycleCapable: true
+      transcriptLifecycle: { state: 'working', turnId: 'u-1', timestamp: 1 }
     })
     expect(session.status).toBe('working')
+  })
+
+  it('recovers via assistant prose when capable host has no in-progress lifecycle', () => {
+    const session = mergeNativeChatLiveSession({
+      sources: { transcript: [user('u-1', 'go'), assistant('a-1', 'done')] },
+      sessionId: 'sess',
+      agent: 'claude',
+      hookState: 'working',
+      stateStartedAt: 1
+    })
+    expect(session.status).toBe('ready')
   })
 
   it('settles a dropped working hook from an explicit completion marker', () => {
@@ -118,7 +129,6 @@ describe('mergeNativeChatLiveSession', () => {
       agent: 'claude',
       hookState: 'working',
       stateStartedAt: 1,
-      turnLifecycleCapable: true,
       transcriptLifecycle: { state: 'completed', turnId: 'turn-1', timestamp: 2 }
     })
     expect(session.status).toBe('ready')
@@ -143,7 +153,6 @@ describe('mergeNativeChatLiveSession', () => {
       agent: 'claude',
       hookState: 'working',
       stateStartedAt: 5,
-      turnLifecycleCapable: true,
       transcriptLifecycle: { state: 'completed', turnId: 'turn-1', timestamp: 2 }
     })
     expect(session.status).toBe('working')
@@ -161,17 +170,33 @@ describe('mergeNativeChatLiveSession', () => {
     expect(session.status).toBe('working')
   })
 
-  it('does not apply an unorderable completion marker to live work', () => {
+  it('settles an unorderable (null-timestamp) completion marker for live work', () => {
     const session = mergeNativeChatLiveSession({
       sources: { transcript: [assistant('a-1', 'prior')] },
       sessionId: 'sess',
       agent: 'claude',
       hookState: 'working',
       stateStartedAt: 5,
-      turnLifecycleCapable: true,
       transcriptLifecycle: { state: 'completed', turnId: 'turn-1', timestamp: null }
     })
-    expect(session.status).toBe('working')
+    expect(session.status).toBe('ready')
+  })
+
+  it('settles a completion slightly before hook receipt within clock-skew slack', () => {
+    const hookStartedAt = 1_700_000_000_000
+    const session = mergeNativeChatLiveSession({
+      sources: { transcript: [assistant('a-1', 'done')] },
+      sessionId: 'sess',
+      agent: 'claude',
+      hookState: 'working',
+      stateStartedAt: hookStartedAt,
+      transcriptLifecycle: {
+        state: 'completed',
+        turnId: 'turn-1',
+        timestamp: hookStartedAt - 500
+      }
+    })
+    expect(session.status).toBe('ready')
   })
 
   it('preserves the assistant fallback when the serving host lacks explicit boundaries', () => {
@@ -180,8 +205,7 @@ describe('mergeNativeChatLiveSession', () => {
       sessionId: 'sess',
       agent: 'grok',
       hookState: 'working',
-      stateStartedAt: 1,
-      turnLifecycleCapable: false
+      stateStartedAt: 1
     })
     expect(session.status).toBe('ready')
   })
@@ -193,7 +217,6 @@ describe('mergeNativeChatLiveSession', () => {
       agent: 'claude',
       hookState: 'working',
       stateStartedAt: 1,
-      turnLifecycleCapable: true,
       transcriptLifecycle: { state: 'completed', turnId: 'turn-1', timestamp: 2 },
       hookHasWorkingSubagents: true
     })
@@ -207,7 +230,6 @@ describe('mergeNativeChatLiveSession', () => {
       agent: 'claude',
       hookState: 'working',
       stateStartedAt: 1,
-      turnLifecycleCapable: true,
       transcriptLifecycle: { state: 'interrupted', turnId: 'turn-1', timestamp: 2 },
       hookHasWorkingSubagents: true
     })
@@ -721,7 +743,6 @@ describe('useNativeChatLiveSession — transport routing', () => {
         type: 'snapshot',
         messages: [user('u-1', 'go')],
         hasMore: false,
-        turnLifecycleCapable: true,
         lifecycle: { state: 'working', turnId: 'turn-1', timestamp: 10 }
       })
     )
@@ -732,7 +753,6 @@ describe('useNativeChatLiveSession — transport routing', () => {
         type: 'snapshot',
         messages: [user('u-1', 'go')],
         hasMore: false,
-        turnLifecycleCapable: true,
         lifecycle: { state: 'interrupted', turnId: 'turn-1', timestamp: 20 }
       })
     )

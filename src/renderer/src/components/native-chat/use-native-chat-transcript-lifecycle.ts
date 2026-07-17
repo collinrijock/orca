@@ -3,49 +3,37 @@ import type { NativeChatTurnLifecycle } from '../../../../shared/native-chat-typ
 
 type TranscriptLifecycleState = {
   lifecycle?: NativeChatTurnLifecycle
-  capable: boolean
 }
 
 type TranscriptLifecycleControl = {
   reset: () => void
-  replace: (lifecycle: NativeChatTurnLifecycle | undefined, capable: boolean) => void
-  append: (lifecycle: NativeChatTurnLifecycle | undefined, capable: boolean) => void
+  replace: (lifecycle: NativeChatTurnLifecycle | undefined) => void
+  append: (lifecycle: NativeChatTurnLifecycle | undefined) => void
   revision: () => number
   replaceFromPagination: (lifecycle: NativeChatTurnLifecycle | undefined, revision: number) => void
 }
 
 export function useNativeChatTranscriptLifecycle(): readonly [
   NativeChatTurnLifecycle | undefined,
-  boolean,
   TranscriptLifecycleControl
 ] {
-  const [state, setState] = useState<TranscriptLifecycleState>({ capable: false })
+  const [state, setState] = useState<TranscriptLifecycleState>({})
   // Why: pagination may resolve after a live completion; its older boundary
   // can update history only when no live lifecycle write won the race.
   const revisionRef = useRef(0)
 
-  const replace = useCallback(
-    (lifecycle: NativeChatTurnLifecycle | undefined, capable: boolean): void => {
-      revisionRef.current += 1
-      setState({ lifecycle, capable })
-    },
-    []
-  )
-  const reset = useCallback((): void => replace(undefined, false), [replace])
-  const append = useCallback(
-    (lifecycle: NativeChatTurnLifecycle | undefined, capable: boolean): void => {
-      if (lifecycle) {
-        revisionRef.current += 1
-      }
-      setState((current) => {
-        if (!lifecycle && current.capable === capable) {
-          return current
-        }
-        return { lifecycle: lifecycle ?? current.lifecycle, capable }
-      })
-    },
-    []
-  )
+  const replace = useCallback((lifecycle: NativeChatTurnLifecycle | undefined): void => {
+    revisionRef.current += 1
+    setState({ lifecycle })
+  }, [])
+  const reset = useCallback((): void => replace(undefined), [replace])
+  const append = useCallback((lifecycle: NativeChatTurnLifecycle | undefined): void => {
+    if (!lifecycle) {
+      return
+    }
+    revisionRef.current += 1
+    setState({ lifecycle })
+  }, [])
   const revision = useCallback((): number => revisionRef.current, [])
   const replaceFromPagination = useCallback(
     (lifecycle: NativeChatTurnLifecycle | undefined, expectedRevision: number): void => {
@@ -62,5 +50,5 @@ export function useNativeChatTranscriptLifecycle(): readonly [
     () => ({ reset, replace, append, revision, replaceFromPagination }),
     [append, replace, replaceFromPagination, reset, revision]
   )
-  return [state.lifecycle, state.capable, control]
+  return [state.lifecycle, control]
 }

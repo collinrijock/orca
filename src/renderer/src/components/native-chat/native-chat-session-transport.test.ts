@@ -68,9 +68,7 @@ describe('getNativeChatSessionTransport — selection', () => {
 
   it('returns the runtime adapter for an owner on the desktop client', async () => {
     markRuntimeEnvironmentCompatible(ENV)
-    runtimeEnvironmentsCall.mockResolvedValue(
-      okEnvelope({ messages: [], turnLifecycleCapable: true })
-    )
+    runtimeEnvironmentsCall.mockResolvedValue(okEnvelope({ messages: [] }))
     const transport = getNativeChatSessionTransport(ENV)
 
     await transport.readSession('claude', 'sess-1', 40, '/t/path')
@@ -88,9 +86,7 @@ describe('getNativeChatSessionTransport — selection', () => {
     markRuntimeEnvironmentCompatible(ENV)
     const lifecycle = { state: 'completed', turnId: 'turn-1', timestamp: 42 } as const
     runtimeEnvironmentsCall
-      .mockResolvedValueOnce(
-        okEnvelope({ messages: [message('valid')], turnLifecycleCapable: true, lifecycle })
-      )
+      .mockResolvedValueOnce(okEnvelope({ messages: [message('valid')], lifecycle }))
       .mockResolvedValueOnce(
         okEnvelope({
           messages: [message('invalid')],
@@ -101,12 +97,11 @@ describe('getNativeChatSessionTransport — selection', () => {
 
     await expect(transport.readSession('claude', 'sess-1')).resolves.toEqual({
       messages: [message('valid')],
-      turnLifecycleCapable: true,
       lifecycle
     })
+    // An invalid lifecycle payload is dropped, leaving prose recovery to settle.
     await expect(transport.readSession('claude', 'sess-1')).resolves.toEqual({
-      messages: [message('invalid')],
-      turnLifecycleCapable: false
+      messages: [message('invalid')]
     })
   })
 
@@ -114,13 +109,12 @@ describe('getNativeChatSessionTransport — selection', () => {
     markRuntimeEnvironmentCompatible(ENV)
     const lifecycle = { state: 'interrupted', turnId: 'turn-2', timestamp: 43 } as const
     runtimeEnvironmentsCall.mockResolvedValueOnce(
-      okEnvelope({ messages: [message('interrupted')], turnLifecycleCapable: true, lifecycle })
+      okEnvelope({ messages: [message('interrupted')], lifecycle })
     )
     const transport = getNativeChatSessionTransport(ENV)
 
     await expect(transport.readSession('codex', 'sess-1')).resolves.toEqual({
       messages: [message('interrupted')],
-      turnLifecycleCapable: true,
       lifecycle
     })
   })
@@ -130,7 +124,6 @@ describe('getNativeChatSessionTransport — selection', () => {
     runtimeEnvironmentsCall.mockResolvedValueOnce(
       okEnvelope({
         messages: [message('no-ts')],
-        turnLifecycleCapable: true,
         lifecycle: { state: 'completed', turnId: 'turn-3' }
       })
     )
@@ -138,7 +131,6 @@ describe('getNativeChatSessionTransport — selection', () => {
 
     await expect(transport.readSession('claude', 'sess-1')).resolves.toEqual({
       messages: [message('no-ts')],
-      turnLifecycleCapable: true,
       lifecycle: { state: 'completed', turnId: 'turn-3', timestamp: null }
     })
   })
@@ -200,20 +192,17 @@ describe('runtime subscribe', () => {
     expect(onFrame).toHaveBeenNthCalledWith(1, {
       type: 'snapshot',
       messages: [message('m-1')],
-      hasMore: false,
-      turnLifecycleCapable: false
+      hasMore: false
     })
     expect(onFrame).toHaveBeenNthCalledWith(2, {
       type: 'snapshot',
       messages: [message('m-snapshot')],
-      hasMore: false,
-      turnLifecycleCapable: false
+      hasMore: false
     })
     expect(onFrame).toHaveBeenNthCalledWith(3, {
       type: 'replacement',
       messages: [message('m-replacement')],
-      hasMore: true,
-      turnLifecycleCapable: false
+      hasMore: true
     })
   })
 
@@ -229,7 +218,6 @@ describe('runtime subscribe', () => {
     deliver({
       type: 'snapshot',
       messages: [message('valid')],
-      turnLifecycleCapable: true,
       lifecycle
     })
     deliver({
@@ -242,13 +230,37 @@ describe('runtime subscribe', () => {
       type: 'snapshot',
       messages: [message('valid')],
       hasMore: false,
-      turnLifecycleCapable: true,
       lifecycle
     })
     expect(onFrame).toHaveBeenNthCalledWith(2, {
       type: 'appended',
-      messages: [message('invalid')],
-      turnLifecycleCapable: false
+      messages: [message('invalid')]
+    })
+  })
+
+  it('omits an invalid lifecycle payload from a stream frame', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    const { deliver } = stubSubscribe()
+    const onFrame = vi.fn()
+    const transport = getNativeChatSessionTransport(ENV)
+
+    transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onFrame)
+    await Promise.resolve()
+    deliver({
+      type: 'snapshot',
+      messages: [message('seed')],
+      hasMore: false,
+      lifecycle: { state: 'completed', turnId: 'turn-ok', timestamp: 1 }
+    })
+    deliver({
+      type: 'appended',
+      messages: [message('bad-lifecycle')],
+      lifecycle: { state: 'completed', turnId: '', timestamp: undefined }
+    })
+
+    expect(onFrame).toHaveBeenNthCalledWith(2, {
+      type: 'appended',
+      messages: [message('bad-lifecycle')]
     })
   })
 
@@ -291,7 +303,6 @@ describe('runtime subscribe', () => {
       type: 'snapshot',
       messages: [],
       hasMore: false,
-      turnLifecycleCapable: false,
       error: 'runtime too old'
     })
   })

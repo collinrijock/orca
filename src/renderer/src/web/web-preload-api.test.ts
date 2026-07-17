@@ -727,7 +727,7 @@ describe('web native chat preload API', () => {
           return Promise.resolve({
             id: 'read-1',
             ok: true,
-            result: { messages: [message], turnLifecycleCapable: true, lifecycle },
+            result: { messages: [message], lifecycle },
             _meta: { runtimeId: 'runtime-1' }
           })
         }
@@ -744,7 +744,6 @@ describe('web native chat preload API', () => {
               type: 'snapshot',
               messages: [message],
               hasMore: false,
-              turnLifecycleCapable: true,
               lifecycle
             },
             _meta: { runtimeId: 'runtime-1' }
@@ -764,7 +763,6 @@ describe('web native chat preload API', () => {
     await expect(globals.window.api.nativeChat.readSession('claude', 'session-1')).resolves.toEqual(
       {
         messages: [message],
-        turnLifecycleCapable: true,
         lifecycle
       }
     )
@@ -780,7 +778,6 @@ describe('web native chat preload API', () => {
         type: 'snapshot',
         messages: [message],
         hasMore: false,
-        turnLifecycleCapable: true,
         lifecycle
       }
     ])

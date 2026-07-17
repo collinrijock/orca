@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest'
 import {
   decodeClaudeTurnLifecycle,
   decodeCodexTurnLifecycle,
-  supportsNativeChatTranscriptTurnLifecycle
+  nativeChatTurnLifecycleDecoderForAgent
 } from './transcript-turn-lifecycle'
 
 describe('native chat transcript turn lifecycle', () => {
-  it('reports which transcript formats have explicit boundaries', () => {
-    expect(supportsNativeChatTranscriptTurnLifecycle('claude')).toBe(true)
-    expect(supportsNativeChatTranscriptTurnLifecycle('openclaude')).toBe(true)
-    expect(supportsNativeChatTranscriptTurnLifecycle('codex')).toBe(true)
-    expect(supportsNativeChatTranscriptTurnLifecycle('grok')).toBe(false)
+  it('exposes a lifecycle decoder only for transcript formats with explicit boundaries', () => {
+    expect(nativeChatTurnLifecycleDecoderForAgent('claude')).not.toBeNull()
+    expect(nativeChatTurnLifecycleDecoderForAgent('openclaude')).not.toBeNull()
+    expect(nativeChatTurnLifecycleDecoderForAgent('codex')).not.toBeNull()
+    expect(nativeChatTurnLifecycleDecoderForAgent('grok')).toBeNull()
   })
 
   it('decodes Codex task boundaries with the provider turn id', () => {
@@ -108,30 +108,44 @@ describe('native chat transcript turn lifecycle', () => {
     ).toBeNull()
   })
 
-  it('does not treat Claude mid-turn assistant rows as completed', () => {
+  it('does not treat Claude mid-turn tool_use assistant rows as completed', () => {
     expect(
       decodeClaudeTurnLifecycle(
         JSON.stringify({
           type: 'assistant',
           uuid: 'assistant-tool',
           timestamp: '2026-07-16T23:45:37.608Z',
-          message: { role: 'assistant', stop_reason: 'tool_use', content: [] }
+          message: {
+            role: 'assistant',
+            stop_reason: 'tool_use',
+            content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: {} }]
+          }
         }),
         'fallback'
       )
     ).toBeNull()
+  })
 
+  it('treats Claude assistant rows with omitted stop_reason and content as completed', () => {
     expect(
       decodeClaudeTurnLifecycle(
         JSON.stringify({
           type: 'assistant',
           uuid: 'assistant-null-stop',
           timestamp: '2026-07-16T23:45:37.608Z',
-          message: { role: 'assistant', stop_reason: null, content: [] }
+          message: {
+            role: 'assistant',
+            stop_reason: null,
+            content: [{ type: 'text', text: 'final answer' }]
+          }
         }),
         'fallback'
       )
-    ).toBeNull()
+    ).toEqual({
+      state: 'completed',
+      turnId: 'assistant-null-stop',
+      timestamp: Date.parse('2026-07-16T23:45:37.608Z')
+    })
 
     expect(
       decodeClaudeTurnLifecycle(
@@ -139,7 +153,90 @@ describe('native chat transcript turn lifecycle', () => {
           type: 'assistant',
           uuid: 'assistant-missing-stop',
           timestamp: '2026-07-16T23:45:37.608Z',
-          message: { role: 'assistant', content: [] }
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'final answer' }]
+          }
+        }),
+        'fallback'
+      )
+    ).toEqual({
+      state: 'completed',
+      turnId: 'assistant-missing-stop',
+      timestamp: Date.parse('2026-07-16T23:45:37.608Z')
+    })
+  })
+
+  it('does not complete a Claude assistant row that omits stop_reason but carries a tool_use block', () => {
+    // A pre-tool row can hold prose AND a tool_use block; without stop_reason the
+    // turn is still mid-flight, so it must not settle the spinner before the tool.
+    for (const stopReason of [null, undefined] as const) {
+      expect(
+        decodeClaudeTurnLifecycle(
+          JSON.stringify({
+            type: 'assistant',
+            uuid: `assistant-pretool-${stopReason}`,
+            timestamp: '2026-07-16T23:45:37.608Z',
+            message: {
+              role: 'assistant',
+              ...(stopReason === null ? { stop_reason: null } : {}),
+              content: [
+                { type: 'text', text: 'let me check' },
+                { type: 'tool_use', id: 't1', name: 'Bash', input: {} }
+              ]
+            }
+          }),
+          'fallback'
+        )
+      ).toBeNull()
+    }
+  })
+
+  it('does not complete Claude assistant rows with omitted stop_reason and no content', () => {
+    expect(
+      decodeClaudeTurnLifecycle(
+        JSON.stringify({
+          type: 'assistant',
+          uuid: 'assistant-empty',
+          timestamp: '2026-07-16T23:45:37.608Z',
+          message: { role: 'assistant', stop_reason: null, content: [] }
+        }),
+        'fallback'
+      )
+    ).toBeNull()
+  })
+
+  it('does not treat harness noise user rows as a new working generation', () => {
+    expect(
+      decodeClaudeTurnLifecycle(
+        JSON.stringify({
+          type: 'user',
+          uuid: 'task-note-1',
+          timestamp: '2026-07-16T23:46:10.000Z',
+          message: {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: '<task-notification>background task finished</task-notification>'
+              }
+            ]
+          }
+        }),
+        'fallback'
+      )
+    ).toBeNull()
+
+    expect(
+      decodeClaudeTurnLifecycle(
+        JSON.stringify({
+          type: 'user',
+          uuid: 'reminder-1',
+          timestamp: '2026-07-16T23:46:11.000Z',
+          message: {
+            role: 'user',
+            content: [{ type: 'text', text: '<system-reminder>continue</system-reminder>' }]
+          }
         }),
         'fallback'
       )

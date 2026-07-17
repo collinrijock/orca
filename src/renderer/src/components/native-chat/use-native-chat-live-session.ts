@@ -127,8 +127,7 @@ export function useNativeChatLiveSession(
   const [read, setRead] = useState<ReadState>({ phase: 'loading' })
   const [hasMore, setHasMore] = useState(false)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
-  const [transcriptLifecycle, turnLifecycleCapable, transcriptLifecycleControl] =
-    useNativeChatTranscriptLifecycle()
+  const [transcriptLifecycle, transcriptLifecycleControl] = useNativeChatTranscriptLifecycle()
   // The active read window; raised by loadEarlier to page in older history.
   const limitRef = useRef(NATIVE_CHAT_INITIAL_LIMIT)
 
@@ -222,10 +221,7 @@ export function useNativeChatLiveSession(
             return
           }
           const messages = result?.messages ?? []
-          transcriptLifecycleControl.replace(
-            result?.lifecycle,
-            result?.turnLifecycleCapable === true
-          )
+          transcriptLifecycleControl.replace(result?.lifecycle)
           setRead({ phase: 'ready', messages })
           setHasMore(hasMoreNativeChatHistory(messages.length, limitRef.current))
         })
@@ -259,14 +255,14 @@ export function useNativeChatLiveSession(
               setRead({ phase: 'error', error: frame.error })
               return
             }
-            transcriptLifecycleControl.replace(frame.lifecycle, frame.turnLifecycleCapable === true)
+            transcriptLifecycleControl.replace(frame.lifecycle)
             replaceList(appendMergerRef.current, frame.messages)
             setAppended([])
             setRead({ phase: 'ready', messages: appendMergerRef.current.list })
             setHasMore(frame.hasMore)
             return
           }
-          transcriptLifecycleControl.append(frame.lifecycle, frame.turnLifecycleCapable === true)
+          transcriptLifecycleControl.append(frame.lifecycle)
           // Merge by id (re-emits replace in place) then bound to the window so
           // the bucket can't grow without limit. The base read still holds older
           // turns, and the assembler re-dedups the concat, so trimming the recent
@@ -398,7 +394,6 @@ export function useNativeChatLiveSession(
       hookState,
       stateStartedAt: hookStateStartedAt,
       transcriptLifecycle,
-      turnLifecycleCapable,
       hookHasWorkingSubagents,
       // Why: a watcher append (fix for #8401) can land content while the read is
       // still retrying ('loading') or after it settled into 'error' — in both
@@ -416,7 +411,6 @@ export function useNativeChatLiveSession(
     hookState,
     hookStateStartedAt,
     transcriptLifecycle,
-    turnLifecycleCapable,
     hookHasWorkingSubagents,
     hasMore,
     loadingEarlier,

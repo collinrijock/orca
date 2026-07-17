@@ -47,7 +47,6 @@ export function parseRuntimeNativeChatReadSessionResult(
     const lifecycle = parseRuntimeNativeChatTurnLifecycle(record.lifecycle)
     return {
       messages: record.messages as NativeChatAppendedMessages,
-      turnLifecycleCapable: record.turnLifecycleCapable === true,
       ...(lifecycle ? { lifecycle } : {})
     }
   }

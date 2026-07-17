@@ -843,8 +843,6 @@ export type NativeChatReadSessionResult =
   | {
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
-      /** True when this host can decode authoritative transcript turn boundaries. */
-      turnLifecycleCapable?: boolean
     }
   | { error: string; notFound?: true }
 
@@ -858,20 +856,17 @@ export type NativeChatSubscriptionFrame =
       hasMore: boolean
       error?: string
       lifecycle?: NativeChatTurnLifecycle
-      turnLifecycleCapable?: boolean
     }
   | {
       type: 'replacement'
       messages: NativeChatMessage[]
       hasMore: boolean
       lifecycle?: NativeChatTurnLifecycle
-      turnLifecycleCapable?: boolean
     }
   | {
       type: 'appended'
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
-      turnLifecycleCapable?: boolean
     }
 
 /** Wire payload for the `nativeChat:appended` push channel. */

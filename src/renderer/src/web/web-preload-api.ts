@@ -1150,10 +1150,8 @@ function createNativeChatApi(): NativeChatApi {
                 hasMore?: boolean
                 error?: string
                 lifecycle?: unknown
-                turnLifecycleCapable?: unknown
               }
               const lifecycle = parseRuntimeNativeChatTurnLifecycle(result?.lifecycle)
-              const turnLifecycleCapable = result?.turnLifecycleCapable === true
               if (
                 (result?.type === 'appended' ||
                   result?.type === 'snapshot' ||
@@ -1166,7 +1164,6 @@ function createNativeChatApi(): NativeChatApi {
                     type: 'snapshot',
                     messages: result.messages,
                     hasMore: result.hasMore ?? result.messages.length >= (args.limit ?? 300),
-                    turnLifecycleCapable,
                     ...(result.error ? { error: result.error } : {}),
                     ...(lifecycle ? { lifecycle } : {})
                   })
@@ -1175,7 +1172,6 @@ function createNativeChatApi(): NativeChatApi {
                     type: 'snapshot',
                     messages: result.messages,
                     hasMore: result.hasMore ?? false,
-                    turnLifecycleCapable,
                     ...(result.error ? { error: result.error } : {}),
                     ...(lifecycle ? { lifecycle } : {})
                   })
@@ -1186,13 +1182,11 @@ function createNativeChatApi(): NativeChatApi {
                           type: 'replacement',
                           messages: result.messages,
                           hasMore: result.hasMore ?? false,
-                          turnLifecycleCapable,
                           ...(lifecycle ? { lifecycle } : {})
                         }
                       : {
                           type: 'appended',
                           messages: result.messages,
-                          turnLifecycleCapable,
                           ...(lifecycle ? { lifecycle } : {})
                         }
                   )
