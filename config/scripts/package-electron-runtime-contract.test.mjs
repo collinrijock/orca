@@ -380,6 +380,7 @@ describe('Electron runtime package contract', () => {
       'utf8'
     )
     const parsedWorkflow = parse(releaseWorkflow)
+    const checkoutStep = parsedWorkflow.jobs.cut.steps.find((step) => step.name === 'Checkout ref')
     const bumpStep = parsedWorkflow.jobs.cut.steps.find(
       (step) => step.name === 'Bump package.json and tag'
     )
@@ -391,6 +392,7 @@ describe('Electron runtime package contract', () => {
       'node config/scripts/generate-skill-bundle-manifest.mjs --write'
     )
     const stageIndex = bumpStep.run.indexOf('git add package.json resources/skills')
+    expect(checkoutStep.with['fetch-depth']).toBe(0)
     expect(bumpIndex).toBeGreaterThanOrEqual(0)
     expect(generateIndex).toBeGreaterThan(bumpIndex)
     expect(stageIndex).toBeGreaterThan(generateIndex)
