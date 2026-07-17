@@ -490,39 +490,51 @@ describe('createRemoteRuntimePtyTransport', () => {
     const draft = 'QA regular reconnect draft - keep this unsent'
     emitOutput(initialStreamId, draft)
 
-    runtimeCall.mockImplementation(async (args: { method: string }) =>
-      args.method === 'session.tabs.list'
-        ? {
-            ok: true,
-            result: {
-              worktree: 'wt-1',
-              publicationEpoch: 'epoch-1',
-              snapshotVersion: 2,
-              activeGroupId: null,
-              activeTabId: 'tab-1::pane:1',
-              activeTabType: 'terminal',
-              tabs: [
-                {
-                  type: 'terminal',
-                  id: 'tab-1::pane:1',
-                  parentTabId: 'tab-1',
-                  leafId: 'pane:1',
-                  title: 'Claude Code',
-                  isActive: true,
-                  status: 'ready',
-                  terminal: 'terminal-reconnected'
-                }
-              ]
-            }
+    let hostListCalls = 0
+    runtimeCall.mockImplementation(async (args: { method: string }) => {
+      if (args.method === 'session.tabs.list') {
+        hostListCalls += 1
+        const terminal =
+          hostListCalls === 1
+            ? 'terminal-stale'
+            : hostListCalls === 2
+              ? null
+              : 'terminal-reconnected'
+        return {
+          ok: true,
+          result: {
+            worktree: 'wt-1',
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: hostListCalls + 1,
+            activeGroupId: null,
+            activeTabId: 'tab-1::pane:1',
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: 'tab-1::pane:1',
+                parentTabId: 'tab-1',
+                leafId: 'pane:1',
+                title: 'Claude Code',
+                isActive: true,
+                status: terminal ? 'ready' : 'pending-handle',
+                terminal
+              }
+            ]
           }
-        : { ok: true, result: {} }
-    )
+        }
+      }
+      return { ok: true, result: {} }
+    })
 
     subscriptionCallbacks?.onResponse({
       ok: true,
       result: { type: 'error', streamId: initialStreamId, message: 'terminal_handle_stale' }
     })
 
+    await vi.waitFor(() => expect(hostListCalls).toBeGreaterThanOrEqual(1))
+    expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-stale' })
+    expect(onPtyExit).not.toHaveBeenCalled()
     await vi.waitFor(() =>
       expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-reconnected' })
     )
@@ -536,6 +548,17 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(transport.getPtyId()).toBe('remote:env-1@@terminal-reconnected')
     expect(transport.isConnected()).toBe(true)
     expect(renderedScreen.at(-1)).toBe(draft)
+    expect(hostListCalls).toBe(3)
+    const subscribedTerminals = subscriptionSendBinary.mock.calls
+      .map((call) => decodeTerminalStreamFrame(call[0]))
+      .flatMap((frame) => {
+        if (frame?.opcode !== TerminalStreamOpcode.Subscribe) {
+          return []
+        }
+        const payload = decodeTerminalStreamJson<{ terminal: string }>(frame.payload)
+        return payload ? [payload.terminal] : []
+      })
+    expect(subscribedTerminals).toEqual(['terminal-stale', 'terminal-reconnected'])
   })
 
   it('still retires the regular TUI surface after an explicit terminal exit', async () => {

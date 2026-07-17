@@ -40,6 +40,7 @@ import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '@/runtime/web-ter
 const REMOTE_TERMINAL_INPUT_FLUSH_MS = 8
 const REMOTE_TERMINAL_VIEWPORT_FLUSH_MS = 33
 const HOST_SESSION_ATTACH_POLL_MS = 150
+const HOST_SESSION_REPLACEMENT_POLL_MAX_MS = 1_000
 const HOST_SESSION_ATTACH_TIMEOUT_MS = 15_000
 
 function isRemoteTerminalStaleMessage(message: string): boolean {
@@ -94,6 +95,7 @@ export function createRemoteRuntimePtyTransport(
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
   let resubscribing = false
   let resubscribeRequested = false
+  let resubscribeRequiresReplacement = false
   let subscriptionGeneration = 0
   let pendingViewportClaim = false
   let pendingClaimInput = ''
@@ -210,6 +212,39 @@ export function createRemoteRuntimePtyTransport(
       worktree: toRuntimeWorktreeSelector(worktreeId)
     })
     return findReadyHostSessionHandle(listed, hostTabId)
+  }
+
+  async function waitForReplacementHostSessionHandle(
+    hostTabId: string,
+    previousHandle: string
+  ): Promise<string | null> {
+    if (!worktreeId) {
+      return null
+    }
+    const worktree = toRuntimeWorktreeSelector(worktreeId)
+    const startedAt = Date.now()
+    let pollMs = HOST_SESSION_ATTACH_POLL_MS
+    while (!destroyed && connected && handle === previousHandle) {
+      const listed = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', {
+        worktree
+      })
+      const nextHandle = findReadyHostSessionHandle(listed, hostTabId)
+      if (nextHandle && nextHandle !== previousHandle) {
+        return nextHandle
+      }
+      if (!hasHostSessionTerminalSurface(listed, hostTabId)) {
+        return null
+      }
+      const remainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)
+      if (remainingMs <= 0) {
+        return null
+      }
+      // Why: a stale response can precede publication of its replacement.
+      // Bounded backoff avoids retrying the known-stale handle in a hot loop.
+      await new Promise((resolve) => setTimeout(resolve, Math.min(pollMs, remainingMs)))
+      pollMs = Math.min(pollMs * 2, HOST_SESSION_REPLACEMENT_POLL_MAX_MS)
+    }
+    return null
   }
 
   async function attachHostSessionMirror(
@@ -429,7 +464,7 @@ export function createRemoteRuntimePtyTransport(
         // Why: reconnect can re-mint a mirrored pane's handle while its host tab
         // remains alive. Keep xterm/composer state mounted while we re-resolve it.
         closeMultiplexedStream()
-        scheduleResubscribeAfterTransportClose()
+        scheduleResubscribeAfterTransportClose(true)
       } else {
         retireRemoteTerminalId()
       }
@@ -448,9 +483,15 @@ export function createRemoteRuntimePtyTransport(
   // handle (reconnect, epoch or PTY change). Re-derive it from the current
   // session snapshot instead of resubscribing the stale closure value, which
   // would mirror (and type into) whatever PTY now sits behind it (#7718).
-  async function resubscribeAfterTransportClose(previousHandle: string): Promise<void> {
+  async function resubscribeAfterTransportClose(
+    previousHandle: string,
+    requireReplacement: boolean
+  ): Promise<void> {
     if (tabId && isWebTerminalSurfaceTabId(tabId)) {
-      const nextHandle = await listHostSessionHandle(toHostSessionTabId(tabId))
+      const hostTabId = toHostSessionTabId(tabId)
+      const nextHandle = requireReplacement
+        ? await waitForReplacementHostSessionHandle(hostTabId, previousHandle)
+        : await listHostSessionHandle(hostTabId)
       if (destroyed || !connected || handle !== previousHandle) {
         return
       }
@@ -469,17 +510,18 @@ export function createRemoteRuntimePtyTransport(
     await subscribeToHandle()
   }
 
-  function scheduleResubscribeAfterTransportClose(): void {
+  function scheduleResubscribeAfterTransportClose(requireReplacement = false): void {
     if (destroyed || !connected || !handle) {
       return
     }
     if (resubscribing) {
       resubscribeRequested = true
+      resubscribeRequiresReplacement ||= requireReplacement
       return
     }
     resubscribing = true
     const resubscribeHandle = handle
-    void resubscribeAfterTransportClose(resubscribeHandle)
+    void resubscribeAfterTransportClose(resubscribeHandle, requireReplacement)
       .catch((error) => {
         if (!destroyed && connected && handle) {
           clearPendingViewportClaim()
@@ -490,7 +532,9 @@ export function createRemoteRuntimePtyTransport(
         resubscribing = false
         if (resubscribeRequested) {
           resubscribeRequested = false
-          scheduleResubscribeAfterTransportClose()
+          const pendingRequiresReplacement = resubscribeRequiresReplacement
+          resubscribeRequiresReplacement = false
+          scheduleResubscribeAfterTransportClose(pendingRequiresReplacement)
         }
       })
   }
