@@ -13203,7 +13203,30 @@
         "pastedImageLabel": "붙여넣은 이미지",
         "imagePasteFailed": "이미지 붙여넣기 실패.",
         "worktreeNotReady": "워크트리가 준비되지 않았습니다 — 잠시 후 다시 시도하세요.",
-        "uploadingAttachments": "{{value0}}개 파일을 원격으로 업로드 중…"
+        "uploadingAttachments": "{{value0}}개 파일을 원격으로 업로드 중…",
+        "model": "모델",
+        "modelWithValue": "모델: {{value0}}",
+        "effort": "추론 수준",
+        "effortWithValue": "추론 수준: {{value0}}",
+        "fastMode": "빠른 모드",
+        "thinking": "사고",
+        "options": "옵션",
+        "sessionOptions": "세션 옵션",
+        "chooseInAgentPicker": "에이전트 선택기에서 선택…",
+        "toggleOption": "{{value0}} 전환",
+        "sentNotConfirmed": "에이전트에 전송됨 — 확인되지 않음",
+        "setWhenSessionStarts": "세션을 시작할 때 설정하세요.",
+        "availableAfterSessionStarts": "세션이 시작된 후 사용할 수 있습니다.",
+        "optionUpdateFailed": "옵션을 업데이트하지 못했습니다",
+        "optionValue": {
+          "fast": "빠름",
+          "minimal": "최소",
+          "low": "낮음",
+          "medium": "중간",
+          "high": "높음",
+          "xhigh": "매우 높음",
+          "max": "최대"
+        }
       },
       "tool": {
         "running": "실행 중…",
@@ -13279,6 +13302,29 @@
           "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
+    }
+  },
+  "browser": {
+    "loadFailure": {
+      "connectionNotSecure": "Connection isn't secure",
+      "cantReachHost": "Can't reach {{value0}}",
+      "cantLoadPage": "Can't load this page",
+      "certificateNameMismatch": "The certificate doesn't match {{value0}}.",
+      "certificateDateInvalid": "The certificate for {{value0}} isn't valid at the current date and time.",
+      "certificateAuthorityInvalid": "Orca doesn't trust the authority that issued the certificate for {{value0}}.",
+      "certificateVerificationFailed": "Orca couldn't verify the certificate for {{value0}}.",
+      "trustedCertificateGuidance": "For local development, use a trusted local certificate when possible.",
+      "retry": "Retry",
+      "copyAddress": "Copy Address",
+      "addressCopied": "Copied the current page address.",
+      "openExternally": "Open Externally",
+      "tryHttps": "Try HTTPS",
+      "proceedUnsafe": "Proceed Anyway (Unsafe)",
+      "connecting": "Connecting…",
+      "certificateChallengeExpired": "This certificate approval expired. Retry the page to request a new one.",
+      "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
+      "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
+      "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
     }
   }
 }
