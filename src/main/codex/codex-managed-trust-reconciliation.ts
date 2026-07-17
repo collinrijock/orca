@@ -6,8 +6,11 @@ import {
   normalizeCodexHookSourcePath,
   parseTrustKey,
   readHookTrustEntries,
+  readHookTrustEntriesFromContent,
   removeHookTrustEntries,
+  removeHookTrustEntriesFromContent,
   type CodexEventLabel,
+  type CodexHookTrustState,
   type CodexTrustEntry
 } from './config-toml-trust'
 import { getCodexHookTrustSignature } from './codex-hook-identity'
@@ -52,8 +55,7 @@ function addLedgerRecognizedHashes(
   }
 }
 
-export function removeCodexManagedHookTrustEntries(options: {
-  tomlPath: string
+type CodexManagedHookTrustOwnershipOptions = {
   runtimeHomePath: string
   sourcePath: string
   command: string
@@ -61,8 +63,12 @@ export function removeCodexManagedHookTrustEntries(options: {
   timeoutSec: number
   /** Explicit native homes resolve their parent before hook discovery. */
   sourceUsesExplicitCodexHome?: boolean
-}): void {
-  const existingEntries = readHookTrustEntries(options.tomlPath)
+}
+
+function getCodexManagedHookTrustEntryKeys(
+  existingEntries: ReadonlyMap<string, CodexHookTrustState>,
+  options: CodexManagedHookTrustOwnershipOptions
+): string[] {
   const ledgerHome = readCodexTrustGrantLedgerHomeForReconciliation(options.runtimeHomePath)
   const expectedSourcePath = options.sourceUsesExplicitCodexHome
     ? getCodexExplicitHomeHookSourcePath(options.sourcePath)
@@ -94,6 +100,27 @@ export function removeCodexManagedHookTrustEntries(options: {
       ownedKeys.push(key)
     }
   }
+  return ownedKeys
+}
+
+export function stripCodexManagedHookTrustEntriesFromConfig(
+  contents: string,
+  options: CodexManagedHookTrustOwnershipOptions
+): string {
+  const ownedKeys = getCodexManagedHookTrustEntryKeys(
+    readHookTrustEntriesFromContent(contents),
+    options
+  )
+  return removeHookTrustEntriesFromContent(contents, ownedKeys)
+}
+
+export function removeCodexManagedHookTrustEntries(
+  options: CodexManagedHookTrustOwnershipOptions & { tomlPath: string }
+): void {
+  const ownedKeys = getCodexManagedHookTrustEntryKeys(
+    readHookTrustEntries(options.tomlPath),
+    options
+  )
   if (ownedKeys.length > 0) {
     removeHookTrustEntries(options.tomlPath, ownedKeys)
   }
