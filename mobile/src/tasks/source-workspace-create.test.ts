@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { createWorkspaceFromComposerSource } from './source-workspace-create'
 import type { MobileComposerCreateSelection } from './mobile-composer-source-types'
+
+vi.mock('expo-crypto', () => ({
+  randomUUID: () => '00000000-0000-4000-8000-000000000001'
+}))
 
 type Call = { method: string; params: Record<string, unknown> }
 

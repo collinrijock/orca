@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { createBlankWorkspace } from './blank-workspace-create'
+
+vi.mock('expo-crypto', () => ({
+  randomUUID: () => '00000000-0000-4000-8000-000000000001'
+}))
 
 type Call = { method: string; params: unknown }
 
@@ -45,7 +49,8 @@ describe('createBlankWorkspace', () => {
         repo: 'id:repo-1',
         startupCommand: undefined,
         setupDecision: 'inherit',
-        name: 'octopus'
+        name: 'octopus',
+        clientMutationId: '00000000-0000-4000-8000-000000000001'
       }
     })
     const params = calls[0]?.params as Record<string, unknown>

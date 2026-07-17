@@ -154,6 +154,27 @@ describe('worktree RPC methods', () => {
     })
   })
 
+  it('returns the original workspace when a create mutation is replayed', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      showRepo: vi.fn().mockResolvedValue(repo),
+      createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-created' } })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+    const params = {
+      repo: 'repo-1',
+      name: 'migration-safe',
+      clientMutationId: 'c39750ef-6c87-4bb4-a152-e22ac7eb7a7d'
+    }
+
+    const first = await dispatcher.dispatch(makeRequest('worktree.create', params))
+    const replay = await dispatcher.dispatch(makeRequest('worktree.create', params))
+
+    expect(first).toMatchObject({ ok: true, result: { worktree: { id: 'wt-created' } } })
+    expect(replay).toMatchObject({ ok: true, result: { worktree: { id: 'wt-created' } } })
+    expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
+  })
+
   it('mints automation provenance from a valid dispatch request on worktree creation', async () => {
     const dispatchToken = createAutomationDispatchToken('automation-1', 'run-1')
     const runtime = {

@@ -262,6 +262,11 @@ window.onerror = function(msg) {
     if (/iP(ad|hone|od)/.test(navigator.userAgent)) return true;
     return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
   }
+  function shouldUseWebglRenderer() {
+    // Why: iOS WebKit can leave transient blank glyph-atlas cells that repaint
+    // later even though xterm's buffer is correct; the DOM renderer avoids that atlas.
+    return !isIOSWebView();
+  }
   // Why: iOS WebKit does not reliably resolve "SF Mono" by CSS family name and can
   // fall to a non-monospace face; lead with the ui-monospace generic to avoid that.
   var TERMINAL_FONT_FALLBACKS = '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace';
@@ -740,7 +745,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     var nextTerm = term;
     pendingTerm = nextTerm;
     term.open(surface);
-    attachWebglAddon(true);
+    if (shouldUseWebglRenderer()) attachWebglAddon(true);
     if (window.Unicode11Addon && window.Unicode11Addon.Unicode11Addon) try { term.loadAddon(new window.Unicode11Addon.Unicode11Addon()); term.unicode.activeVersion = '11'; } catch (e) {}
     if (typeof replayData === 'string' && replayData.length > 0) {
       enqueueWrite(replayData);

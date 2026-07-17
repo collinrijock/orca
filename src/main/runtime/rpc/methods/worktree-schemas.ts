@@ -65,6 +65,7 @@ export const WorktreeCreate = z
       .unknown()
       .transform((v) => (typeof v === 'string' ? v : ''))
       .pipe(z.string().min(1, 'Missing repo selector')),
+    clientMutationId: z.string().uuid().optional(),
     name: OptionalString,
     baseBranch: OptionalString,
     compareBaseRef: OptionalString,

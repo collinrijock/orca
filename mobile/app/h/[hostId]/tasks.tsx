@@ -89,6 +89,7 @@ import {
   workspaceSshStatusLabel
 } from '../../../src/tasks/workspace-ssh-gate'
 import { WORKTREE_CREATE_TIMEOUT_MS } from '../../../src/tasks/workspace-create-timeout'
+import { sendMigrationSafeWorktreeCreate } from '../../../src/tasks/worktree-create-migration'
 import {
   isSetupHookTrusted,
   normalizeSetupHookTrust,
@@ -5610,7 +5611,9 @@ export default function MobileTasksScreen() {
             sparseCheckout: sparseCheckoutOverride
           })
         }
-        const response = await client.sendRequest('worktree.create', params, {
+        const response = await sendMigrationSafeWorktreeCreate({
+          client,
+          params,
           timeoutMs: WORKTREE_CREATE_TIMEOUT_MS
         })
         if (!isSuccess(response)) {
