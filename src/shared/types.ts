@@ -103,6 +103,7 @@ export type ProjectProviderIdentity = {
   provider: 'github'
   owner: string
   repo: string
+  host?: string
 }
 
 export type Project = {
@@ -1555,6 +1556,7 @@ export type GitHubPRFileContents = {
 
 export type GitHubPRReviewCommentInput = {
   repoPath: string
+  prRepo?: GitHubRepositoryIdentity | null
   prNumber: number
   commitId: string
   path: string

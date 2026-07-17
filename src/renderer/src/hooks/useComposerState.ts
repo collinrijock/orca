@@ -38,6 +38,7 @@ import {
   type TaskSourceContext
 } from '../../../shared/task-source-context'
 import type {
+  GitHubRepositoryIdentity,
   GitHubWorkItem,
   GitHubPrStartPoint,
   GitPushTarget,
@@ -55,6 +56,7 @@ import type {
   WorkspaceCreateTelemetrySource,
   ProjectGroup
 } from '../../../shared/types'
+import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
 import { isWorkspaceStatusId } from '../../../shared/workspace-statuses'
 import {
   CLIENT_PLATFORM,
@@ -1262,9 +1264,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // Pasting a PR URL from a different repo would otherwise recover only the
   // PR number, mislinking the worktree to an unrelated PR with the same
   // number in the selected repo.
-  const [selectedRepoSlug, setSelectedRepoSlug] = useState<{ owner: string; repo: string } | null>(
-    null
-  )
+  const [selectedRepoSlug, setSelectedRepoSlug] = useState<GitHubRepositoryIdentity | null>(null)
   const selectedRepoPath = selectedRepo?.path
   const selectedRepoPathRef = useRef<string | undefined>(selectedRepoPath)
   selectedRepoPathRef.current = selectedRepoPath
@@ -1411,7 +1411,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     const target = getActiveRuntimeTarget(selectedRepoSettings)
     const slugRequest =
       target.kind === 'environment'
-        ? callRuntimeRpc<{ owner: string; repo: string } | null>(
+        ? callRuntimeRpc<GitHubRepositoryIdentity | null>(
             target,
             'github.repoSlug',
             { repo: repoId },
@@ -1501,8 +1501,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       // risking a cross-repo mislink.
       if (
         selectedRepoSlug &&
-        fromName.slug.owner.toLowerCase() === selectedRepoSlug.owner.toLowerCase() &&
-        fromName.slug.repo.toLowerCase() === selectedRepoSlug.repo.toLowerCase()
+        githubRepoIdentityKey(fromName.slug) === githubRepoIdentityKey(selectedRepoSlug)
       ) {
         return fromName.number
       }
