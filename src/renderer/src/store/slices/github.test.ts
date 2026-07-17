@@ -6322,6 +6322,71 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     }
   })
 
+  it('flags a GitHub outage returned by a remote runtime method', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items-outage',
+      ok: false,
+      error: { code: 'runtime_error', message: 'HTTP 503: Service Unavailable' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    try {
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'caller-repo-id', path: '/server/repo' }],
+          24,
+          100,
+          ''
+        )
+
+      expect(result.githubUnavailable).toBe(true)
+      expect(result.failedCount).toBe(1)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('does not attribute a remote runtime transport timeout to GitHub', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items-runtime-timeout',
+      ok: false,
+      error: {
+        code: 'runtime_unavailable',
+        message: 'Runtime request timed out before github.listWorkItems completed'
+      },
+      _meta: { runtimeId: null }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    try {
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'caller-repo-id', path: '/server/repo' }],
+          24,
+          100,
+          ''
+        )
+
+      expect(result.githubUnavailable).toBe(false)
+      expect(result.failedCount).toBe(1)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
   it('flags githubUnavailable while serving stale cached rows after a failed refresh', async () => {
     const store = createTestStore()
     const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})

@@ -39,7 +39,11 @@ import {
   PER_REPO_FETCH_LIMIT
 } from '../../../../shared/work-items'
 import { deriveCheckStatusFromChecks, syncPRChecksStatus } from './github-checks'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import {
+  callRuntimeRpc,
+  getActiveRuntimeTarget,
+  RuntimeRpcCallError
+} from '../../runtime/runtime-rpc-client'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { settingsForProjectRowOwner } from './github-project-row-owner'
 import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility'
@@ -416,6 +420,17 @@ function countGitHubWorkItemsForRepo(
     repoId: context.repoId,
     ...args
   })
+}
+
+function isGitHubUnavailableWorkItemsError(error: unknown): boolean {
+  // Why: remote-runtime transport failures can also say "timed out" or
+  // "unavailable". Only runtime_error came from the GitHub method itself;
+  // other RPC codes must not be attributed to GitHub.
+  if (error instanceof RuntimeRpcCallError && error.code !== 'runtime_error') {
+    return false
+  }
+  const message = error instanceof Error ? error.message : String(error)
+  return classifyGitHubUnavailable(message) !== null
 }
 
 export function projectViewCacheKey(
@@ -2887,7 +2902,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             return [] as GitHubWorkItem[]
           }
           requestFailureCount += 1
-          if (classifyGitHubUnavailable(err instanceof Error ? err.message : String(err))) {
+          if (isGitHubUnavailableWorkItemsError(err)) {
             unavailableFailureCount += 1
           }
           const key =
