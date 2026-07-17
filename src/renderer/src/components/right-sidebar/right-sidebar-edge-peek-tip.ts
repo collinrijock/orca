@@ -1,12 +1,11 @@
-import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/types'
-import { translate } from '@/i18n/i18n'
 import {
   isRightSidebarEdgePeekEnabled,
   isRightSidebarEdgePeekTipDismissed
 } from './right-sidebar-edge-peek-preference'
 
-export const RIGHT_SIDEBAR_EDGE_PEEK_TIP_TOAST_ID = 'right-sidebar-edge-peek-tip'
+/** How long the one-shot edge-peek hint stays visible. */
+export const RIGHT_SIDEBAR_EDGE_PEEK_TIP_VISIBLE_MS = 1000
 
 type TipSettings = Pick<
   GlobalSettings,
@@ -17,33 +16,10 @@ export function shouldShowRightSidebarEdgePeekTip(settings: TipSettings): boolea
   return isRightSidebarEdgePeekEnabled(settings) && !isRightSidebarEdgePeekTipDismissed(settings)
 }
 
-export function showRightSidebarEdgePeekTip(args: {
+export function markRightSidebarEdgePeekTipDismissed(args: {
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
 }): void {
-  const dismissTip = (): void => {
-    void Promise.resolve(args.updateSettings({ rightSidebarEdgePeekTipDismissed: true })).catch(
-      () => {}
-    )
-  }
-
-  // Why: one-shot discoverability for an invisible edge gesture; long enough
-  // to read but not sticky like opt-in setting suggestions.
-  toast.info(
-    translate('auto.components.right.sidebar.edge.peek.tip.title', 'Hover the right edge to peek'),
-    {
-      id: RIGHT_SIDEBAR_EDGE_PEEK_TIP_TOAST_ID,
-      description: translate(
-        'auto.components.right.sidebar.edge.peek.tip.description',
-        'The right sidebar slides over the editor without reflowing it. Click the toggle or use the shortcut to pin it open. Change this anytime in Settings › Appearance.'
-      ),
-      duration: 10_000,
-      dismissible: true,
-      onDismiss: dismissTip,
-      onAutoClose: dismissTip
-    }
+  void Promise.resolve(args.updateSettings({ rightSidebarEdgePeekTipDismissed: true })).catch(
+    () => {}
   )
-}
-
-export function dismissRightSidebarEdgePeekTipToast(): void {
-  toast.dismiss(RIGHT_SIDEBAR_EDGE_PEEK_TIP_TOAST_ID)
 }

@@ -1,17 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { toast } from 'sonner'
+import { describe, expect, it, vi } from 'vitest'
 import {
-  RIGHT_SIDEBAR_EDGE_PEEK_TIP_TOAST_ID,
-  shouldShowRightSidebarEdgePeekTip,
-  showRightSidebarEdgePeekTip
+  RIGHT_SIDEBAR_EDGE_PEEK_TIP_VISIBLE_MS,
+  markRightSidebarEdgePeekTipDismissed,
+  shouldShowRightSidebarEdgePeekTip
 } from './right-sidebar-edge-peek-tip'
-
-vi.mock('sonner', () => ({
-  toast: {
-    info: vi.fn(),
-    dismiss: vi.fn()
-  }
-}))
 
 describe('shouldShowRightSidebarEdgePeekTip', () => {
   it('shows only when edge peek is enabled and the tip is not dismissed', () => {
@@ -35,27 +27,16 @@ describe('shouldShowRightSidebarEdgePeekTip', () => {
   })
 })
 
-describe('showRightSidebarEdgePeekTip', () => {
-  beforeEach(() => {
-    vi.mocked(toast.info).mockReset()
-  })
-
-  it('shows a dismissible info toast and persists dismiss on close', () => {
+describe('markRightSidebarEdgePeekTipDismissed', () => {
+  it('persists the one-shot dismiss flag', () => {
     const updateSettings = vi.fn().mockResolvedValue(undefined)
-    showRightSidebarEdgePeekTip({ updateSettings })
-
-    expect(toast.info).toHaveBeenCalledTimes(1)
-    const [, options] = vi.mocked(toast.info).mock.calls[0] as [
-      string,
-      {
-        id: string
-        onDismiss?: () => void
-        onAutoClose?: () => void
-      }
-    ]
-    expect(options.id).toBe(RIGHT_SIDEBAR_EDGE_PEEK_TIP_TOAST_ID)
-
-    options.onDismiss?.()
+    markRightSidebarEdgePeekTipDismissed({ updateSettings })
     expect(updateSettings).toHaveBeenCalledWith({ rightSidebarEdgePeekTipDismissed: true })
+  })
+})
+
+describe('RIGHT_SIDEBAR_EDGE_PEEK_TIP_VISIBLE_MS', () => {
+  it('stays brief (tooltip-length, not toast-length)', () => {
+    expect(RIGHT_SIDEBAR_EDGE_PEEK_TIP_VISIBLE_MS).toBe(1000)
   })
 })
