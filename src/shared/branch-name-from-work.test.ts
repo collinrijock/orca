@@ -127,6 +127,8 @@ describe('buildBranchNamePrompt', () => {
     expect(prompt.startsWith('Prefer product nouns.')).toBe(true)
     expect(prompt).not.toContain('Additional user prompt:')
     expect(prompt).not.toContain('Rules:')
+    expect(prompt).toContain('Generate a git branch name')
+    expect(prompt).toContain('Output ONLY the branch name on a single line')
     expect(prompt).toContain('Add a logout button')
   })
 })

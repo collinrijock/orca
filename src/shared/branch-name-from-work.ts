@@ -113,13 +113,14 @@ export function buildBranchNamePrompt(context: BranchNameWorkContext, customProm
   // override owns style rather than sitting under a prescriptive default.
   if (prompt) {
     sections.push(prompt, '')
-  } else {
-    sections.push(
-      'Generate a short git branch name that summarizes the coding task described below.',
-      'Output ONLY the branch name on a single line, nothing else.',
-      ''
-    )
   }
+  sections.push(
+    prompt
+      ? 'Generate a git branch name that summarizes the coding task described below.'
+      : 'Generate a short git branch name that summarizes the coding task described below.',
+    'Output ONLY the branch name on a single line, nothing else.',
+    ''
+  )
   sections.push('User request:', context.firstPrompt.trim())
   const assistant = context.assistantMessage?.trim()
   if (assistant) {
