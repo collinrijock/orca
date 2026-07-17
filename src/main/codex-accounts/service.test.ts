@@ -344,7 +344,7 @@ describe('CodexAccountService config sync', () => {
     )
   })
 
-  it('strips only Orca-owned source-home hook trust on startup and account selection', async () => {
+  it('does not seed source-home hook trust into a self-contained account home', async () => {
     const fixture = await createCanonicalHookTrustFixture()
     const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
     writeFileSync(canonicalConfigPath, fixture.config, 'utf-8')
@@ -354,6 +354,7 @@ describe('CodexAccountService config sync', () => {
       'approval_policy = "on-request"\n'
     )
     const settings = createSettings({
+      codexSystemDefaultRealHomeEnabled: true,
       codexManagedAccounts: [
         {
           id: 'account-1',
@@ -385,7 +386,8 @@ describe('CodexAccountService config sync', () => {
       for (const key of fixture.orcaKeys) {
         expect(entries.has(key)).toBe(false)
       }
-      expect(entries.has(fixture.userKey)).toBe(true)
+      // The launch-time hook mirror remaps user trust to this home's hooks.json.
+      expect(entries.has(fixture.userKey)).toBe(false)
     }
 
     expectSanitizedManagedConfig()
@@ -727,7 +729,7 @@ describe('CodexAccountService config sync', () => {
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(1)
   })
 
-  it('does not seed Orca-owned source-home trust when adding an account', async () => {
+  it('does not seed source-home hook trust when adding a self-contained account', async () => {
     vi.resetModules()
     let fixture: Awaited<ReturnType<typeof createCanonicalHookTrustFixture>>
     let readHookTrustEntries: typeof ReadHookTrustEntries
@@ -748,7 +750,7 @@ describe('CodexAccountService config sync', () => {
         for (const key of fixture.orcaKeys) {
           expect(entries.has(key)).toBe(false)
         }
-        expect(entries.has(fixture.userKey)).toBe(true)
+        expect(entries.has(fixture.userKey)).toBe(false)
         writeFileSync(
           join(loginHome!, 'auth.json'),
           createCodexAuthJson('user@example.com', 'provider-account-1', 'refresh-token'),
@@ -771,7 +773,7 @@ describe('CodexAccountService config sync', () => {
     readHookTrustEntries = (await import('../codex/config-toml-trust')).readHookTrustEntries
     writeFileSync(join(testState.fakeHomeDir, '.codex', 'config.toml'), fixture.config, 'utf-8')
 
-    const store = createStore(createSettings())
+    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: true }))
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
     const { CodexAccountService } = await import('./service')
