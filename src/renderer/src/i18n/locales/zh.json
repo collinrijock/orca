@@ -13184,7 +13184,30 @@
         "pastedImageLabel": "粘贴的图片",
         "imagePasteFailed": "图片粘贴失败。",
         "worktreeNotReady": "工作树未就绪 — 请稍后重试。",
-        "uploadingAttachments": "正在上传 {{value0}} 个文件到远程…"
+        "uploadingAttachments": "正在上传 {{value0}} 个文件到远程…",
+        "model": "模型",
+        "modelWithValue": "模型：{{value0}}",
+        "effort": "推理强度",
+        "effortWithValue": "推理强度：{{value0}}",
+        "fastMode": "快速模式",
+        "thinking": "思考",
+        "options": "选项",
+        "sessionOptions": "会话选项",
+        "chooseInAgentPicker": "在代理选择器中选择…",
+        "toggleOption": "切换{{value0}}",
+        "sentNotConfirmed": "已发送给代理 — 尚未确认",
+        "setWhenSessionStarts": "请在会话开始时设置。",
+        "availableAfterSessionStarts": "会话开始后可用。",
+        "optionUpdateFailed": "无法更新选项",
+        "optionValue": {
+          "fast": "快速",
+          "minimal": "最小",
+          "low": "低",
+          "medium": "中",
+          "high": "高",
+          "xhigh": "极高",
+          "max": "最大"
+        }
       },
       "tool": {
         "running": "正在运行…",

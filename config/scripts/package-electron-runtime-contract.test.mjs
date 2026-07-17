@@ -374,16 +374,28 @@ describe('Electron runtime package contract', () => {
     expect(afterInstallScript).not.toContain('chmod 0755 "$sandbox"')
   })
 
-  it('lets release-cut tag a version that is already present on main', () => {
+  it('keeps release-cut version commits self-healing and taggable on retries', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),
       'utf8'
     )
     const parsedWorkflow = parse(releaseWorkflow)
+    const checkoutStep = parsedWorkflow.jobs.cut.steps.find((step) => step.name === 'Checkout ref')
     const bumpStep = parsedWorkflow.jobs.cut.steps.find(
       (step) => step.name === 'Bump package.json and tag'
     )
 
+    const bumpIndex = bumpStep.run.indexOf(
+      'npm version "$VERSION" --no-git-tag-version --allow-same-version'
+    )
+    const generateIndex = bumpStep.run.indexOf(
+      'node config/scripts/generate-skill-bundle-manifest.mjs --write'
+    )
+    const stageIndex = bumpStep.run.indexOf('git add package.json resources/skills')
+    expect(checkoutStep.with['fetch-depth']).toBe(0)
+    expect(bumpIndex).toBeGreaterThanOrEqual(0)
+    expect(generateIndex).toBeGreaterThan(bumpIndex)
+    expect(stageIndex).toBeGreaterThan(generateIndex)
     expect(bumpStep.run).toContain('git diff --cached --quiet')
     expect(bumpStep.run).toContain('git commit --allow-empty -m "$commit_message"')
   })
