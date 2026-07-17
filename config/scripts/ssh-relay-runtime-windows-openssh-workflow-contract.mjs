@@ -3,6 +3,9 @@ export function assertWindowsOpenSshWorkflow(workflow, expect) {
   const start = steps.find(
     (step) => step.name === 'Start loopback Windows OpenSSH system-SSH fixture'
   )
+  const launcher = steps.find(
+    (step) => step.name === 'Build disconnected Windows no-input launcher diagnostic'
+  )
   const measure = steps.find(
     (step) => step.name === 'Measure exact full-size runtime over Windows system SSH'
   )
@@ -11,8 +14,15 @@ export function assertWindowsOpenSshWorkflow(workflow, expect) {
   )
 
   expect(start).toBeDefined()
+  expect(launcher).toBeDefined()
   expect(measure).toBeDefined()
   expect(stop).toBeDefined()
+  expect(launcher.shell).toBe('pwsh')
+  expect(launcher.run).toContain('build-windows-ssh-no-input-launcher.mjs')
+  expect(launcher.run).toContain('ORCA_SSH_WINDOWS_NO_INPUT_LAUNCHER=')
+  expect(launcher.run).toContain('$env:RUNNER_TEMP')
+  expect(launcher.run).not.toMatch(/runtime-evidence|firstOutput|Upload|SignPath/iu)
+  expect(steps.indexOf(launcher)).toBeLessThan(steps.indexOf(start))
   expect(start.shell).toBe('pwsh')
   expect(start.run).toContain('10.0.0.0p2-Preview')
   expect(start.run).toContain('23f50f3458c4c5d0b12217c6a5ddfde0137210a30fa870e98b29827f7b43aba5')

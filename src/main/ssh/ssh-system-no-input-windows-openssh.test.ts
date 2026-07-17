@@ -1,7 +1,4 @@
 import { spawn } from 'node:child_process'
-import { closeSync, mkdtempSync, openSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
 import { describe, expect, it } from 'vitest'
@@ -10,7 +7,7 @@ import type { SshTarget } from '../../shared/ssh-types'
 import { buildSshArgs } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
 
-type DiagnosticMode = 'regular-file-eof-no-n'
+type DiagnosticMode = 'private-pipe-launcher-no-n'
 
 type DiagnosticResult = {
   mode: DiagnosticMode
@@ -22,15 +19,15 @@ type DiagnosticResult = {
   channelClosed: boolean
   closeCode: number | null | 'not-observed'
   stderrBytes: number
-  stdinFixtureRemoved: boolean
   elapsedMs: number
 }
 
 const host = process.env.ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_HOST
 const user = process.env.ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_USER
 const identityFile = process.env.ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_IDENTITY
+const launcherPath = process.env.ORCA_SSH_WINDOWS_NO_INPUT_LAUNCHER
 const port = Number.parseInt(process.env.ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_PORT ?? '', 10)
-const hasLiveInput = Boolean(host && user && identityFile && Number.isInteger(port))
+const hasLiveInput = Boolean(host && user && identityFile && launcherPath && Number.isInteger(port))
 
 function createTarget(): SshTarget {
   return {
@@ -51,25 +48,15 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
   if (!sshPath) {
     throw new Error('Native Windows OpenSSH client is unavailable')
   }
-  const mode: DiagnosticMode = 'regular-file-eof-no-n'
+  const mode: DiagnosticMode = 'private-pipe-launcher-no-n'
   const startedAt = performance.now()
-  const stdinDirectory = mkdtempSync(join(tmpdir(), 'orca-ssh-empty-stdin-'))
-  const stdinPath = join(stdinDirectory, 'stdin')
-  const stdinFd = openSync(stdinPath, 'wx+')
-  let child: ReturnType<typeof spawn>
-  try {
-    child = spawn(sshPath, [...buildSshArgs(createTarget()), 'echo ORCA-SYSTEM-SSH-OK'], {
-      // Why: a zero-length regular file is at EOF before CreateProcess without
-      // triggering Win32-OpenSSH's NUL-handle bug.
-      stdio: [stdinFd, 'pipe', 'pipe'],
-      windowsHide: true
-    })
-  } catch (error) {
-    closeSync(stdinFd)
-    rmSync(stdinDirectory, { recursive: true, force: true })
-    throw error
-  }
-  closeSync(stdinFd)
+  // Why: the disconnected launcher creates private child pipes so Win32-OpenSSH receives EOF
+  // before CreateProcessW without depending on Node's Windows named-pipe behavior.
+  const child = spawn(
+    launcherPath as string,
+    [sshPath, ...buildSshArgs(createTarget()), 'echo ORCA-SYSTEM-SSH-OK'],
+    { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }
+  )
 
   return new Promise((resolve, reject) => {
     let stdout = ''
@@ -80,14 +67,6 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
     let closeCode: number | null | 'not-observed' = 'not-observed'
     let timedOut = false
     let settled = false
-    const removeStdinFixture = (): boolean => {
-      try {
-        rmSync(stdinDirectory, { recursive: true, force: true })
-        return true
-      } catch {
-        return false
-      }
-    }
     const finish = (): void => {
       if (settled) {
         return
@@ -95,7 +74,6 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
       settled = true
       clearTimeout(timeout)
       clearTimeout(killTimeout)
-      const stdinFixtureRemoved = removeStdinFixture()
       const sentinel = stdout.includes('ORCA-SYSTEM-SSH-OK')
       resolve({
         mode,
@@ -105,8 +83,7 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
           stdoutEnded &&
           processExit === 0 &&
           channelClosed &&
-          closeCode === 0 &&
-          stdinFixtureRemoved,
+          closeCode === 0,
         timedOut,
         sentinel,
         stdoutEnded,
@@ -114,7 +91,6 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
         channelClosed,
         closeCode,
         stderrBytes,
-        stdinFixtureRemoved,
         elapsedMs: performance.now() - startedAt
       })
     }
@@ -155,7 +131,6 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
       settled = true
       clearTimeout(timeout)
       clearTimeout(killTimeout)
-      removeStdinFixture()
       reject(error)
     })
   })
@@ -163,14 +138,16 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
 
 describe.skipIf(!hasLiveInput)('Windows OpenSSH no-input child-handle diagnostic', () => {
   it(
-    'qualifies regular-file stdin EOF without the Windows null-input option',
+    'qualifies private-pipe stdin EOF without the Windows null-input option',
     { timeout: 15_000 },
     async () => {
       expect(process.platform).toBe('win32')
-      const regularFileEofNoN = await runDiagnostic()
-      console.log(`ssh_windows_no_input_handle_diagnostic=${JSON.stringify({ regularFileEofNoN })}`)
+      const privatePipeLauncherNoN = await runDiagnostic()
+      console.log(
+        `ssh_windows_no_input_handle_diagnostic=${JSON.stringify({ privatePipeLauncherNoN })}`
+      )
 
-      expect(regularFileEofNoN.success).toBe(true)
+      expect(privatePipeLauncherNoN.success).toBe(true)
     }
   )
 })

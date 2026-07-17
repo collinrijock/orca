@@ -178,6 +178,12 @@ describe('SSH relay runtime artifact workflow', () => {
     expect(windowsUploadIndex).toBeGreaterThan(windowsMeasurementIndex)
     expect(source).toContain('verify-ssh-relay-runtime.mjs')
     expect(source).toContain('ssh-relay-runtime-workflow.test.mjs')
+    expect(
+      source.match(/node --check config\/scripts\/build-windows-ssh-no-input-launcher\.mjs/g)
+    ).toHaveLength(2)
+    expect(
+      source.match(/config\/scripts\/ssh-relay-runtime-windows-no-input-launcher\.test\.mjs/g)
+    ).toHaveLength(4)
     for (const testName of [
       'ssh-relay-artifact-schema.test.ts',
       'ssh-relay-manifest-signature.test.ts',

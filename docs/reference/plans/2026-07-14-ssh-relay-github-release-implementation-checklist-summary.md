@@ -9,8 +9,8 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — pre-execution Windows
-regular-file EOF qualification, 2026-07-15, Codex implementation owner.**
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected Windows
+no-input launcher native qualification, 2026-07-15, Codex implementation owner.**
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the portable-fixture
 correction locally green: the no-Orca-publication workflow oracle permits the one exact pinned
 Microsoft fixture release URL while Orca release URLs, `gh release`, and `contents: write` remain
@@ -151,7 +151,19 @@ architectures to pass the diagnostic, full-size live transfer, cancellation, reu
 profile teardown before changing production. `E-M6-WINDOWS-NOINPUT-REGULAR-FILE-NO-N-LOCAL-001`
 records the disconnected replacement locally green: focused 117+2, all 283 release contracts,
 typecheck, full lint/reliability/max-lines, and formatting pass. Commit/push this exact isolated
-diagnostic and require fresh native x64/ARM64 proof; SignPath remains deferred.
+diagnostic and require fresh native x64/ARM64 proof. `E-M6-WINDOWS-NOINPUT-REGULAR-FILE-NO-N-CI-RED-001`
+records exact pushed head `eee686d7f6203c88f00d607711d3816aaf444c61`, artifact run
+`29549252407`, Windows x64/ARM64 jobs `87788106340`/`87788106351`, and independent
+8036.46/8042.17-millisecond timeouts despite `stdinFixtureRemoved=true`; both profile teardowns are
+RED. All four non-Windows primary jobs and both Linux supplements remain green. Next implement only
+a disconnected Windows launcher artifact with private anonymous stdio pipes, exact handle
+inheritance, hidden child creation, bounded output pumps, exit propagation, and job-owned
+cancellation. `E-M6-WINDOWS-NOINPUT-LAUNCHER-LOCAL-001` records that artifact-only package locally
+green: focused 119/119, release contracts 285/285, typecheck, full lint/reliability/max-lines,
+formatting, diff, and resolver isolation pass. Its Windows-native suite requires legacy-compiler,
+argv/EOF/binary/exit, unrelated-handle exclusion, job cancellation, and bounded settlement proof;
+all four native cases are declared skips locally. Commit/push this exact package and require x64/
+ARM64 live evidence next. Do not package or call it from production; SignPath remains deferred.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown

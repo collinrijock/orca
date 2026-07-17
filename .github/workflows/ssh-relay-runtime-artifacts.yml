@@ -7,6 +7,7 @@ on:
       - 'config/patches/node-pty@1.1.0.patch'
       - 'config/ssh-relay-runtime-linux-builder.Containerfile'
       - 'config/scripts/build-relay.mjs'
+      - 'config/scripts/build-windows-ssh-no-input-launcher.mjs'
       - 'config/scripts/*ssh-relay*'
       - 'config/ssh-relay-node-release-keys/**'
       - 'config/ssh-relay-node-release-v24.18.0.json'
@@ -14,7 +15,10 @@ on:
       - 'pnpm-lock.yaml'
       - 'src/main/ipc/parcel-watcher-process-entry.ts'
       - 'src/main/ssh/ssh-relay-runtime-*'
+      - 'src/main/ssh/ssh-system-no-input-windows-openssh.test.ts'
       - 'src/relay/**'
+      - 'native/windows-ssh-no-input-launcher/**'
+      - 'native/windows-ssh-no-input-launcher-test/**'
   workflow_dispatch:
   # Why: callers may gate on the native graph only after separate release wiring is reviewed.
   workflow_call:
@@ -258,6 +262,8 @@ jobs:
           node --check config/scripts/ssh-relay-runtime-native-signing-workflow.test.mjs
           node --check config/scripts/ssh-relay-runtime-native-signing-rehearsal-workflow.test.mjs
           node --check config/scripts/ssh-relay-runtime-build-prerequisite.test.mjs
+          node --check config/scripts/build-windows-ssh-no-input-launcher.mjs
+          node --check config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
           pnpm exec vitest run --config config/vitest.config.ts \
             src/main/ssh/ssh-relay-artifact-schema.test.ts \
             src/main/ssh/ssh-relay-manifest-signature.test.ts \
@@ -348,6 +354,7 @@ jobs:
             config/scripts/ssh-relay-runtime-native-signing-workflow.test.mjs \
             config/scripts/ssh-relay-runtime-native-signing-rehearsal-workflow.test.mjs \
             config/scripts/ssh-relay-runtime-build-prerequisite.test.mjs \
+            config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs \
             config/scripts/ssh-relay-runtime-closure.test.mjs \
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs \
             config/scripts/ssh-relay-runtime-reproducibility.test.mjs \
@@ -1000,6 +1007,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'runtime native signing rehearsal workflow test syntax check failed' }
           node --check config/scripts/ssh-relay-runtime-build-prerequisite.test.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime build prerequisite test syntax check failed' }
+          node --check config/scripts/build-windows-ssh-no-input-launcher.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Windows no-input launcher build syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Windows no-input launcher test syntax check failed' }
           pnpm exec vitest run --config config/vitest.config.ts `
             src/main/ssh/ssh-relay-artifact-schema.test.ts `
             src/main/ssh/ssh-relay-manifest-signature.test.ts `
@@ -1090,6 +1101,7 @@ jobs:
             config/scripts/ssh-relay-runtime-native-signing-workflow.test.mjs `
             config/scripts/ssh-relay-runtime-native-signing-rehearsal-workflow.test.mjs `
             config/scripts/ssh-relay-runtime-build-prerequisite.test.mjs `
+            config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs `
             config/scripts/ssh-relay-runtime-closure.test.mjs `
             config/scripts/ssh-relay-runtime-pty-smoke.test.mjs `
             config/scripts/ssh-relay-runtime-reproducibility.test.mjs `
@@ -1102,6 +1114,21 @@ jobs:
             config/scripts/ssh-relay-runtime-zip.test.mjs `
             config/scripts/ssh-relay-runtime-workflow.test.mjs
           if ($LASTEXITCODE -ne 0) { throw 'runtime artifact contract tests failed' }
+
+      - name: Build disconnected Windows no-input launcher diagnostic
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $launcherRoot = Join-Path $env:RUNNER_TEMP 'orca-ssh-no-input-launcher'
+          $launcherPath = Join-Path $launcherRoot 'orca-ssh-no-input.exe'
+          node config/scripts/build-windows-ssh-no-input-launcher.mjs --output $launcherPath
+          if ($LASTEXITCODE -ne 0) { throw 'Windows no-input launcher build failed' }
+          if (-not (Test-Path -LiteralPath $launcherPath -PathType Leaf)) {
+            throw 'Windows no-input launcher output is missing'
+          }
+          # Why: this artifact is live-test input only; it is not part of runtime or release output.
+          "ORCA_SSH_WINDOWS_NO_INPUT_LAUNCHER=$launcherPath" |
+            Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Download exact Node release inputs
         shell: pwsh

@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: pre-execution Windows regular-file EOF qualification**. `E-M6-WINDOWS-NOINPUT-OVERLAPPED-NO-N-CI-RED-001` falsifies stdin-only overlapped EOF on exact pushed head `1c391aa851777f36cf81af9adb85d7177d7acff6`, artifact run `29548340927`, Windows x64 job `87785371486`, and Windows ARM64 job `87785371526`. `E-M6-WINDOWS-NOINPUT-REGULAR-FILE-NO-N-LOCAL-001` implements only a newly created zero-length regular-file descriptor that is already at EOF before `CreateProcess` and distinct from `NUL`; commit/push the isolated diagnostic and require exact native x64/ARM64 proof. Do not add a launcher unless this narrower disconnected boundary is also falsified. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **POSIX EOF CORRECTION NATIVELY GREEN / WINDOWS STANDARD AND OVERLAPPED PIPE EOF WITHOUT `-n` NATIVELY RED / REGULAR-FILE EOF DIAGNOSTIC LOCALLY GREEN — 2026-07-15, Codex implementation owner** — exact correction head `4f57b885d24ad1755a5c863eaf37369208cecedb`, artifact run `29545688003`, and Linux x64/ARM64 jobs `87777401256`/`87777401218` prove the separate no-input facade through live SFTP and restricted no-tar POSIX system SSH with bounded full-size transfer, four-file concurrency, cancellation, and cleanup. Exact diagnostic head `da938a7405d0a6c760979358a6c0a38030d9acaf`, artifact run `29546702916`, and Windows x64/ARM64 jobs `87780486286`/`87780486259` prove that mandatory `-n` confounds inherited and overlapped handles. `E-M6-WINDOWS-NOINPUT-PIPE-NO-N-CI-RED-001` records exact pushed head `daffd545d75570f198db093c3ba054ae1fa033ba`, artifact run `29547488550`, Windows x64/ARM64 jobs `87782833321`/`87782833288`, and independent standard-pipe/no-`-n` timeouts after 8.03/8.04 seconds with `sentinel=false`, `stdoutEnded=true`, termination-only null exit/close codes, zero stderr bytes, and exact profile teardown RED. `E-M6-WINDOWS-NOINPUT-OVERLAPPED-NO-N-CI-RED-001` records exact pushed head `1c391aa851777f36cf81af9adb85d7177d7acff6`, artifact run `29548340927`, Windows x64/ARM64 jobs `87785371486`/`87785371526`, and the same independent timeout shape after 8035.00/8043.47 milliseconds; both exact profile teardowns remain RED. All four non-Windows primary jobs and both Linux oldest-userland supplements remain green. `E-M6-WINDOWS-NOINPUT-REGULAR-FILE-NO-N-LOCAL-001` replaces only the disconnected diagnostic with a newly created zero-length regular-file descriptor already at EOF before `CreateProcess` and distinct from `NUL`; focused 117+2, all 283 release contracts, typecheck, full lint/reliability/max-lines, and formatting pass. Commit/push and require fresh x64/ARM64 proof; do not add a launcher unless this boundary is falsified. Production runtime bytes still cross authenticated SSH and no product remote downloads anything. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected Windows no-input launcher native qualification**. `E-M6-WINDOWS-NOINPUT-LAUNCHER-LOCAL-001` records the unpackaged, unsigned launcher and its local source/workflow/static contracts green. Commit/push only this exact artifact-only package and require native Windows x64/ARM64 legacy-compiler, argv/EOF/binary/exit/handle-exclusion/cancellation, live diagnostic, and exact teardown proof before any product caller. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **DIRECT WINDOWS NODE STDIN BOUNDARIES NATIVELY RED / DISCONNECTED PRIVATE-PIPE LAUNCHER LOCALLY GREEN / NATIVE QUALIFICATION NEXT — 2026-07-15, Codex implementation owner** — `E-M6-WINDOWS-NOINPUT-REGULAR-FILE-NO-N-CI-RED-001` records exact head `eee686d7f6203c88f00d607711d3816aaf444c61`, artifact run `29549252407`, Windows x64/ARM64 jobs `87788106340`/`87788106351`, and independent 8036.46/8042.17-millisecond timeouts after the last direct-Node boundary. `E-M6-WINDOWS-NOINPUT-LAUNCHER-LOCAL-001` adds only a runner-temp launcher with private anonymous stdio pipes, pre-execution stdin EOF, exact three-handle inheritance, suspended/job-owned hidden child creation, pump-failure cancellation, bounded pump settlement, and exit propagation. Focused 119/119, release contracts 285/285, typecheck, full lint/reliability/max-lines, formatting, diff, and resolver isolation pass locally; four launcher-native and two live Windows cases are declared skips. Production runtime bytes still cross authenticated SSH and no product remote downloads anything. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -19621,6 +19621,88 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 117 cases with two de
   Windows x64 and ARM64 lifecycle plus exact profile/directory teardown before any production
   handle change.
 
+### E-M6-WINDOWS-NOINPUT-REGULAR-FILE-NO-N-CI-RED-001 — pre-execution regular-file EOF still fails natively
+
+- Date/owner/head/run: 2026-07-15, Codex implementation owner; exact pushed head
+  `eee686d7f6203c88f00d607711d3816aaf444c61`, artifact run `29549252407`, Windows x64 job
+  `87788106340` on `windows-2022`, and Windows ARM64 job `87788106351` on `windows-11-arm`.
+- Exact log command: `gh api repos/stablyai/orca/actions/jobs/<job-id>/logs | rg -n -C 15
+  'ssh_windows_no_input_handle_diagnostic|Windows no-input handle diagnostic failed|profile
+  teardown:|UsrClass.dat|regular-file-eof-no-n|stdinFixtureRemoved|sentinel|stderrBytes'` for each
+  job.
+- Native result: x64 returns `success=false`, `timedOut=true`, `sentinel=false`,
+  `stdoutEnded=true`, `processExit=null`, `channelClosed=true`, `closeCode=null`, `stderrBytes=0`,
+  and `stdinFixtureRemoved=true` after 8036.46 milliseconds. ARM64 independently returns the same
+  fields after 8042.17 milliseconds. The exit/close fields are termination settlement after the
+  timeout, not remote-command success; both server logs show pinned-key authentication and command-
+  session close.
+- Teardown result: both jobs fail `_Classes` hive unload, retain locked `UsrClass.dat`, and retain
+  the fixture profile directory. The workflow correctly stops before the unchanged product
+  full-size test, so no Windows transport cell is green and no tuple is enabled.
+- Preserved evidence: the same run passes Linux x64/ARM64 jobs `87788106335`/`87788106349`, Darwin
+  x64/ARM64 jobs `87788106347`/`87788106337`, and Linux oldest-userland supplements
+  `87788703378`/`87788703379`. Both Linux primary jobs remain green through target-native build,
+  full-size cache, live SFTP, restricted no-tar POSIX system SSH, cancellation, cleanup, and
+  artifact upload.
+- Interpretation/course correction: a regular file proves EOF existed before `CreateProcess`, so
+  another direct Node stdin mode is not justified. Orca-managed ControlMaster is already absent on
+  Windows because `getControlSocketPath()` returns `null`; this is not the 300-second mux-persist
+  path. The next capability must isolate the SSH child from Node's Windows named-pipe handles with
+  private anonymous stdin/stdout/stderr pipes, an exact inherited-handle list, and bounded output
+  pumps, while retaining hidden execution, exit propagation, and cancellation-owned child lifetime.
+- Residual boundary: implement and native-test only an unpackaged, unsigned, disconnected launcher
+  artifact. Keep product handles/args, legacy default/fallback, Beta, tuple publication, and
+  SignPath unchanged.
+
+### E-M6-WINDOWS-NOINPUT-LAUNCHER-LOCAL-001 — disconnected launcher contracts are locally green
+
+- Date/owner/base/runner: 2026-07-15, Codex implementation owner; uncommitted capability atop exact
+  regular-file RED head `eee686d7f6203c88f00d607711d3816aaf444c61` on Apple arm64, macOS 26.2
+  build 25C56, Node 26.5.0, and pnpm 10.24.0.
+- Artifact boundary: four purpose-named C# sources create private anonymous stdin/stdout/stderr
+  pipes, close the stdin writer before `CreateProcessW`, use `STARTUPINFOEX` with exactly three
+  inherited handles, start the hidden child suspended, assign it to a kill-on-close job before
+  resume, signal pump failure into the child wait, bound both pump joins to five seconds, propagate
+  the child exit code, and terminate any started child that failed job assignment. The build uses
+  the Windows .NET Framework 4 `csc.exe` and emits only to an explicit runner-temp path.
+- Native contract design: the purpose-named suite compiles the launcher and a separate inheritable-
+  event probe on Windows, then requires exact empty/space/quote/trailing-slash/newline/Unicode argv,
+  zero child stdin bytes despite input supplied to the launcher, exact binary stdout/stderr,
+  exit-code 37 propagation, exclusion of an unrelated inheritable event, job-owned child death,
+  and cancellation settlement under ten seconds. On macOS the two source/fail-closed cases pass and
+  the four Windows-native cases are declared skips; native x64/ARM64 proof remains required.
+- Workflow boundary: `.github/workflows/ssh-relay-runtime-artifacts.yml` runs syntax and source
+  contracts on every native family, runs all native launcher cases on both Windows architectures,
+  builds a separate diagnostic copy under `$RUNNER_TEMP`, and exposes only its path to the existing
+  live diagnostic. The workflow oracle rejects runtime-evidence, first-output, upload, and SignPath
+  references in that step. Runtime archives, release evidence, product imports, production system-
+  SSH arguments/handles, legacy fallback/default, Beta, tuple publication, and signing are unchanged.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+  --maxWorkers=1 src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
+  src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
+  src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+  config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
+  config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 119 cases with six declared native
+  skips in 4.73 seconds real; maximum RSS is 167,936,000 bytes and peak footprint is 98,735,864
+  bytes.
+- Release contracts: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+  --maxWorkers=1 --reporter=dot config/scripts/ssh-relay-runtime-*.test.mjs` passes 51 files and
+  285/285 runnable cases with four declared Windows skips in 25.07 seconds real; maximum RSS is
+  195,428,352 bytes and peak footprint is 97,638,160 bytes. One preceding quoted-glob invocation
+  selected no files and exited 1; it is recorded as operator error and is not evidence.
+- Static gates: `/usr/bin/time -l pnpm typecheck` passes in 4.52 seconds real with maximum RSS
+  1,247,133,696 bytes and peak footprint 97,982,104 bytes. `/usr/bin/time -l pnpm lint` passes in
+  24.72 seconds real with only the same 26 pre-existing warnings, all 41 reliability gates, and the
+  355-entry max-lines ratchet; maximum RSS is 2,030,288,896 bytes and peak footprint 97,883,872
+  bytes.
+- Isolation gates: purpose-file formatting, `git diff --check`, and protected-resolver zero-diff
+  pass. No executable can be trusted yet because local macOS cannot run legacy `csc.exe` or Win32
+  handle/job semantics.
+- Residual boundary: commit/push this exact artifact-only package and require Windows x64 and ARM64
+  compile/native-contract/live-diagnostic evidence plus exact profile teardown. The unchanged
+  product full-size test is expected to remain separately gated until both architectures prove the
+  disconnected launcher and a subsequent product integration package is reviewed.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -19679,9 +19761,10 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push only the disconnected zero-length regular-file stdin diagnostic recorded by
-`E-M6-WINDOWS-NOINPUT-REGULAR-FILE-NO-N-LOCAL-001`, then require exact-head Windows x64 and ARM64
-lifecycle plus exact profile/directory teardown. Do not
+Commit and push only the disconnected launcher package recorded by
+`E-M6-WINDOWS-NOINPUT-LAUNCHER-LOCAL-001`, then require exact-head Windows x64 and ARM64 legacy-
+compiler, argv/EOF/binary/exit/handle-exclusion/cancellation, live diagnostic, and exact profile/
+directory teardown evidence. Do not
 change the production Windows handle or check the broad Milestone 6 Windows system-SSH item until
 both architectures select the same console-independent strategy. Do not add an
 Electron/startup/product importer, per-target mode wiring, fallback, tuple
