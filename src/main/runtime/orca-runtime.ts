@@ -4692,7 +4692,7 @@ export class OrcaRuntimeService {
       // renderer's live pin guard and durable close transaction.
       if (closingWholeParent && !this.tabs.has(tab.parentTabId)) {
         this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
-        this.notifier?.closeTerminal(tab.parentTabId)
+        this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
         this.store?.flushOrThrow?.()
         return { closed: true }
       }
@@ -4706,7 +4706,7 @@ export class OrcaRuntimeService {
       // only raw pane close. Runtime-owned parents still need de-persist + kill.
       if (closingWholeParent && this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)) {
         this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
-        this.notifier?.closeTerminal(tab.parentTabId)
+        this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
         this.store?.flushOrThrow?.()
         return { closed: true }
       }
@@ -4737,6 +4737,19 @@ export class OrcaRuntimeService {
       this.notifier?.closeSessionTab?.(tab.id, worktreeId)
     }
     return { closed: true }
+  }
+
+  private notifyRendererOfHeadlessTerminalClose(parentTabId: string): void {
+    // Why: this relay is advisory after main owns teardown; renderer failure must
+    // not prevent the authoritative session flush or turn the close into failure.
+    try {
+      this.notifier?.closeTerminal(parentTabId)
+    } catch (error) {
+      console.warn('[runtime] failed to notify renderer after headless terminal close', {
+        parentTabId,
+        error
+      })
+    }
   }
 
   private async closeHeadlessMobileBrowserTab(

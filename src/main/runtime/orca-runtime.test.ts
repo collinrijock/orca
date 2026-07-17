@@ -19722,11 +19722,9 @@ describe('OrcaRuntimeService', () => {
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
   })
 
-  it('tears down a runtime-owned SSH headless tab authoritatively even when the renderer relay is wired', async () => {
-    // #8958 regression: with a window attached, both closeTerminal and
-    // closeTerminalTab are wired. A headless SSH tab is absent from the window
-    // graph, so the closeTerminalTab relay would resolve nothing and ack success
-    // while the PTY kept running. The authoritative teardown must win.
+  it('durably tears down a runtime-owned SSH headless tab when renderer cleanup fails', async () => {
+    // #8958 regression: the acknowledged renderer relay cannot see headless tabs;
+    // its advisory fallback must not prevent authoritative teardown or flushing.
     const persistedPtyId = 'ssh:ssh-1@@relay-pty'
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
@@ -19750,9 +19748,14 @@ describe('OrcaRuntimeService', () => {
       })
     )
     const kill = vi.fn(() => true)
-    const closeTerminal = vi.fn()
+    const flushOrThrow = vi.fn()
+    const rendererError = new Error('renderer unavailable')
+    const closeTerminal = vi.fn(() => {
+      throw rendererError
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const closeTerminalTab = vi.fn(async () => {})
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow } as never)
     runtime.setPtyController({
       write: () => true,
       kill,
@@ -19767,6 +19770,11 @@ describe('OrcaRuntimeService', () => {
     expect(closeTerminalTab).not.toHaveBeenCalled()
     expect(kill).toHaveBeenCalledWith(persistedPtyId)
     expect(closeTerminal).toHaveBeenCalledWith('host-tab')
+    expect(flushOrThrow).toHaveBeenCalledTimes(1)
+    expect(warn).toHaveBeenCalledWith(
+      '[runtime] failed to notify renderer after headless terminal close',
+      { parentTabId: 'host-tab', error: rendererError }
+    )
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
   })
