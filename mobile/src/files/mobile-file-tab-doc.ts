@@ -21,9 +21,8 @@ export type MobileFileTabDocRequest = {
   diffSource?: 'staged' | 'unstaged' | 'branch' | 'commit'
 }
 
-// Loads the previewable doc for a session file tab: git diffs (text or image),
-// previewable images, HTML source, or plain text. Throws 'binary_file',
-// 'file_too_large', or the RPC error message; callers map those to error docs.
+// Throws 'binary_file'/'file_too_large'/the RPC error message; callers map those
+// to error docs.
 export async function resolveMobileFileTabDoc(
   client: FileTabDocClient,
   request: MobileFileTabDocRequest
