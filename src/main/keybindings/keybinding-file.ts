@@ -322,9 +322,15 @@ export function migrateLegacyKeybindings(
  * Pin the pre-swap tab-switch chords for a pre-existing install so upgrading
  * users keep the shortcuts they learned. Writes into the active-platform
  * section (mirroring `writeKeybindingOverride`) so the seeded values stay
- * resettable from Settings. No-op when the user has already customized any of
- * the swapped actions — that is custom territory, and a half-swapped pin would
- * be worse than leaving their choices alone.
+ * resettable from Settings.
+ *
+ * Pins per action, not all-or-nothing: an action is seeded only when this
+ * platform has no effective override for it yet. That way a user who rebound
+ * just one of the swapped actions keeps that choice AND keeps the pre-swap
+ * default on the other three — an existing user's behavior is never altered,
+ * whether they customized none, some, or all of them. Because every pin equals
+ * the action's old default, the seeded set reproduces exactly today's effective
+ * config and introduces no new conflicts.
  */
 export function seedLegacyTabSwitchBindings(
   path: string,
@@ -334,14 +340,14 @@ export function seedLegacyTabSwitchBindings(
   const keybindingPlatform = getKeybindingPlatform(platform)
   const actionIds = Object.keys(legacyBindings) as KeybindingActionId[]
   const current = readKeybindingFile(path, platform)
-  const alreadyCustomized = actionIds.some(
-    (actionId) =>
-      Object.prototype.hasOwnProperty.call(current.commonOverrides, actionId) ||
-      PLATFORM_KEYS.some((os) =>
-        Object.prototype.hasOwnProperty.call(current.platformOverrides[os] ?? {}, actionId)
-      )
+  // `current.overrides` is the effective override map for this platform (common
+  // + this platform's section). Skip any action that already resolves to a
+  // user-set binding here; a foreign-platform-only override must not block the
+  // pin, or this platform would drift to the new default.
+  const toSeed = actionIds.filter(
+    (actionId) => !Object.prototype.hasOwnProperty.call(current.overrides, actionId)
   )
-  if (alreadyCustomized) {
+  if (toSeed.length === 0) {
     return { seeded: false, snapshot: current }
   }
 
@@ -359,7 +365,7 @@ export function seedLegacyTabSwitchBindings(
   const activePlatform = isJsonObject(platforms[keybindingPlatform])
     ? { ...(platforms[keybindingPlatform] as JsonObject) }
     : {}
-  for (const actionId of actionIds) {
+  for (const actionId of toSeed) {
     const normalized = normalizeKeybindingArrayForAction(actionId, legacyBindings[actionId] ?? [])
     if (Array.isArray(normalized)) {
       activePlatform[actionId] = normalized

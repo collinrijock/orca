@@ -247,15 +247,46 @@ describe('keybinding-file', () => {
     expect(snapshot.diagnostics).toEqual([])
   })
 
-  it('skips the seed when the user has already customized any swapped action', () => {
+  it('preserves a customized action while still pinning the un-customized ones', () => {
+    // A partially-customized existing user: they rebound one action. The other
+    // three must still land on their pre-swap defaults, not the new ones.
     writeKeybindingOverride(filePath, 'darwin', 'tab.nextSameType', ['Mod+Alt+K'])
 
     const result = seedLegacyTabSwitchBindings(filePath, 'darwin', LEGACY_TAB_SWITCH_BINDINGS)
 
-    expect(result.seeded).toBe(false)
-    // The user's choice is untouched and the other actions stay on their defaults.
+    expect(result.seeded).toBe(true)
     expect(readKeybindingFile(filePath, 'darwin').overrides).toEqual({
-      'tab.nextSameType': ['Mod+Alt+K']
+      'tab.nextSameType': ['Mod+Alt+K'],
+      'tab.previousSameType': ['Mod+Shift+BracketLeft'],
+      'tab.nextAllTypes': ['Mod+Alt+BracketRight'],
+      'tab.previousAllTypes': ['Mod+Alt+BracketLeft']
+    })
+  })
+
+  it('is a no-op once every swapped action already resolves on this platform', () => {
+    // Seeding writes the whole document at once, so it clears the per-write
+    // conflict guard that a naive one-action-at-a-time write would trip.
+    const first = seedLegacyTabSwitchBindings(filePath, 'darwin', LEGACY_TAB_SWITCH_BINDINGS)
+    expect(first.seeded).toBe(true)
+    expect(first.snapshot.diagnostics).toEqual([])
+
+    const second = seedLegacyTabSwitchBindings(filePath, 'darwin', LEGACY_TAB_SWITCH_BINDINGS)
+    expect(second.seeded).toBe(false)
+  })
+
+  it('does not let a foreign-platform override block the active-platform pin', () => {
+    // Only linux is customized; a darwin launch must still pin darwin so the
+    // active platform keeps the pre-swap behavior.
+    writeKeybindingOverride(filePath, 'linux', 'tab.nextAllTypes', ['Mod+Alt+K'])
+
+    const result = seedLegacyTabSwitchBindings(filePath, 'darwin', LEGACY_TAB_SWITCH_BINDINGS)
+
+    expect(result.seeded).toBe(true)
+    expect(readKeybindingFile(filePath, 'darwin').platformOverrides.darwin).toMatchObject({
+      'tab.nextAllTypes': ['Mod+Alt+BracketRight']
+    })
+    expect(readKeybindingFile(filePath, 'linux').platformOverrides.linux).toEqual({
+      'tab.nextAllTypes': ['Mod+Alt+K']
     })
   })
 
