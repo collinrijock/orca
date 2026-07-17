@@ -4687,11 +4687,10 @@ export class OrcaRuntimeService {
       const closingWholeParent = tab.id !== tabId || parentLeafCount <= 1
       // Why: a runtime-owned headless tab is absent from renderer state, so the
       // closeTerminalTab relay below would ack success without killing its PTY,
-      // and syncMobileSessionTabs would republish the "closed" tab. Tear it down
-      // authoritatively here — ahead of the relay, even with a renderer attached —
-      // and best-effort notify the renderer to close any adopted pane. A single
-      // split leaf (exact id, multi-leaf parent) stays on the per-leaf path below.
-      if (closingWholeParent && this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)) {
+      // and syncMobileSessionTabs would republish the "closed" tab. Only bypass
+      // the relay when no renderer owns the parent: an adopted tab needs the
+      // renderer's live pin guard and durable close transaction.
+      if (closingWholeParent && !this.tabs.has(tab.parentTabId)) {
         this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
         this.notifier?.closeTerminal(tab.parentTabId)
         this.store?.flushOrThrow?.()
@@ -4701,6 +4700,14 @@ export class OrcaRuntimeService {
         // Why: whole-tab close is a lifecycle transaction. The renderer reply
         // arrives only after canonical retirement and a forced session flush.
         await this.notifier.closeTerminalTab(tab.parentTabId)
+        return { closed: true }
+      }
+      // Why: notifier implementations without the acknowledged relay may expose
+      // only raw pane close. Runtime-owned parents still need de-persist + kill.
+      if (closingWholeParent && this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)) {
+        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
+        this.notifier?.closeTerminal(tab.parentTabId)
+        this.store?.flushOrThrow?.()
         return { closed: true }
       }
       if (!this.notifier?.closeTerminal) {
