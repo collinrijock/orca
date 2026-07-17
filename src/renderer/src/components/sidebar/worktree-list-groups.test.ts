@@ -1569,6 +1569,51 @@ describe('buildRows with pinned worktrees', () => {
     ])
   })
 
+  it('keeps the inbox group when the repo only has a pinned worktree', () => {
+    const pinnedWorktree = { ...worktree, id: 'wt-pinned', isPinned: true }
+    const rows = buildRows(
+      'repo',
+      [pinnedWorktree],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[pinnedWorktree.id, pinnedWorktree]]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map([[repo.id, { repo, inboxWorktrees: [makeDetectedWorktree()] }]])
+    )
+
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'item',
+          sectionKey: PINNED_GROUP_KEY,
+          worktree: expect.objectContaining({ id: pinnedWorktree.id })
+        }),
+        expect.objectContaining({ type: 'header', key: `repo:${repo.id}` }),
+        expect.objectContaining({
+          type: 'new-external-worktrees-inbox',
+          key: `new-external-worktrees-inbox:${repo.id}`
+        })
+      ])
+    )
+    expect(
+      rows.some(
+        (row) =>
+          row.type === 'item' &&
+          row.sectionKey === `repo:${repo.id}` &&
+          row.worktree.id === pinnedWorktree.id
+      )
+    ).toBe(false)
+  })
+
   it('does not emit new external worktrees inbox rows outside repo grouping', () => {
     const rows = buildRows(
       'workspace-status',

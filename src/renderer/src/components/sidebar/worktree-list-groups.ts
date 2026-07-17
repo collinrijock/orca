@@ -1043,11 +1043,6 @@ export function buildRows(
     settings,
     projectGrouping
   })
-  // Repos whose only visible worktrees are pinned are surfaced via the pinned
-  // section, so the repo-grouped inbox loop below must not re-create a group for them.
-  const visiblePinnedRepoIds = new Set(
-    worktrees.filter((worktree) => worktree.isPinned).map((worktree) => worktree.repoId)
-  )
   emitPinnedGroup(
     worktrees,
     repoMap,
@@ -1151,7 +1146,9 @@ export function buildRows(
     for (const [repoId, candidate] of newExternalWorktreesInboxByRepo) {
       const grouping = getProjectGroupingForRepo(repoId, repoMap, projectIndex)
       const key = grouping.key
-      if (!grouped.has(key) && !visiblePinnedRepoIds.has(repoId)) {
+      if (!grouped.has(key)) {
+        // Why: the default policy removes pinned worktrees from natural groups,
+        // but actionable inbox rows still need a project section to render in.
         grouped.set(key, {
           label: grouping.label,
           items: [],

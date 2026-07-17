@@ -403,6 +403,47 @@ describe('addHostSectionRows', () => {
     ])
   })
 
+  it('keeps a pinned row with its explicit worktree host', () => {
+    const local = repo('local')
+    const pinned = pinnedItem('ssh-pinned', local, PINNED_GROUP_KEY)
+    pinned.worktree.hostId = 'ssh:ssh-1'
+    const rows = [
+      pinnedHeader(new Map([['ssh:ssh-1', 1]]), new Map([['ssh:ssh-1', ['ssh-pinned']]])),
+      pinned,
+      repoHeader(local),
+      item('local-wt', local)
+    ]
+
+    const sectioned = addHostSectionRows({
+      rows,
+      hostOptions: [
+        {
+          id: 'local',
+          kind: 'local',
+          label: 'Local Mac',
+          detail: 'This computer',
+          health: 'local'
+        },
+        { id: 'ssh:ssh-1', kind: 'ssh', label: 'Builder', detail: 'SSH', health: 'available' }
+      ],
+      workspaceHostScope: 'all',
+      defaultHostId: 'local'
+    })
+
+    expect(sectioned.map(rowKey)).toEqual([
+      'host:local',
+      'repo:local',
+      'local-wt',
+      'host:ssh:ssh-1',
+      PINNED_GROUP_KEY,
+      'ssh-pinned'
+    ])
+    expect(sectioned.filter((row) => row.type === 'host-header')).toMatchObject([
+      { hostId: 'local', count: 1 },
+      { hostId: 'ssh:ssh-1', count: 1 }
+    ])
+  })
+
   it('does not double-count a collapsed pinned header and its natural duplicate row', () => {
     const local = repo('local')
     const ssh = repo('ssh', 'ssh-1')
