@@ -131,4 +131,72 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
       }).size
     ).toBe(0)
   })
+
+  it('still respects explicit project filters for sleep-filtered grouped members', () => {
+    const selected: Repo = { ...repo, id: 'repo-selected', projectGroupId: 'group-1' }
+    const filteredOut: Repo = { ...repo, id: 'repo-hidden', projectGroupId: 'group-1' }
+    const selectedWt: Worktree = { ...worktree, id: 'wt-selected', repoId: selected.id }
+    const hiddenWt: Worktree = { ...worktree, id: 'wt-hidden', repoId: filteredOut.id }
+
+    expect(
+      Array.from(
+        getEmptyProjectPlaceholderRepoIds({
+          groupBy: 'repo',
+          repos: [selected, filteredOut],
+          worktreesByRepo: {
+            [selected.id]: [selectedWt],
+            [filteredOut.id]: [hiddenWt]
+          },
+          // Why: simulate Hide sleeping removing every card while the project
+          // filter still intentionally excludes `filteredOut`.
+          visibleWorktrees: [],
+          filterRepoIds: [selected.id]
+        })
+      )
+    ).toEqual([selected.id])
+  })
+
+  it('placeholders only the fully-filtered members of a multi-project group', () => {
+    const sleeping: Repo = { ...repo, id: 'repo-sleeping', projectGroupId: 'group-1' }
+    const awake: Repo = { ...repo, id: 'repo-awake', projectGroupId: 'group-1' }
+    const sleepingWt: Worktree = { ...worktree, id: 'wt-sleeping', repoId: sleeping.id }
+    const awakeWt: Worktree = { ...worktree, id: 'wt-awake', repoId: awake.id }
+
+    expect(
+      Array.from(
+        getEmptyProjectPlaceholderRepoIds({
+          groupBy: 'repo',
+          repos: [sleeping, awake],
+          worktreesByRepo: {
+            [sleeping.id]: [sleepingWt],
+            [awake.id]: [awakeWt]
+          },
+          visibleWorktrees: [awakeWt],
+          filterRepoIds: []
+        })
+      )
+    ).toEqual([sleeping.id])
+  })
+
+  it('does not placeholder ungrouped neighbors of a filtered grouped member', () => {
+    const grouped: Repo = { ...repo, id: 'repo-grouped', projectGroupId: 'group-1' }
+    const ungrouped: Repo = { ...repo, id: 'repo-ungrouped' }
+    const groupedWt: Worktree = { ...worktree, id: 'wt-grouped', repoId: grouped.id }
+    const ungroupedWt: Worktree = { ...worktree, id: 'wt-ungrouped', repoId: ungrouped.id }
+
+    expect(
+      Array.from(
+        getEmptyProjectPlaceholderRepoIds({
+          groupBy: 'repo',
+          repos: [grouped, ungrouped],
+          worktreesByRepo: {
+            [grouped.id]: [groupedWt],
+            [ungrouped.id]: [ungroupedWt]
+          },
+          visibleWorktrees: [],
+          filterRepoIds: []
+        })
+      )
+    ).toEqual([grouped.id])
+  })
 })
