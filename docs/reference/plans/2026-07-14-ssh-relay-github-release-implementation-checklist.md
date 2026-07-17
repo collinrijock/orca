@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-17<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — matched 4 KiB Windows pipe correction locally green, native qualification next, 2026-07-17, Codex implementation owner**. Exact head `c93111a14bdb5390f99aa44a9004449625cbdcb5`, run `29564980476`, and Windows x64/ARM64 jobs `87835460661`/`87835460642` falsify client-only subdivision. `E-M6-WINDOWS-MATCHED-PIPE-LOCAL-001` matches client writes and remote .NET reads at 4 KiB while preserving the source 64 KiB buffer. Commit/push only this correction and require fresh native proof. Legacy remains the sole production path; real Apple/SignPath rehearsals remain deferred.<br>
-Session checkpoint: **MATCHED 4 KIB PIPE LOCAL GREEN / NATIVE RUN NEXT — 2026-07-17, Codex implementation owner** — focused, broad relay, release-contract, typecheck, full lint/reliability/max-lines, formatting, diff, and resolver isolation pass. No product caller, default/fallback, Beta, tuple publication, or signing behavior changed.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — Windows executable-name versus large-file diagnostic locally green, native qualification next, 2026-07-17, Codex implementation owner**. Exact matched-buffer head `d7fcdb25972390bee5b97d495bf605845bcee364`, run `29566111327`, and x64/ARM64 jobs `87838990171`/`87838990156` both select `bin/node.exe`. `E-M6-WINDOWS-NEUTRAL-NODE-DIAGNOSTIC-LOCAL-001` adds an exact authenticated Node transfer to a neutral `.bin` path before the unchanged full-tree test. Commit/push only this diagnostic. Legacy remains the sole production path; real Apple/SignPath rehearsals remain deferred.<br>
+Session checkpoint: **NEUTRAL NODE NAME DIAGNOSTIC LOCAL GREEN / NATIVE RUN NEXT — 2026-07-17, Codex implementation owner** — focused, broad relay, typecheck, full lint/reliability/max-lines, formatting, diff, and resolver isolation pass. No production or default behavior changed.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -20590,6 +20590,36 @@ src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts` exi
 - Residual: local Darwin skips native OpenSSH/PowerShell. Fresh x64/ARM64 full-size metrics and exact
   teardown remain mandatory.
 
+### E-M6-WINDOWS-MATCHED-PIPE-CI-RED-001 — both architectures select the node.exe boundary
+
+- Date/source/run: 2026-07-17; exact head `d7fcdb25972390bee5b97d495bf605845bcee364`, run
+  [29566111327](https://github.com/stablyai/orca/actions/runs/29566111327), x64 job
+  [87838990171](https://github.com/stablyai/orca/actions/runs/29566111327/job/87838990171), ARM64 job
+  [87838990156](https://github.com/stablyai/orca/actions/runs/29566111327/job/87838990156).
+- Result: both transfer `.version` and the full 180,825/180,827-byte license file, reaching
+  180,843/180,845 aggregate bytes, then make no progress on `bin/node.exe` before the 60-second
+  watchdog. Both retain only the active node file and fixture process/profile chain; bounded failure
+  remains fail-closed. Pinned trust passes in 550.8297/868.8028 ms.
+- Next gate: transfer the exact scanned/authenticated Node file to a neutral `.bin` name using the
+  same connection, framing, 4 KiB quantum, source snapshots, size, and hash. If it passes on both
+  architectures, executable-name/native endpoint protection is selected; if it fails, large-file
+  streaming remains selected. Do not alter staging/publish semantics before this evidence.
+
+### E-M6-WINDOWS-NEUTRAL-NODE-DIAGNOSTIC-LOCAL-001 — exact Node bytes get a neutral-name probe
+
+- Date/base: 2026-07-17; uncommitted test-only diagnostic atop exact head
+  `d7fcdb25972390bee5b97d495bf605845bcee364`.
+- Boundary: derive a one-file scanned tree from the already hashed `bin/node.exe` entry, preserve its
+  local path/state/size/hash, transfer it to `bin/orca-node-payload.bin`, validate the exact remote
+  tree and bytes, remove that owned root, then run the unchanged full-tree test. Phase logs contain
+  only aggregate counts/timing. No production module or behavior changes.
+- Evidence: focused Windows tests pass 25 cases with two skips in 3.91 seconds real; broad relay
+  passes 698 cases with ten skips in 27.04 seconds; typecheck passes in 3.57 seconds; full lint passes
+  with 26 existing warnings, 41 reliability gates, and the 355-entry max-lines ratchet in 17.53
+  seconds. Formatting, diff, and protected-resolver isolation pass.
+- Residual: local Darwin skips the native probe. Both native architectures must agree before staging
+  semantics change.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -20648,8 +20678,9 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push only the matched 4 KiB Windows pipe correction recorded by
-`E-M6-WINDOWS-MATCHED-PIPE-LOCAL-001`, then require exact-head Windows x64/ARM64 full-size
+Commit and push only the neutral-name Node transfer diagnostic recorded by
+`E-M6-WINDOWS-NEUTRAL-NODE-DIAGNOSTIC-LOCAL-001`, then require exact-head Windows x64/ARM64 evidence before
+changing staging semantics. Ultimately require full-size
 serial/concurrent/collision/cancellation metrics, bounded memory, connection reuse, and exact
 profile/directory teardown evidence. Do not check the broad Milestone 6 Windows system-SSH item or
 add an Electron/startup/product importer, per-target mode wiring, fallback, tuple enablement, release

@@ -9,16 +9,14 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — matched 4 KiB Windows
-pipe correction locally green, native qualification next, 2026-07-17, Codex implementation
-owner.** Exact head
-`c93111a14bdb5390f99aa44a9004449625cbdcb5`, run `29564980476`, and x64/ARM64 jobs
-`87835460661`/`87835460642` falsify client-only 16 KiB subdivision: x64 stalls after the 18-byte
-first file, while ARM64 completes the 180,827-byte license and stalls on `node.exe`. Client pipe
-writes and remote .NET reads now match at 4 KiB while preserving the source 64 KiB buffer; focused,
-broad, release, typecheck, lint/reliability/max-lines, formatting, diff, and resolver isolation pass.
-Commit/push only this package. No product/default caller, Beta, fallback, tuple, publication, or
-signing behavior is authorized.
+Active checkpoint: **Milestone 6 / Work Package 5 — executable-name versus large-file diagnostic
+locally green, native qualification next, 2026-07-17, Codex implementation owner.** Exact matched-buffer head
+`d7fcdb25972390bee5b97d495bf605845bcee364`, run `29566111327`, and x64/ARM64 jobs
+`87838990171`/`87838990156` both transfer `.version` and the full license, then stall at
+180,843/180,845 bytes on `bin/node.exe`. Transfer the exact authenticated Node bytes once to a
+neutral `.bin` path; focused, broad, typecheck, lint/reliability/max-lines, formatting, diff, and
+resolver isolation pass. Do not change staging semantics before both architectures classify the cause.
+No product/default caller, Beta, fallback, tuple, publication, or signing behavior is authorized.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the portable-fixture
 correction locally green: the no-Orca-publication workflow oracle permits the one exact pinned
 Microsoft fixture release URL while Orca release URLs, `gh release`, and `contents: write` remain

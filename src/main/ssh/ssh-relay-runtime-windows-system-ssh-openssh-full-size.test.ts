@@ -204,6 +204,23 @@ function stagePath(name: string, identity: MeasurementIdentity): string {
   return join(remoteRoot as string, `${name}-${identity.contentId.slice('sha256:'.length, 23)}`)
 }
 
+function neutralNodeTree(tree: SshRelayRuntimeScannedSourceTree): SshRelayRuntimeScannedSourceTree {
+  const node = tree.files.find((file) => file.path === 'bin/node.exe')
+  const bin = tree.directories.find((directory) => directory.path === 'bin')
+  if (!node || !bin) {
+    throw new Error('Live Windows system-SSH runtime Node entry is missing')
+  }
+  // Why: identical authenticated bytes under a non-executable name distinguish streaming from
+  // native endpoint-protection behavior before staging semantics are redesigned.
+  return Object.freeze({
+    ...tree,
+    directories: Object.freeze([bin]),
+    files: Object.freeze([Object.freeze({ ...node, path: 'bin/orca-node-payload.bin' })]),
+    fileCount: 1,
+    expandedBytes: node.size
+  })
+}
+
 function logLivePhase(phase: string, details: Record<string, unknown> = {}): void {
   console.log(`ssh_relay_live_windows_system_ssh_phase=${JSON.stringify({ phase, ...details })}`)
 }
@@ -339,9 +356,10 @@ describe.skipIf(!hasLiveInput)(
           }
         )
         const serialStage = stagePath('system-serial', identity)
+        const neutralNodeStage = stagePath('system-neutral-node', identity)
         const concurrentStage = stagePath('system-concurrent', identity)
         const cancelledStage = stagePath('system-cancelled', identity)
-        const stages = [serialStage, concurrentStage, cancelledStage]
+        const stages = [neutralNodeStage, serialStage, concurrentStage, cancelledStage]
         await Promise.all(stages.map((stage) => rm(stage, { recursive: true, force: true })))
 
         try {
@@ -349,6 +367,25 @@ describe.skipIf(!hasLiveInput)(
           await connection.connect()
           expect(connection.usesSystemSshTransport()).toBe(true)
           logLivePhase('connect-complete')
+
+          const neutralTree = neutralNodeTree(tree)
+          const { measurement: neutralNode } = await measureWatchedTransfer(
+            connection,
+            neutralTree,
+            neutralNodeStage,
+            'neutral-node'
+          )
+          logLivePhase('neutral-node-validation-start')
+          await validateTransferredTree(neutralTree, neutralNodeStage)
+          logLivePhase('neutral-node-validation-complete', { elapsedMs: neutralNode.elapsedMs })
+          await runSshRelayRuntimeWindowsStagingControl({
+            operation: 'remove-root',
+            remoteRoot: neutralNodeStage,
+            signal: new AbortController().signal,
+            openChannel: (command, signal) =>
+              openSshRelayRuntimeSystemSshFileChannel(connection, command, signal, 'powershell')
+          })
+          logLivePhase('neutral-node-cleanup-complete')
 
           const { measurement: serial, progress: serialProgress } = await measureWatchedTransfer(
             connection,
