@@ -4685,6 +4685,18 @@ export class OrcaRuntimeService {
         (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
       ).length
       const closingWholeParent = tab.id !== tabId || parentLeafCount <= 1
+      // Why: a runtime-owned headless tab is absent from renderer state, so the
+      // closeTerminalTab relay below would ack success without killing its PTY,
+      // and syncMobileSessionTabs would republish the "closed" tab. Tear it down
+      // authoritatively here — ahead of the relay, even with a renderer attached —
+      // and best-effort notify the renderer to close any adopted pane. A single
+      // split leaf (exact id, multi-leaf parent) stays on the per-leaf path below.
+      if (closingWholeParent && this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)) {
+        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
+        this.notifier?.closeTerminal(tab.parentTabId)
+        this.store?.flushOrThrow?.()
+        return { closed: true }
+      }
       if (closingWholeParent && this.notifier?.closeTerminalTab) {
         // Why: whole-tab close is a lifecycle transaction. The renderer reply
         // arrives only after canonical retirement and a forced session flush.
@@ -4693,18 +4705,6 @@ export class OrcaRuntimeService {
       }
       if (!this.notifier?.closeTerminal) {
         this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
-        this.store?.flushOrThrow?.()
-        return { closed: true }
-      }
-      // Why: a runtime-owned headless tab whose whole parent is being closed must
-      // be torn down authoritatively even with a renderer attached — kill the
-      // PTY, drop the persisted binding, and prune+emit — or syncMobileSessionTabs
-      // keeps republishing the "closed" tab with a live PTY. Best-effort notify the
-      // renderer too so any adopted pane closes (no dead pane). A single split leaf
-      // (exact id, multi-leaf parent) keeps the per-leaf path so siblings survive.
-      if (closingWholeParent && this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)) {
-        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
-        this.notifier?.closeTerminal(tab.parentTabId)
         this.store?.flushOrThrow?.()
         return { closed: true }
       }

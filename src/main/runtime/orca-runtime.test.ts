@@ -19722,6 +19722,55 @@ describe('OrcaRuntimeService', () => {
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
   })
 
+  it('tears down a runtime-owned SSH headless tab authoritatively even when the renderer relay is wired', async () => {
+    // #8958 regression: with a window attached, both closeTerminal and
+    // closeTerminalTab are wired. A headless SSH tab is absent from the window
+    // graph, so the closeTerminalTab relay would resolve nothing and ack success
+    // while the PTY kept running. The authoritative teardown must win.
+    const persistedPtyId = 'ssh:ssh-1@@relay-pty'
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'host-tab',
+              ptyId: persistedPtyId,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Remote Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: persistedPtyId })
+        }
+      })
+    )
+    const kill = vi.fn(() => true)
+    const closeTerminal = vi.fn()
+    const closeTerminalTab = vi.fn(async () => {})
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [{ id: persistedPtyId, cwd: TEST_WORKTREE_PATH, title: 'Remote' }]
+    })
+    runtime.setNotifier({ closeTerminal, closeTerminalTab } as never)
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
+
+    expect(closeTerminalTab).not.toHaveBeenCalled()
+    expect(kill).toHaveBeenCalledWith(persistedPtyId)
+    expect(closeTerminal).toHaveBeenCalledWith('host-tab')
+    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
+    expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
+  })
+
   it('materializes hydrated pending headless terminals with the persisted session identity', async () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
