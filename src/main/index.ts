@@ -760,10 +760,13 @@ function prepareCodexRuntimeHomeForLaunch(
   target?: CodexAccountSelectionTarget,
   launchEnv?: NodeJS.ProcessEnv
 ): string | null {
-  if (
-    target?.runtime !== 'wsl' &&
-    codexRuntimeHome!.isHostSystemDefaultRealHomeSelected(launchEnv)
-  ) {
+  const ensureRealHomeHooksIfSelected = (): boolean => {
+    if (
+      target?.runtime === 'wsl' ||
+      !codexRuntimeHome!.isHostSystemDefaultRealHomeSelected(launchEnv)
+    ) {
+      return false
+    }
     // Why (flag ON, system default): the hook entry must exist — appended last
     // and trusted by codex's own app-server grant — in the real ~/.codex before
     // the pane spawns. An incapable grant flips the lane gate so the launch
@@ -772,8 +775,19 @@ function prepareCodexRuntimeHomeForLaunch(
       hooksEnabled: isAgentStatusHooksEnabled(store?.getSettings()),
       userDataPath: app.getPath('userData')
     })
+    return true
   }
-  const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv)
+  let realHomeHooksPrepared = ensureRealHomeHooksIfSelected()
+  let runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv)
+  if (runtimeHomePath === null && !realHomeHooksPrepared) {
+    // Why: a managed home can lose auth during launch prep, which clears its
+    // selection and falls through to real home. Establish hook capability for
+    // that newly selected lane, then re-resolve if the capability gate rejects it.
+    realHomeHooksPrepared = ensureRealHomeHooksIfSelected()
+    if (realHomeHooksPrepared) {
+      runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv)
+    }
+  }
   if (runtimeHomePath === null && target?.runtime !== 'wsl') {
     // Why: Codex runs on the user's real ~/.codex; the managed-home hook
     // install below would target a home Codex never reads on this lane.

@@ -66,12 +66,12 @@ import { hasCustomCodexHomeOverride } from '../codex/codex-real-home-path'
 import { invalidateCodexSessionBackfillMarker } from '../codex/codex-session-backfill-marker'
 import { readShellStartupEnvVar } from '../pty/shell-startup-env'
 import { assertOwnedHostCodexManagedHomePath } from './host-codex-managed-home-ownership'
-
-type CodexAuthIdentity = {
-  email: string | null
-  providerAccountId: string | null
-  workspaceAccountId: string | null
-}
+import {
+  codexAuthIsFresher,
+  codexAuthMatchesManagedAccount,
+  codexAuthMatchesSystemDefaultIdentity
+} from './codex-auth-identity'
+import { migrateLegacySharedAuthToPerAccountHome } from './legacy-shared-auth-migration'
 
 type CodexSystemDefaultSnapshot = {
   authJson: string | null
@@ -132,6 +132,7 @@ export class CodexRuntimeHomeService {
   private skipNextReadBackForAccountId: string | null = null
 
   constructor(private readonly store: Store) {
+    this.safeMigrateLegacySharedAuth()
     this.safeMigrateLegacyManagedState()
     this.safeMigrateLegacyActiveHomePointer()
     this.initializeLastSyncedState()
@@ -235,8 +236,9 @@ export class CodexRuntimeHomeService {
       if (this.getWslManagedHomePath(account)) {
         continue
       }
-      if (flagEnabled || existsSync(join(account.managedHomePath, 'sessions'))) {
-        homes.push(account.managedHomePath)
+      const trustedHome = this.getTrustedSelfContainedManagedHomePath(account)
+      if (trustedHome && (flagEnabled || existsSync(join(trustedHome, 'sessions')))) {
+        homes.push(trustedHome)
       }
     }
     return homes
@@ -1072,7 +1074,7 @@ export class CodexRuntimeHomeService {
         continue
       }
       const managedAuthContents = readFileSync(managedAuthPath, 'utf-8')
-      if (this.runtimeAuthMatchesAccount(runtimeAuthContents, account, managedAuthContents)) {
+      if (codexAuthMatchesManagedAccount(runtimeAuthContents, account, managedAuthContents)) {
         matches.push({ account, managedAuthPath, managedAuthContents })
       }
     }
@@ -1083,235 +1085,38 @@ export class CodexRuntimeHomeService {
     return { kind: matches.length === 0 ? 'none' : 'ambiguous' }
   }
 
-  private runtimeAuthMatchesAccount(
-    runtimeAuthContents: string,
-    activeAccount: CodexManagedAccount,
-    managedAuthContents: string
-  ): boolean {
-    const identity = this.readIdentityFromAuthContents(runtimeAuthContents)
-    if (!identity) {
-      return false
-    }
-    const managedIdentity = this.readIdentityFromAuthContents(managedAuthContents)
-
-    // Why: old live Codex PTYs can still write refreshed tokens into the
-    // shared runtime home after the user switches accounts. Never persist
-    // that write into the newly active managed account unless the auth claims
-    // still match the account Orca believes is selected.
-    const selectedEmail = this.firstNonNull(
-      this.normalizeField(activeAccount.email),
-      managedIdentity?.email
-    )
-    const selectedProviderId = this.firstNonNull(
-      this.normalizeField(activeAccount.providerAccountId),
-      managedIdentity?.providerAccountId
-    )
-    const selectedWorkspaceId = this.firstNonNull(
-      this.normalizeField(activeAccount.workspaceAccountId),
-      managedIdentity?.workspaceAccountId
-    )
-    const emailMatches = Boolean(
-      selectedEmail && identity.email && selectedEmail === identity.email
-    )
-    if (selectedEmail && identity.email && selectedEmail !== identity.email) {
-      return false
-    }
-    if (!this.identityFieldMatches(selectedProviderId, identity.providerAccountId)) {
-      return false
-    }
-    if (!this.identityFieldMatches(selectedWorkspaceId, identity.workspaceAccountId)) {
-      return false
-    }
-
-    const hasStrongIdentity = Boolean(
-      (selectedProviderId && identity.providerAccountId) ||
-      (selectedWorkspaceId && identity.workspaceAccountId)
-    )
-    return (
-      hasStrongIdentity ||
-      (emailMatches && !identity.providerAccountId && !identity.workspaceAccountId)
-    )
-  }
-
   private runtimeAuthMatchesSystemDefaultIdentity(
     runtimeAuthContents: string,
     systemDefaultAuthContents: string
   ): boolean {
-    const runtimeIdentity = this.readIdentityFromAuthContents(runtimeAuthContents)
-    const systemDefaultIdentity = this.readIdentityFromAuthContents(systemDefaultAuthContents)
-    if (!runtimeIdentity || !systemDefaultIdentity) {
-      return false
-    }
-
-    // Why: stale managed Codex PTYs share the same runtime home. Only read a
-    // runtime refresh back into ~/.codex when the auth still claims the same
-    // system-default identity Orca mirrored earlier.
-    if (
-      systemDefaultIdentity.email &&
-      runtimeIdentity.email &&
-      systemDefaultIdentity.email !== runtimeIdentity.email
-    ) {
-      return false
-    }
-    if (
-      !this.identityFieldMatches(
-        systemDefaultIdentity.providerAccountId,
-        runtimeIdentity.providerAccountId
-      )
-    ) {
-      return false
-    }
-    if (
-      !this.identityFieldMatches(
-        systemDefaultIdentity.workspaceAccountId,
-        runtimeIdentity.workspaceAccountId
-      )
-    ) {
-      return false
-    }
-
-    const strongIdentityMatches = Boolean(
-      (systemDefaultIdentity.providerAccountId && runtimeIdentity.providerAccountId) ||
-      (systemDefaultIdentity.workspaceAccountId && runtimeIdentity.workspaceAccountId)
-    )
-    const emailMatches = Boolean(
-      systemDefaultIdentity.email &&
-      runtimeIdentity.email &&
-      systemDefaultIdentity.email === runtimeIdentity.email
-    )
-    return (
-      strongIdentityMatches ||
-      (emailMatches && !runtimeIdentity.providerAccountId && !runtimeIdentity.workspaceAccountId)
-    )
+    return codexAuthMatchesSystemDefaultIdentity(runtimeAuthContents, systemDefaultAuthContents)
   }
 
   private runtimeAuthIsFresher(runtimeAuthContents: string, managedAuthContents: string): boolean {
-    const runtimeFreshness = this.readFreshnessFromAuthContents(runtimeAuthContents)
-    const managedFreshness = this.readFreshnessFromAuthContents(managedAuthContents)
-    return (
-      runtimeFreshness !== null && managedFreshness !== null && runtimeFreshness > managedFreshness
-    )
+    return codexAuthIsFresher(runtimeAuthContents, managedAuthContents)
   }
 
-  private identityFieldMatches(selectedField: string | null, runtimeField: string | null): boolean {
-    return !selectedField || Boolean(runtimeField && selectedField === runtimeField)
-  }
-
-  private firstNonNull(...values: (string | null | undefined)[]): string | null {
-    return values.find((value): value is string => Boolean(value)) ?? null
-  }
-
-  private readIdentityFromAuthContents(contents: string): CodexAuthIdentity | null {
-    let raw: Record<string, unknown>
+  private safeMigrateLegacySharedAuth(): void {
+    const settings = this.store.getSettings()
+    if (!isCodexSystemDefaultRealHomeEnabled(settings)) {
+      return
+    }
     try {
-      raw = JSON.parse(contents) as Record<string, unknown>
-    } catch {
-      return null
+      migrateLegacySharedAuthToPerAccountHome({
+        activeHostAccountId: normalizeCodexRuntimeSelection(settings).host,
+        hostAccounts: settings.codexManagedAccounts.filter(
+          (account) => !this.getWslManagedHomePath(account)
+        ),
+        managedAccountsRoot: this.getManagedAccountsRoot(),
+        metadataDir: this.getRuntimeMetadataDir(),
+        sharedRuntimeHome: this.getRuntimeHomePath(),
+        systemCodexHome: getSystemCodexHomePath()
+      })
+    } catch (error) {
+      // Why: an inconclusive identity, ownership, or filesystem result must
+      // leave the marker absent so the next startup can retry safely.
+      console.warn('[codex-runtime-home] Failed to migrate legacy shared Codex auth:', error)
     }
-
-    const tokens = this.readRecordClaim(raw, 'tokens')
-    const idToken = this.normalizeField(
-      this.readStringClaim(tokens, 'id_token') ?? this.readStringClaim(tokens, 'idToken')
-    )
-    const payload = idToken ? this.parseJwtPayload(idToken) : null
-    const authClaims = this.readRecordClaim(payload, 'https://api.openai.com/auth')
-    const profileClaims = this.readRecordClaim(payload, 'https://api.openai.com/profile')
-
-    return {
-      email: this.normalizeField(
-        this.readStringClaim(payload, 'email') ?? this.readStringClaim(profileClaims, 'email')
-      ),
-      providerAccountId: this.normalizeField(
-        this.readStringClaim(tokens, 'account_id') ??
-          this.readStringClaim(tokens, 'accountId') ??
-          this.readStringClaim(authClaims, 'chatgpt_account_id') ??
-          this.readStringClaim(payload, 'chatgpt_account_id')
-      ),
-      workspaceAccountId: this.normalizeField(
-        this.readStringClaim(authClaims, 'workspace_account_id') ??
-          this.readStringClaim(tokens, 'account_id') ??
-          this.readStringClaim(tokens, 'accountId') ??
-          this.readStringClaim(payload, 'chatgpt_account_id')
-      )
-    }
-  }
-
-  private readFreshnessFromAuthContents(contents: string): number | null {
-    let raw: Record<string, unknown>
-    try {
-      raw = JSON.parse(contents) as Record<string, unknown>
-    } catch {
-      return null
-    }
-
-    const tokens = this.readRecordClaim(raw, 'tokens')
-    const idToken = this.normalizeField(
-      this.readStringClaim(tokens, 'id_token') ?? this.readStringClaim(tokens, 'idToken')
-    )
-    const payload = idToken ? this.parseJwtPayload(idToken) : null
-    return (
-      this.readNumberClaim(tokens, 'expires_at') ??
-      this.readNumberClaim(tokens, 'expiresAt') ??
-      this.readNumberClaim(tokens, 'expiry') ??
-      this.readNumberClaim(tokens, 'expires') ??
-      this.readNumberClaim(payload, 'exp') ??
-      this.readNumberClaim(payload, 'iat')
-    )
-  }
-
-  private parseJwtPayload(token: string): Record<string, unknown> | null {
-    const parts = token.split('.')
-    if (parts.length < 2) {
-      return null
-    }
-
-    let payload = parts[1].replace(/-/g, '+').replace(/_/g, '/')
-    while (payload.length % 4 !== 0) {
-      payload += '='
-    }
-
-    try {
-      const json = Buffer.from(payload, 'base64').toString('utf-8')
-      return JSON.parse(json) as Record<string, unknown>
-    } catch {
-      return null
-    }
-  }
-
-  private readRecordClaim(
-    value: Record<string, unknown> | null,
-    key: string
-  ): Record<string, unknown> | null {
-    const claim = value?.[key]
-    if (!claim || typeof claim !== 'object' || Array.isArray(claim)) {
-      return null
-    }
-    return claim as Record<string, unknown>
-  }
-
-  private readStringClaim(value: Record<string, unknown> | null, key: string): string | null {
-    const claim = value?.[key]
-    return typeof claim === 'string' ? claim : null
-  }
-
-  private readNumberClaim(value: Record<string, unknown> | null, key: string): number | null {
-    const claim = value?.[key]
-    if (typeof claim === 'number' && Number.isFinite(claim)) {
-      return claim
-    }
-    if (typeof claim === 'string') {
-      const parsed = Number(claim)
-      return Number.isFinite(parsed) ? parsed : null
-    }
-    return null
-  }
-
-  private normalizeField(value: string | null | undefined): string | null {
-    if (!value) {
-      return null
-    }
-    const trimmed = value.trim()
-    return trimmed === '' ? null : trimmed
   }
 
   private safeMigrateLegacyManagedState(): void {
