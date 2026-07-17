@@ -1,35 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Pressable, ScrollView, Switch } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
-import { loadDefaultSessionView, saveDefaultSessionView } from '../src/storage/preferences'
+import { useMobileDefaultSessionViewPreference } from '../src/session/use-mobile-default-session-view-preference'
 
 export default function NativeChatSettingsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
 
-  const [chatDefault, setChatDefault] = useState(false)
-  // Why: a fast toggle before the initial load resolves must win — otherwise the
-  // delayed read would clobber the user's choice with the stored (stale) value.
-  const userToggledRef = useRef(false)
-  useEffect(() => {
-    let stale = false
-    void loadDefaultSessionView().then((view) => {
-      if (!stale && !userToggledRef.current) {
-        setChatDefault(view === 'chat')
-      }
-    })
-    return () => {
-      stale = true
-    }
-  }, [])
-  const toggleDefault = useCallback((next: boolean) => {
-    userToggledRef.current = true
-    setChatDefault(next)
-    void saveDefaultSessionView(next ? 'chat' : 'terminal')
-  }, [])
+  const { defaultView, setDefaultView } = useMobileDefaultSessionViewPreference()
+  const chatDefault = defaultView === 'chat'
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
@@ -64,7 +45,7 @@ export default function NativeChatSettingsScreen() {
             <Switch
               accessibilityLabel="Open sessions in native chat"
               value={chatDefault}
-              onValueChange={toggleDefault}
+              onValueChange={(next) => setDefaultView(next ? 'chat' : 'terminal')}
               trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
               thumbColor={colors.textPrimary}
             />

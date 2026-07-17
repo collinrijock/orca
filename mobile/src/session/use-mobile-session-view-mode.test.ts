@@ -12,6 +12,10 @@ import {
   type MobileSessionViewModeController
 } from './use-mobile-session-view-mode'
 
+const focusEffectRuntime = vi.hoisted(() => ({
+  callback: null as null | (() => undefined | (() => void))
+}))
+
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
   const promise = new Promise<T>((resolvePromise) => {
@@ -24,7 +28,10 @@ vi.mock('expo-router', async () => {
   const react = await import('react')
   return {
     // Run the focus callback once on mount, mirroring a focus.
-    useFocusEffect: (cb: () => undefined | (() => void)) => react.useEffect(() => cb(), [cb])
+    useFocusEffect: (cb: () => undefined | (() => void)) => {
+      focusEffectRuntime.callback = cb
+      react.useEffect(() => cb(), [cb])
+    }
   }
 })
 
@@ -43,6 +50,7 @@ describe('useMobileSessionViewMode', () => {
     vi.mocked(loadDefaultSessionView).mockResolvedValue('terminal')
     vi.mocked(loadSessionViewOverrides).mockResolvedValue(new Map())
     vi.mocked(saveSessionViewOverrides).mockReset().mockResolvedValue(undefined)
+    focusEffectRuntime.callback = null
   })
 
   afterEach(() => {
@@ -85,6 +93,19 @@ describe('useMobileSessionViewMode', () => {
     })
     expect(controller?.isTabChatView('t1')).toBe(false)
     expect(controller?.isTabChatView('t2')).toBe(true)
+  })
+
+  it('reloads the default on refocus after Settings changes it', async () => {
+    await mount({ defaultView: 'terminal' })
+    expect(controller?.isTabChatView('t1')).toBe(false)
+    vi.mocked(loadDefaultSessionView).mockResolvedValue('chat')
+
+    await act(async () => {
+      focusEffectRuntime.callback?.()
+      await Promise.resolve()
+    })
+
+    expect(controller?.isTabChatView('t1')).toBe(true)
   })
 
   it('toggles from the effective view and persists the override', async () => {
