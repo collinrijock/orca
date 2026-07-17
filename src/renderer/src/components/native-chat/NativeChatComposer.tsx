@@ -75,6 +75,8 @@ export type NativeChatComposerProps = {
   onSlashCommand?: (command: string) => void
   /** Picker-only agent commands continue in the hosted TUI after dispatch. */
   onSwitchToTerminal?: () => void
+  /** Reads the hosted TUI's current rendered screen when chat is entered. */
+  readTerminalScreen?: () => string | null
 }
 
 export type NativeChatComposerHandle = {
@@ -113,7 +115,8 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       onOptimisticSend,
       onOptimisticSendCanceled,
       onSlashCommand,
-      onSwitchToTerminal
+      onSwitchToTerminal,
+      readTerminalScreen
     },
     ref
   ): React.JSX.Element {
@@ -263,7 +266,8 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         terminalTabId,
         targetPtyId,
         dispatchCommand: dispatchSessionOptionCommand,
-        onAgentPicker: onSwitchToTerminal
+        onAgentPicker: onSwitchToTerminal,
+        readTerminalScreen
       })
 
     const send = useCallback(() => {

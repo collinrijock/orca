@@ -22,15 +22,13 @@ import {
   flattenNativeChatSessionOptionRecord,
   type NativeChatSessionOptionMode
 } from './native-chat-session-option-snapshot'
-import {
-  isSessionOptionAgentPickerCommand,
-  parseBuiltSessionOptionCommand
-} from './native-chat-session-option-command-matching'
 import { buildNativeChatSessionOptionCommand } from './native-chat-session-option-command-builder'
 import type {
   NativeChatSessionOptionDispatchCommand,
   NativeChatSessionOptionDispatchResult
 } from './native-chat-session-option-command-dispatch'
+import { applyNativeChatReportedSessionOptions } from './native-chat-session-option-reporting'
+import { recordNativeChatSessionOptionCommand } from './native-chat-session-option-command-recording'
 
 type PersistSelection = (args: {
   modelId: string
@@ -40,6 +38,7 @@ type PersistSelection = (args: {
 
 export type NativeChatPtySessionOptionsSurface = SessionOptionsSurface & {
   recordOutgoingCommand(command: string): void
+  reportSessionOptions(values: Record<string, SessionOptionValue>): void
   replaceModels(models: CatalogModel[]): void
 }
 
@@ -49,6 +48,7 @@ export type CreateNativeChatPtySessionOptionsArgs = {
   fallbackScopeKey?: string
   initialModels?: readonly CatalogModel[]
   mode: NativeChatSessionOptionMode
+  reportedValues?: Record<string, SessionOptionValue> | null
   dispatchCommand: NativeChatSessionOptionDispatchCommand
   onAgentPicker?: () => void
   persistSelection?: PersistSelection
@@ -68,6 +68,10 @@ export function createNativeChatPtySessionOptions(
     createNativeChatSessionOptionRecord(args.agent)
   if (record.agent !== args.agent) {
     record = createNativeChatSessionOptionRecord(args.agent)
+  }
+
+  if (args.reportedValues && applyNativeChatReportedSessionOptions(record, args.reportedValues)) {
+    writeNativeChatSessionOptionCache(args.scopeKey, record)
   }
   let snapshot = buildNativeChatSessionOptionSnapshot({
     catalog,
@@ -237,45 +241,6 @@ export function createNativeChatPtySessionOptions(
     return { snapshot: next }
   }
 
-  const recordCommandApply = (
-    optionId: string,
-    midSession: CatalogMidSessionApply | undefined,
-    command: string
-  ): boolean => {
-    if (!midSession || midSession.kind === 'unsupported') {
-      return false
-    }
-    if (midSession.kind === 'toggle-command' && command === midSession.command) {
-      const modelId = typeof record.model?.value === 'string' ? record.model.value : null
-      if (modelId) {
-        delete record.valuesByModel[modelId]?.[optionId]
-      }
-      return true
-    }
-    if (isSessionOptionAgentPickerCommand(midSession, command)) {
-      clearModelTruth()
-      return true
-    }
-    if (midSession.kind !== 'command') {
-      return false
-    }
-    const value = parseBuiltSessionOptionCommand(midSession.build, command)
-    if (!value) {
-      return false
-    }
-    if (optionId === 'model') {
-      const previousModelId = typeof record.model?.value === 'string' ? record.model.value : null
-      if (previousModelId !== value) {
-        // Why: a model command can reset model-scoped state, so an older value
-        // from a prior visit is no longer evidence about this live session.
-        delete record.valuesByModel[value]
-      }
-    }
-    const modelId = setTrackedValue(optionId, value, 'dispatched')
-    persist(modelId, optionId, value)
-    return true
-  }
-
   return {
     getSnapshot: () => snapshot,
     setOption,
@@ -284,24 +249,23 @@ export function createNativeChatPtySessionOptions(
       return () => listeners.delete(listener)
     },
     recordOutgoingCommand: (command) => {
-      const trimmed = command.trim()
-      let opensAgentPicker = isSessionOptionAgentPickerCommand(
-        catalog.modelApply.midSession,
-        trimmed
-      )
-      let changed = recordCommandApply('model', catalog.modelApply.midSession, trimmed)
-      const modelId = typeof record.model?.value === 'string' ? record.model.value : null
-      const model = modelId ? findCatalogModel({ ...catalog, models }, modelId) : undefined
-      for (const option of model?.options ?? []) {
-        opensAgentPicker =
-          opensAgentPicker || isSessionOptionAgentPickerCommand(option.apply.midSession, trimmed)
-        changed = recordCommandApply(option.id, option.apply.midSession, trimmed) || changed
-      }
-      if (changed) {
+      const result = recordNativeChatSessionOptionCommand({
+        catalog,
+        models,
+        record,
+        command,
+        persist
+      })
+      if (result.changed) {
         publish()
       }
-      if (opensAgentPicker) {
+      if (result.opensAgentPicker) {
         args.onAgentPicker?.()
+      }
+    },
+    reportSessionOptions: (values) => {
+      if (applyNativeChatReportedSessionOptions(record, values)) {
+        publish()
       }
     },
     replaceModels: (nextModels) => {

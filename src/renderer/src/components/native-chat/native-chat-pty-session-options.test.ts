@@ -22,6 +22,31 @@ describe('native chat PTY session options', () => {
     })
   })
 
+  it('uses model and effort reported by the live Claude terminal', () => {
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'claude',
+      scopeKey: 'pty-1',
+      mode: 'live',
+      reportedValues: { model: 'opus', effort: 'medium' },
+      dispatchCommand: vi.fn()
+    })!
+
+    expect(surface.getSnapshot()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'model',
+          valueSource: 'reported',
+          kind: expect.objectContaining({ currentValue: 'opus' })
+        }),
+        expect.objectContaining({
+          id: 'effort',
+          valueSource: 'reported',
+          kind: expect.objectContaining({ currentValue: 'medium' })
+        })
+      ])
+    )
+  })
+
   it('restores launch-backed values through the tab-to-PTY cache handoff', () => {
     seedNativeChatAppliedSessionOptions('tab-1', 'claude', {
       model: 'opus',

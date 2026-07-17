@@ -17,6 +17,7 @@ import {
   discoverNativeChatCatalogModels,
   resolveNativeChatModelDiscoveryContext
 } from './native-chat-session-option-discovery'
+import { readClaudeSessionOptionsFromTerminalScreen } from './claude-terminal-session-options'
 
 const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
 const subscribeEmpty = (): (() => void) => () => {}
@@ -28,35 +29,41 @@ export function useNativeChatSessionOptions(args: {
   targetPtyId: string | null
   dispatchCommand: NativeChatSessionOptionDispatchCommand
   onAgentPicker?: () => void
+  readTerminalScreen?: () => string | null
 }): {
   surface: NativeChatPtySessionOptionsSurface | null
   snapshot: SessionOptionDescriptor[]
 } {
+  const { agent, terminalTabId, targetPtyId, dispatchCommand, onAgentPicker, readTerminalScreen } =
+    args
   const discoveryContext = useMemo(
-    () => resolveNativeChatModelDiscoveryContext(args.terminalTabId),
-    [args.terminalTabId]
+    () => resolveNativeChatModelDiscoveryContext(terminalTabId),
+    [terminalTabId]
   )
   const surface = useMemo(() => {
     // Why: native chat currently attaches only after startup is already queued;
     // exposing a draft picker here would claim it can still mutate that command.
-    if (!args.targetPtyId) {
+    if (!targetPtyId) {
       return null
     }
-    const scopeKey = args.targetPtyId ?? args.terminalTabId
+    const scopeKey = targetPtyId ?? terminalTabId
+    const reportedValues =
+      agent === 'claude' ? readClaudeSessionOptionsFromTerminalScreen(readTerminalScreen?.()) : null
     let settingsWrite = Promise.resolve()
     return createNativeChatPtySessionOptions({
-      agent: args.agent,
+      agent,
       scopeKey,
-      ...(args.targetPtyId ? { fallbackScopeKey: args.terminalTabId } : {}),
+      ...(targetPtyId ? { fallbackScopeKey: terminalTabId } : {}),
       ...(discoveryContext
         ? {
             initialModels:
-              readNativeChatEnrichedModels(args.agent, discoveryContext.hostKey) ?? undefined
+              readNativeChatEnrichedModels(agent, discoveryContext.hostKey) ?? undefined
           }
         : {}),
-      mode: args.targetPtyId ? 'live' : 'draft',
-      dispatchCommand: args.dispatchCommand,
-      onAgentPicker: args.onAgentPicker,
+      mode: targetPtyId ? 'live' : 'draft',
+      reportedValues,
+      dispatchCommand,
+      onAgentPicker,
       persistSelection: async ({ modelId, optionId, value }) => {
         // Why: read the live persisted defaults at write time (after any prior
         // write in this chain settles) and merge only this selection onto them,
@@ -70,7 +77,7 @@ export function useNativeChatSessionOptions(args: {
             const base = useAppStore.getState().settings?.nativeChatSessionOptions
             const next = updateNativeChatSessionOptionDefaults({
               persisted: base,
-              agent: args.agent,
+              agent,
               modelId,
               optionId,
               value
@@ -81,30 +88,63 @@ export function useNativeChatSessionOptions(args: {
       }
     })
   }, [
-    args.agent,
-    args.dispatchCommand,
+    agent,
+    dispatchCommand,
     discoveryContext,
-    args.onAgentPicker,
-    args.targetPtyId,
-    args.terminalTabId
+    onAgentPicker,
+    readTerminalScreen,
+    targetPtyId,
+    terminalTabId
   ])
+
+  useEffect(() => {
+    if (!surface || agent !== 'claude') {
+      return
+    }
+    let cancelled = false
+    const reportCurrentValues = async (): Promise<void> => {
+      let authoritativeScreen: string | null = null
+      if (targetPtyId && window.api?.pty?.getMainBufferSnapshot) {
+        try {
+          const snapshot = await window.api.pty.getMainBufferSnapshot(targetPtyId, {
+            scrollbackRows: 0
+          })
+          // Why: the API snapshots the main buffer, which is stale while a TUI
+          // owns the alternate screen. The mounted xterm is authoritative then.
+          authoritativeScreen = snapshot?.alternateScreen ? null : (snapshot?.data ?? null)
+        } catch {
+          // The mounted renderer buffer remains a transport-neutral fallback.
+        }
+      }
+      const reportedValues =
+        readClaudeSessionOptionsFromTerminalScreen(authoritativeScreen) ??
+        readClaudeSessionOptionsFromTerminalScreen(readTerminalScreen?.())
+      if (!cancelled && reportedValues) {
+        surface.reportSessionOptions(reportedValues)
+      }
+    }
+    void reportCurrentValues()
+    return () => {
+      cancelled = true
+    }
+  }, [agent, readTerminalScreen, surface, targetPtyId])
 
   useEffect(() => {
     if (!surface || !discoveryContext) {
       return
     }
     const unsubscribe = subscribeNativeChatEnrichedModels(
-      args.agent,
+      agent,
       discoveryContext.hostKey,
       (models) => surface.replaceModels(models)
     )
     ensureNativeChatModelEnrichment({
-      agent: args.agent,
+      agent,
       hostKey: discoveryContext.hostKey,
-      discover: () => discoverNativeChatCatalogModels(args.agent, discoveryContext.runtime)
+      discover: () => discoverNativeChatCatalogModels(agent, discoveryContext.runtime)
     })
     return unsubscribe
-  }, [args.agent, discoveryContext, surface])
+  }, [agent, discoveryContext, surface])
 
   const snapshot = useSyncExternalStore(
     surface?.subscribe ?? subscribeEmpty,

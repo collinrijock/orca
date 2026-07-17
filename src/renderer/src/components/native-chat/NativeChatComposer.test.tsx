@@ -1,8 +1,12 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SessionOptionsSurface } from '../../../../shared/native-chat-session-options'
+import type {
+  SessionOptionDescriptor,
+  SessionOptionsSurface
+} from '../../../../shared/native-chat-session-options'
+import { clearNativeChatSessionOptionCacheForTests } from './native-chat-session-option-cache'
 
 const mocks = vi.hoisted(() => ({
   cancelPendingSends: vi.fn(),
@@ -10,6 +14,7 @@ const mocks = vi.hoisted(() => ({
     onSend?: () => void
     onStop?: () => void
     sessionOptionsSurface?: SessionOptionsSurface | null
+    sessionOptionsSnapshot?: SessionOptionDescriptor[]
   } | null,
   modelSwitchOutcome: 'applied' as 'applied' | 'rejected' | 'interaction-required' | 'unknown',
   confirmationObserver: null as {
@@ -20,6 +25,7 @@ const mocks = vi.hoisted(() => ({
     dispose: ReturnType<typeof vi.fn>
   } | null,
   createClaudeModelSwitchConfirmationObserver: vi.fn(),
+  getMainBufferSnapshot: vi.fn(),
   sendHandle: { cancel: vi.fn(), settleAfterMs: 500 },
   sendNativeChatMessage: vi.fn(),
   sendNativeChatMessageVerified: vi.fn(),
@@ -113,6 +119,7 @@ import { NativeChatComposer } from './NativeChatComposer'
 describe('NativeChatComposer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    clearNativeChatSessionOptionCacheForTests()
     mocks.fieldProps = null
     mocks.modelSwitchOutcome = 'applied'
     mocks.confirmationObserver = null
@@ -127,12 +134,16 @@ describe('NativeChatComposer', () => {
       mocks.confirmationObserver = observer
       return observer
     })
+    mocks.getMainBufferSnapshot.mockResolvedValue(null)
     mocks.sendNativeChatMessage.mockReturnValue(mocks.sendHandle)
     mocks.sendNativeChatMessageVerified.mockResolvedValue(true)
     mocks.sendHandle.settleAfterMs = 500
     Object.defineProperty(window, 'api', {
       configurable: true,
-      value: { ui: { onFileDrop: () => vi.fn() } }
+      value: {
+        pty: { getMainBufferSnapshot: mocks.getMainBufferSnapshot },
+        ui: { onFileDrop: () => vi.fn() }
+      }
     })
   })
 
@@ -174,6 +185,77 @@ describe('NativeChatComposer', () => {
 
     expect(onOptimisticSend).toHaveBeenCalledWith('hello', [])
     expect(mocks.trackPendingSend).toHaveBeenCalledWith(mocks.sendHandle, 'pending-1')
+  })
+
+  it('shows the model already selected in the Claude TUI when chat opens', async () => {
+    mocks.getMainBufferSnapshot.mockResolvedValue({
+      data: 'Claude Code v2.1.211\r\nOpus 4.8 with medium effort · API Usage Billing',
+      cols: 120,
+      rows: 40
+    })
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        targetPtyId="pty-1"
+        agent="claude"
+        readTerminalScreen={() => null}
+      />
+    )
+
+    await waitFor(() =>
+      expect(mocks.fieldProps?.sessionOptionsSnapshot).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'model',
+            valueSource: 'reported',
+            kind: expect.objectContaining({ currentValue: 'opus' })
+          }),
+          expect.objectContaining({
+            id: 'effort',
+            valueSource: 'reported',
+            kind: expect.objectContaining({ currentValue: 'medium' })
+          })
+        ])
+      )
+    )
+    expect(mocks.getMainBufferSnapshot).toHaveBeenCalledWith('pty-1', { scrollbackRows: 0 })
+  })
+
+  it('reads Claude state from mounted xterm while its alternate screen is active', async () => {
+    mocks.getMainBufferSnapshot.mockResolvedValue({
+      data: 'Claude Code v2.1.211\r\nOpus 4.8 with high effort · stale main buffer',
+      cols: 120,
+      rows: 40,
+      alternateScreen: true
+    })
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        targetPtyId="pty-1"
+        agent="claude"
+        readTerminalScreen={() =>
+          '\u001b[?1049h\u001b[HClaude Codev2.1.211\r\n' +
+          'Sonnet 5 with medium effort · API Usage Billing'
+        }
+      />
+    )
+
+    await waitFor(() =>
+      expect(mocks.fieldProps?.sessionOptionsSnapshot).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'model',
+            valueSource: 'reported',
+            kind: expect.objectContaining({ currentValue: 'sonnet' })
+          }),
+          expect.objectContaining({
+            id: 'effort',
+            valueSource: 'reported',
+            kind: expect.objectContaining({ currentValue: 'medium' })
+          })
+        ])
+      )
+    )
   })
 
   it('observes a fresh Claude model choice and stays native on success', async () => {
