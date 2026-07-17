@@ -6322,6 +6322,32 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     }
   })
 
+  it('ignores an ineligible SSH repo when every GitHub source is unavailable', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockApi.gh.listWorkItems
+      .mockRejectedValueOnce(new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE))
+      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
+
+    try {
+      const result = await store.getState().fetchWorkItemsAcrossRepos(
+        [
+          { repoId: 'ssh-repo', path: '/server/ssh-repo' },
+          { repoId: 'github-repo', path: '/server/github-repo' }
+        ],
+        24,
+        100,
+        ''
+      )
+
+      expect(result.items).toEqual([])
+      expect(result.failedCount).toBe(1)
+      expect(result.githubUnavailable).toBe(true)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
   it('keeps the partial-failure count when another GitHub repo still loads', async () => {
     const store = createTestStore()
     const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})

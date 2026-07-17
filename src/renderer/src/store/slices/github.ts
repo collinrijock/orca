@@ -2866,6 +2866,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const state = get()
     let failedCount = 0
     let unavailableFailureCount = 0
+    let skippedSourceCount = 0
     const perProjectResults = await Promise.all(
       repos.map(async (r) => {
         try {
@@ -2881,6 +2882,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           // Why: must use perRepoLimit (not displayLimit) so the cache key
           // matches what fetchWorkItems wrote.
           if (isGitHubWorkItemsSshRemoteRequiredError(err)) {
+            skippedSourceCount += 1
             return [] as GitHubWorkItem[]
           }
           const key =
@@ -2911,10 +2913,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const merged = sortWorkItemsByNumber(perProjectResults.flat()).slice(0, displayLimit)
     // Why: one repo can fail with a 5xx while another succeeds (or fails for a
     // permission reason). Only claim a global availability failure when every
-    // selected repo failed for a GitHub reachability reason; otherwise keep the
-    // exact count.
+    // eligible source failed for a GitHub reachability reason; intentionally
+    // skipped SSH repos are not GitHub sources for this calculation.
     const githubUnavailable =
-      failedCount > 0 && failedCount === repos.length && unavailableFailureCount === failedCount
+      failedCount > 0 &&
+      failedCount === repos.length - skippedSourceCount &&
+      unavailableFailureCount === failedCount
     return { items: merged, failedCount, githubUnavailable }
   },
 

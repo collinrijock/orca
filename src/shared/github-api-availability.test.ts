@@ -18,6 +18,8 @@ describe('classifyGitHubUnavailable', () => {
       'request to https://api.github.com failed, reason: getaddrinfo ENOTFOUND api.github.com',
       'dial tcp: lookup api.github.com: no such host',
       'connect ETIMEDOUT 140.82.112.5:443',
+      'TimeoutError: request aborted',
+      'NetworkError when attempting to fetch resource',
       'fetch failed',
       'socket hang up',
       'could not resolve host: api.github.com',
