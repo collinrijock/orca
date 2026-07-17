@@ -442,6 +442,26 @@ const devAgentHookEndpointNamespace = devInstanceIdentity.isDev
   : undefined
 
 installUncaughtPipeErrorGuard()
+configureDevUserDataPath(is.dev)
+configureOrcaUserDataPathEnv()
+
+// Why: a launch that races Squirrel's in-flight update install would abort it
+// ("App Still Running Error") and silently strand the user on the old
+// version. Gate before PATH hydration so a rejected launch does not spawn a
+// login shell or spend more time racing ShipIt's final running-app check.
+if (
+  shouldDeferLaunchForUpdateInstall({
+    isPackaged: app.isPackaged,
+    userDataPath: app.getPath('userData'),
+    appVersion: app.getVersion()
+  })
+) {
+  console.warn(
+    '[updater] update install in flight for this bundle; exiting so the installer can finish and relaunch'
+  )
+  app.exit(0)
+}
+
 // Why: propagate the Orca app version into `process.env` so PTY-env
 // construction in both main (local-pty-provider) and the forked daemon
 // (pty-subprocess) can set `TERM_PROGRAM_VERSION` without re-importing
@@ -462,26 +482,6 @@ if (app.isPackaged && process.platform !== 'win32') {
       mergePathSegments(result.segments)
     }
   })
-}
-configureDevUserDataPath(is.dev)
-configureOrcaUserDataPathEnv()
-
-// Why: a launch that races Squirrel's in-flight update install would abort it
-// ("App Still Running Error") and silently strand the user on the old
-// version. Exit instead — ShipIt finishes the install and relaunches the
-// updated app itself, so this click still ends with Orca open. Must run
-// before the single-instance lock and all userData side effects.
-if (
-  shouldDeferLaunchForUpdateInstall({
-    isPackaged: app.isPackaged,
-    userDataPath: app.getPath('userData'),
-    appVersion: app.getVersion()
-  })
-) {
-  console.warn(
-    '[updater] update install in flight for this bundle; exiting so the installer can finish and relaunch'
-  )
-  app.exit(0)
 }
 
 // Why: just past createMainWindow's 10s ready-to-show reveal fallback,

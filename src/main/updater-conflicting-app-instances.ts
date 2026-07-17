@@ -23,8 +23,9 @@ function readCurrentUserProcessList(): Promise<string> {
     // user's Orca does not block ShipIt and must not block the update here.
     // On macOS `comm` is the full executable path, so instances launched from
     // the same bundle match exactly whatever their argv or profile is.
+    // Pin the system binary because Orca hydrates PATH from the user's shell.
     execFile(
-      'ps',
+      '/bin/ps',
       ['-xo', 'pid=,comm='],
       { encoding: 'utf8', timeout: PROCESS_LIST_TIMEOUT_MS, maxBuffer: PROCESS_LIST_MAX_BYTES },
       (error, stdout) => {

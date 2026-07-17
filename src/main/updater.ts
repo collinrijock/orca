@@ -582,30 +582,6 @@ async function performQuitAndInstall(): Promise<void> {
     pendingQuitAndInstallTimer = null
   }
 
-  // Why: Squirrel.Mac's ShipIt waits for ALL instances of the installed
-  // bundle to exit before installing (and aborts if one appears mid-install),
-  // so a second packaged Orca — often an invisible agent/e2e-launched one —
-  // makes "Restart to Update" quit the app and then silently never install
-  // or relaunch. Surface those instances instead of starting a doomed quit.
-  const conflictingPids = await findConflictingAppInstancePids()
-  if (conflictingPids.length > 0) {
-    quitAndInstallInProgress = false
-    recordUpdaterLifecycle(
-      'quit_and_install_blocked_by_other_instances',
-      { pids: conflictingPids.join(','), count: conflictingPids.length },
-      {
-        level: 'warn',
-        message: `Update install blocked: ${conflictingPids.length} other running instance(s) of this app (pids ${conflictingPids.join(', ')})`
-      }
-    )
-    sendErrorStatus(
-      `Another running copy of Orca is blocking the update (PID ${conflictingPids.join(', ')}) — possibly one launched by an agent or test run. Quit it, then install the update again.`,
-      undefined,
-      'install'
-    )
-    return
-  }
-
   markMacQuitAndInstallInFlight()
 
   // Set this BEFORE anything else so the `activate` handler in index.ts
@@ -632,6 +608,28 @@ async function performQuitAndInstall(): Promise<void> {
       span.addEvent('pre_quit_cleanup_start')
       await runBeforeUpdateQuitCleanup()
       span.addEvent('pre_quit_cleanup_done')
+
+      // Why: scan after the bounded cleanup so an instance that starts or
+      // exits during those 2.5s cannot make the handoff decision stale. Keep
+      // this to one process-table read per install attempt.
+      const conflictingPids = await findConflictingAppInstancePids()
+      if (conflictingPids.length > 0) {
+        resetQuitForUpdateState()
+        recordUpdaterLifecycle(
+          'quit_and_install_blocked_by_other_instances',
+          { pids: conflictingPids.join(','), count: conflictingPids.length },
+          {
+            level: 'warn',
+            message: `Update install blocked: ${conflictingPids.length} other running instance(s) of this app (pids ${conflictingPids.join(', ')})`
+          }
+        )
+        sendErrorStatus(
+          `Another running copy of Orca is blocking the update (PID ${conflictingPids.join(', ')}) — possibly one launched by an agent or test run. Quit it, then install the update again.`,
+          undefined,
+          'install'
+        )
+        return
+      }
 
       recordUpdaterLifecycle('quit_and_install_invoking_native', {
         version: pendingVersion || null

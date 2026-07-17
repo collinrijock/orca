@@ -250,6 +250,58 @@ describe('updater mac install handoff', () => {
   )
 
   it.runIf(process.platform === 'darwin')(
+    'checks for blocking instances after pre-quit cleanup settles',
+    async () => {
+      let finishCleanup!: () => void
+      const onBeforeQuit = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishCleanup = resolve
+          })
+      )
+      const sendMock = vi.fn()
+      const mainWindow = { webContents: { send: sendMock } }
+
+      autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+      const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+
+      setupAutoUpdater(mainWindow as never, { onBeforeQuit })
+      await vi.waitFor(() => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+      })
+      autoUpdaterMock.emit('checking-for-update')
+      autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+      const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
+        ([eventName]) => eventName === 'update-downloaded'
+      )?.[1] as (() => void) | undefined
+      nativeDownloadedHandler?.()
+
+      quitAndInstall()
+      await vi.waitFor(() => {
+        expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+      })
+      expect(findConflictingAppInstancePidsMock).not.toHaveBeenCalled()
+
+      // Why: this models an agent/test instance launching during the bounded
+      // cleanup window; the last-moment scan must see it before ShipIt starts.
+      findConflictingAppInstancePidsMock.mockResolvedValue([4242])
+      finishCleanup()
+
+      await vi.waitFor(() => {
+        expect(sendMock).toHaveBeenCalledWith(
+          'updater:status',
+          expect.objectContaining({ state: 'error', retryAction: 'install' })
+        )
+      })
+      expect(findConflictingAppInstancePidsMock).toHaveBeenCalledTimes(1)
+      expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+      expect(killAllPtyMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it.runIf(process.platform === 'darwin')(
     'ignores duplicate quit requests while deferred mac install cleanup is running',
     async () => {
       vi.useFakeTimers()

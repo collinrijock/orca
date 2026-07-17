@@ -70,7 +70,7 @@ describe('shouldDeferLaunchForUpdateInstall', () => {
 
     expect(defer).toBe(true)
     expect(execFileSyncMock).toHaveBeenCalledWith(
-      'ps',
+      '/bin/ps',
       ['-axo', 'command='],
       expect.objectContaining({ encoding: 'utf8' })
     )

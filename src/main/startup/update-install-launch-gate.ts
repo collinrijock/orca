@@ -69,8 +69,8 @@ function readUpdateInstallHandoffMarker(userDataPath: string): UpdateInstallHand
 
 function readProcessCommandList(): string {
   // Why: ShipIt can run as root when the app bundle is not user-writable.
-  // The launch gate must see that privileged installer too.
-  return execFileSync('ps', ['-axo', 'command='], {
+  // Use the system binary so a shell-hydrated PATH cannot change detection.
+  return execFileSync('/bin/ps', ['-axo', 'command='], {
     encoding: 'utf8',
     timeout: PROCESS_LIST_TIMEOUT_MS,
     maxBuffer: PROCESS_LIST_MAX_BYTES
@@ -82,8 +82,10 @@ function readProcessCommandList(): string {
  * this exact install is considered. */
 export function isBundleShipItRunning(executablePath: string, processCommandList: string): boolean {
   // /Applications/Orca.app/Contents/MacOS/Orca → /Applications/Orca.app
-  const bundleRoot = path.resolve(executablePath, '..', '..', '..')
-  const shipItPath = path.join(
+  // Why: this matcher always receives a macOS path, even when its unit tests
+  // run on Windows, so host-native separators would corrupt the comparison.
+  const bundleRoot = path.posix.resolve(executablePath, '..', '..', '..')
+  const shipItPath = path.posix.join(
     bundleRoot,
     'Contents',
     'Frameworks',
