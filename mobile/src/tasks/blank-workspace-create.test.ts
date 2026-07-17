@@ -45,7 +45,10 @@ describe('createBlankWorkspace', () => {
         repo: 'id:repo-1',
         startupCommand: undefined,
         setupDecision: 'inherit',
-        name: 'octopus'
+        name: 'octopus',
+        // Idempotency key so a create interrupted by a connection migration can be
+        // safely retried without the host spawning a duplicate worktree.
+        clientMutationId: expect.any(String)
       }
     })
     const params = calls[0]?.params as Record<string, unknown>
