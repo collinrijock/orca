@@ -491,8 +491,10 @@ type RelayNativeDepName = keyof typeof RELAY_NATIVE_DEPS
 const RELAY_NATIVE_DEP_NAMES = Object.keys(RELAY_NATIVE_DEPS) as RelayNativeDepName[]
 const NATIVE_DEPS_MISSING_PREFIX = 'ORCA-NATIVE-DEPS-MISSING:'
 
-// Why: npm 12 blocks dependency lifecycle scripts unless each exact package
-// version is approved, even when ignore-scripts is explicitly disabled.
+// Why (#8720/#8758): npm 12 blocks dependency lifecycle scripts unless each
+// exact package@version is approved — even when --ignore-scripts=false is set.
+// Linux has no node-pty prebuild, so a missing allowlist yields exit 0 + no
+// pty.node and "node-pty is not available on this remote host" at spawn.
 const RELAY_NATIVE_DEP_SCRIPT_ALLOWLIST = Object.fromEntries(
   Object.entries(RELAY_NATIVE_DEPS).map(([name, version]) => [`${name}@${version}`, true])
 )

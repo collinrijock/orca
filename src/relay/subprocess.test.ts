@@ -116,17 +116,20 @@ describe('Subprocess: Relay entry point', () => {
     const repairedRelayEntry = path.join(tmpDir, 'relay.js')
     copyFileSync(relayEntry, repairedRelayEntry)
 
-    relay = spawnRelay(repairedRelayEntry)
+    // Why: cwd must be the relay dir so loadPty's disk fallback cannot resolve
+    // the monorepo's node-pty, and so an in-place install under this tree is
+    // visible without restarting the process (#8720 ESM/cache repair path).
+    relay = spawnRelay(repairedRelayEntry, [], { cwd: tmpDir })
     await relay.sentinelReceived
 
     const failedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
     const failed = await relay.waitForResponse(failedId)
     expect(failed.error?.message).toContain('node-pty is not available')
 
-    const nodePtyDir = path.join(tmpDir, 'node_modules', 'node-pty')
-    mkdirSync(nodePtyDir, { recursive: true })
+    const nodePtyLibDir = path.join(tmpDir, 'node_modules', 'node-pty', 'lib')
+    mkdirSync(nodePtyLibDir, { recursive: true })
     writeFileSync(
-      path.join(nodePtyDir, 'index.js'),
+      path.join(nodePtyLibDir, 'index.js'),
       `module.exports = { spawn() { return {
         pid: process.pid,
         process: 'mock-shell',

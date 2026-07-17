@@ -289,6 +289,10 @@ export class PtyHandler {
   private worktreeRemovalCoordinator: RelayPtyWorktreeRemovalCoordinator | null = null
   private disposePromise: Promise<void> | null = null
   private ptyModule: typeof NodePty | null = null
+  // Why: single-flight the load so concurrent pty.spawn calls cannot race one
+  // successful dynamic import against a parallel require() of a different
+  // node-pty copy (vitest mock vs monorepo install, or pre-repair vs repaired).
+  private ptyModuleLoad: Promise<typeof NodePty | null> | null = null
   private reloadPtyModuleFromDisk = false
   // Why: external observers need to drop per-pane state when a PTY exits.
   // Today the relay composes multiple consumers (hook-server cache eviction
@@ -314,6 +318,18 @@ export class PtyHandler {
     if (this.ptyModule) {
       return this.ptyModule
     }
+    if (!this.ptyModuleLoad) {
+      this.ptyModuleLoad = this.loadPtyUncached().finally(() => {
+        this.ptyModuleLoad = null
+      })
+    }
+    return this.ptyModuleLoad
+  }
+
+  private async loadPtyUncached(): Promise<typeof NodePty | null> {
+    // Why: after a failed import or a late native-binding failure, ESM may keep
+    // the rejected/broken module in cache. Force a cwd-relative require so an
+    // in-place npm repair is visible without restarting the relay (#8720).
     if (!this.reloadPtyModuleFromDisk) {
       try {
         this.ptyModule = await import('node-pty')
@@ -322,20 +338,38 @@ export class PtyHandler {
         this.reloadPtyModuleFromDisk = true
       }
     }
-    const moduleEntry = join(process.cwd(), 'node_modules', 'node-pty', 'lib', 'index.js')
-    if (!existsSync(moduleEntry)) {
-      return null
+    return this.loadPtyFromDisk()
+  }
+
+  private loadPtyFromDisk(): typeof NodePty | null {
+    // Prefer the published entry, then a bare package root (repair tests / odd packs).
+    const candidates = [
+      join(process.cwd(), 'node_modules', 'node-pty', 'lib', 'index.js'),
+      join(process.cwd(), 'node_modules', 'node-pty', 'index.js')
+    ]
+    for (const moduleEntry of candidates) {
+      if (!existsSync(moduleEntry)) {
+        continue
+      }
+      try {
+        // Drop any prior resolution so a just-repaired tree is not sticky-null.
+        try {
+          delete require.cache[require.resolve(moduleEntry)]
+        } catch {
+          delete require.cache[moduleEntry]
+        }
+        this.ptyModule = require(moduleEntry) as typeof NodePty
+        return this.ptyModule
+      } catch {
+        // try next candidate
+      }
     }
-    try {
-      this.ptyModule = require(moduleEntry) as typeof NodePty
-      return this.ptyModule
-    } catch {
-      return null
-    }
+    return null
   }
 
   private invalidatePtyModuleAfterBindingFailure(): void {
     this.ptyModule = null
+    this.ptyModuleLoad = null
     this.reloadPtyModuleFromDisk = true
     const moduleRoot = join(process.cwd(), 'node_modules', 'node-pty')
     for (const cachedPath of Object.keys(require.cache)) {
