@@ -9305,16 +9305,16 @@ export default function TaskPage(): React.JSX.Element {
                 ) : null}
 
                 {!tasksError && githubUnavailable ? (
-                  // Why: attribute a GitHub outage explicitly so an empty list
-                  // doesn't read as an Orca bug. Takes priority over the generic
-                  // count banner below (the two are mutually exclusive).
+                  // Why: attribute a GitHub availability failure explicitly so
+                  // an empty list doesn't read as an Orca bug. Takes priority
+                  // over the generic count banner below.
                   <div
                     role="alert"
                     className="border-b border-border/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-200"
                   >
                     {translate(
-                      'auto.components.TaskPage.a735832e9c',
-                      "Can't reach GitHub — its API may be temporarily unavailable. This isn't an Orca problem; your pull requests and issues will reappear once GitHub is back."
+                      'auto.components.TaskPage.75a38d7df8',
+                      "GitHub data is temporarily unavailable — its API may be down, rate-limited, or unreachable. This isn't an Orca problem; try again shortly."
                     )}
                   </div>
                 ) : null}

@@ -2037,10 +2037,10 @@ export type GitHubSlice = {
    * served from stale cache on rejection is NOT counted as failed — matching
    * the single-repo behavior of quietly serving stale data.
    *
-   * `githubUnavailable` is true when at least one GitHub source failed (with no
-   * cache) and the failure looks like GitHub being unreachable/unavailable
-   * (5xx outage, network, or rate limit). The caller uses it to attribute the
-   * empty list to a GitHub outage instead of the generic failure banner.
+   * `githubUnavailable` is true when every selected GitHub source failed (with
+   * no cache) because GitHub was unreachable/unavailable (5xx outage, network,
+   * or rate limit). The caller uses it to attribute the empty list to a global
+   * GitHub availability failure instead of the generic partial-failure banner.
    */
   fetchWorkItemsAcrossRepos: (
     repos: {
@@ -2865,7 +2865,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     }
     const state = get()
     let failedCount = 0
-    let githubUnavailable = false
+    let unavailableFailureCount = 0
     const perProjectResults = await Promise.all(
       repos.map(async (r) => {
         try {
@@ -2899,16 +2899,22 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           }
           console.warn(`[workItems] ${r.repoId} failed:`, err)
           failedCount += 1
-          // Why: attribute an empty list to a GitHub outage (vs. a generic
-          // failure) only when the fetch failed because GitHub is unreachable.
+          // Why: track reachability separately so the aggregate below can
+          // distinguish a global GitHub failure from a partial repo failure.
           if (classifyGitHubUnavailable(err instanceof Error ? err.message : String(err))) {
-            githubUnavailable = true
+            unavailableFailureCount += 1
           }
           return [] as GitHubWorkItem[]
         }
       })
     )
     const merged = sortWorkItemsByNumber(perProjectResults.flat()).slice(0, displayLimit)
+    // Why: one repo can fail with a 5xx while another succeeds (or fails for a
+    // permission reason). Only claim a global availability failure when every
+    // selected repo failed for a GitHub reachability reason; otherwise keep the
+    // exact count.
+    const githubUnavailable =
+      failedCount > 0 && failedCount === repos.length && unavailableFailureCount === failedCount
     return { items: merged, failedCount, githubUnavailable }
   },
 

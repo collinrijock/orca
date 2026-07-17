@@ -1759,7 +1759,7 @@
         "jiraSortDescending": "내림차순",
         "jiraSortBy": "정렬 기준",
         "jiraToggleSortDirection": "{{value0}}으로 정렬",
-        "a735832e9c": "Can't reach GitHub — its API may be temporarily unavailable. This isn't an Orca problem; your pull requests and issues will reappear once GitHub is back."
+        "75a38d7df8": "GitHub data is temporarily unavailable — its API may be down, rate-limited, or unreachable. This isn't an Orca problem; try again shortly."
       },
       "Terminal": {
         "73768427cf": "닫기",
