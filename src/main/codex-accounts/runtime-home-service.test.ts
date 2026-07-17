@@ -1686,6 +1686,30 @@ describe('CodexRuntimeHomeService', () => {
     )
   })
 
+  it('launches the system-default custom provider without requiring OAuth auth', async () => {
+    const systemCodexHome = getSystemCodexHomePath()
+    const canonicalConfigPath = join(systemCodexHome, 'config.toml')
+    const canonicalConfig = [
+      'model_provider = "codex-lb"',
+      '',
+      '[model_providers.codex-lb]',
+      'base_url = "https://codex-lb.example.test/v1"',
+      'env_key = "CODEX_LB_API_KEY"',
+      ''
+    ].join('\n')
+    writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
+    const store = createStore(createSettings({ codexSystemDefaultRealHomeEnabled: false }))
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
+    expect(readFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), 'utf-8')).toBe(
+      canonicalConfig
+    )
+    expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
+    expect(readFileSync(canonicalConfigPath, 'utf-8')).toBe(canonicalConfig)
+  })
+
   it('links system Codex user resources into the managed runtime home before launch', async () => {
     const systemCodexHome = getSystemCodexHomePath()
     mkdirSync(join(systemCodexHome, 'skills', 'review'), { recursive: true })

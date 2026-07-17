@@ -661,7 +661,8 @@ describe('CodexAccountService config sync', () => {
     vi.resetModules()
 
     const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
-    const canonicalConfig = 'approval_policy = "never"\nsandbox_mode = "danger-full-access"\n'
+    const canonicalConfig =
+      'model_provider = "openai"\napproval_policy = "never"\nsandbox_mode = "danger-full-access"\n'
     writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
 
     const spawnMock = vi.fn(
@@ -780,6 +781,55 @@ describe('CodexAccountService config sync', () => {
     await service.addAccount()
 
     expect(spawnMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects OAuth account add when canonical config pins a custom provider', async () => {
+    vi.resetModules()
+
+    const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
+    const canonicalConfig = [
+      'model_provider = "codex-lb"',
+      'model = "gpt-5.2-codex"',
+      '',
+      '[model_providers.codex-lb]',
+      'name = "Codex load balancer"',
+      'base_url = "https://codex-lb.example.test/v1"',
+      'env_key = "CODEX_LB_API_KEY"',
+      ''
+    ].join('\n')
+    writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
+
+    const spawnMock = vi.fn()
+    vi.doMock('node:crypto', () => ({ randomUUID: () => 'account-id-for-test' }))
+    vi.doMock('node:child_process', () => ({ execFileSync: vi.fn(), spawn: spawnMock }))
+
+    try {
+      const settings = createSettings()
+      const store = createStore(settings)
+      const rateLimits = createRateLimits()
+      const runtimeHome = createRuntimeHome()
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        store as never,
+        rateLimits as never,
+        runtimeHome as never
+      )
+
+      await expect(service.addAccount()).rejects.toThrow(
+        'Orca cannot add a Codex OAuth account while ~/.codex/config.toml pins the custom provider "codex-lb". Keep using the system-default account for this provider, or remove model_provider (or set it to "openai") before adding an OAuth account. Orca left your config unchanged.'
+      )
+
+      expect(spawnMock).not.toHaveBeenCalled()
+      expect(store.updateSettings).not.toHaveBeenCalled()
+      expect(runtimeHome.syncForCurrentSelection).not.toHaveBeenCalled()
+      expect(existsSync(join(testState.userDataDir, 'codex-accounts', 'account-id-for-test'))).toBe(
+        false
+      )
+      expect(readFileSync(canonicalConfigPath, 'utf-8')).toBe(canonicalConfig)
+    } finally {
+      vi.doUnmock('node:crypto')
+      vi.doUnmock('node:child_process')
+    }
   })
 
   it('recreates the expected missing managed home before reauthenticating', async () => {
