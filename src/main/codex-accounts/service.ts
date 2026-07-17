@@ -19,6 +19,9 @@ import { rewriteRelativePathConfigValues } from '../codex/codex-config-path-refe
 import { stripCodexManagedHookTrustEntriesFromConfig } from '../codex/codex-managed-trust-reconciliation'
 import { isCodexSystemDefaultRealHomeEnabled } from '../codex/codex-real-home-flag'
 import { getCodexManagedHookInstallMaterial } from '../codex/hook-service'
+import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
+import { getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { isCodexSystemDefaultRealHomeEnabled } from '../codex/codex-real-home-flag'
 import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../agent-hooks/installer-utils'
 import { resolveCodexCommand } from '../codex-cli/command'
 import type { Store } from '../persistence'
@@ -458,6 +461,15 @@ export class CodexAccountService {
     }
   }
 
+  private isSelfContainedHostManagedHome(managedHomePath: string): boolean {
+    // Why: flag ON makes each host account home its own launch CODEX_HOME. WSL
+    // homes keep their distro-local seed lane; the flag-OFF opt-out is unchanged.
+    return (
+      isCodexSystemDefaultRealHomeEnabled(this.store.getSettings()) &&
+      !parseWslUncPath(managedHomePath)
+    )
+  }
+
   private syncCanonicalConfigIntoManagedHome(
     managedHomePath: string,
     canonicalConfig = this.readCanonicalConfigForManagedHome(managedHomePath)
@@ -467,6 +479,17 @@ export class CodexAccountService {
     }
 
     const trustedManagedHomePath = this.assertManagedHomePath(managedHomePath)
+    if (this.isSelfContainedHostManagedHome(trustedManagedHomePath)) {
+      // Why: this home is codex's live CODEX_HOME, so mirror config with the
+      // trust-preserving merge — the plain overwrite below would wipe the
+      // hook/project trust codex granted in this home, forcing a re-approval and
+      // an app-server re-grant on every account switch.
+      syncSystemConfigIntoManagedCodexHome({
+        runtimeHomePath: trustedManagedHomePath,
+        systemHomePath: getSystemCodexHomePath()
+      })
+      return
+    }
     // Why: Orca account switching is meant to swap Codex credentials and quota
     // identity, not silently fork the user's sandbox/config defaults. Syncing
     // one canonical config into every managed home keeps auth isolated per

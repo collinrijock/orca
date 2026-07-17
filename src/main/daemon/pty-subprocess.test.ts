@@ -1950,6 +1950,43 @@ describe('createPtySubprocess', () => {
     expect(env.ORCA_CODEX_HOME).toBeUndefined()
   })
 
+  it('strips an inherited per-account self-contained CODEX_HOME overlay in a nested Orca (#5370)', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const previousCodexHome = process.env.CODEX_HOME
+    const previousOrcaCodexHome = process.env.ORCA_CODEX_HOME
+    // A per-account home is injected as CODEX_HOME === ORCA_CODEX_HOME, so the
+    // nested-Orca strip must clear it exactly as it does the shared mirror.
+    const perAccountHome = '/daemon/managed/codex-accounts/019f0000-aaaa/home'
+    process.env.CODEX_HOME = perAccountHome
+    process.env.ORCA_CODEX_HOME = perAccountHome
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: { SHELL: '/bin/bash' },
+        envToDelete: ['ORCA_CODEX_HOME']
+      })
+    } finally {
+      if (previousCodexHome === undefined) {
+        delete process.env.CODEX_HOME
+      } else {
+        process.env.CODEX_HOME = previousCodexHome
+      }
+      if (previousOrcaCodexHome === undefined) {
+        delete process.env.ORCA_CODEX_HOME
+      } else {
+        process.env.ORCA_CODEX_HOME = previousOrcaCodexHome
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)![2].env
+    expect(env.CODEX_HOME).toBeUndefined()
+    expect(env.ORCA_CODEX_HOME).toBeUndefined()
+  })
+
   it('preserves a daemon-owned custom Codex home while deleting a stale private marker', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

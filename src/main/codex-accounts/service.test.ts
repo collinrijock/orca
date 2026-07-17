@@ -48,6 +48,10 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
   const agentStatusHooksEnabled = overrides.agentStatusHooksEnabled ?? true
   const tabAutoGenerateTitle = overrides.tabAutoGenerateTitle ?? false
   return {
+    // Config-sync/hot-swap tests assert the shared-mirror path; the RC defaults
+    // the real-home flag ON (per-account self-contained homes), so opt these
+    // managed cases out unless a test overrides it.
+    codexSystemDefaultRealHomeEnabled: overrides.codexSystemDefaultRealHomeEnabled ?? false,
     workspaceDir: testState.fakeHomeDir,
     nestWorkspaces: false,
     refreshLocalBaseRefOnWorktreeCreate: false,

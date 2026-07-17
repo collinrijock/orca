@@ -95,8 +95,8 @@ const CODEX_EVENTS = [
   'Stop'
 ] as const
 
-function getConfigPath(): string {
-  return join(getOrcaManagedCodexHomePath(), 'hooks.json')
+function getConfigPath(runtimeHomePath: string = getOrcaManagedCodexHomePath()): string {
+  return join(runtimeHomePath, 'hooks.json')
 }
 
 function writeCodexHooksJson(configPath: string, hooks: Record<string, HookDefinition[]>): void {
@@ -105,8 +105,8 @@ function writeCodexHooksJson(configPath: string, hooks: Record<string, HookDefin
   writeHooksJson(configPath, { hooks })
 }
 
-function getCodexConfigTomlPath(): string {
-  return join(getOrcaManagedCodexHomePath(), 'config.toml')
+function getCodexConfigTomlPath(runtimeHomePath: string = getOrcaManagedCodexHomePath()): string {
+  return join(runtimeHomePath, 'config.toml')
 }
 
 // Why: the managed-event subset of the shared PascalCase→label map; the
@@ -297,14 +297,14 @@ function removeCodexPluginEnvironmentCommands(definitions: HookDefinition[]): Ho
 
 function getRuntimeHooksWithSystemUserHooks(
   runtimeHooks: Record<string, HookDefinition[]> | undefined,
-  isManagedCommand: (command: string | undefined) => boolean
+  isManagedCommand: (command: string | undefined) => boolean,
+  runtimeConfigPath: string = getConfigPath()
 ): {
   hooks: Record<string, HookDefinition[]>
   trustEntries: MirroredRuntimeUserHookTrustEntry[]
 } {
   const systemConfigPath = getSystemConfigPath()
-  const runtimeConfigPath = getConfigPath()
-  if (systemConfigPath === getConfigPath()) {
+  if (systemConfigPath === runtimeConfigPath) {
     return { hooks: { ...runtimeHooks }, trustEntries: [] }
   }
 
@@ -1140,14 +1140,15 @@ export class CodexHookService {
     return wslPlan ? refreshWslRuntimeUserHooks(wslPlan) : null
   }
 
-  getStatus(): AgentHookInstallStatus {
-    return this.getStatusAfterInstall(null)
+  getStatus(runtimeHomePath: string = getOrcaManagedCodexHomePath()): AgentHookInstallStatus {
+    return this.getStatusAfterInstall(null, runtimeHomePath)
   }
 
   private getStatusAfterInstall(
-    recentGrantEntries: readonly CodexTrustEntry[] | null
+    recentGrantEntries: readonly CodexTrustEntry[] | null,
+    runtimeHomePath: string = getOrcaManagedCodexHomePath()
   ): AgentHookInstallStatus {
-    const configPath = getConfigPath()
+    const configPath = getConfigPath(runtimeHomePath)
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
     if (!config) {
@@ -1164,7 +1165,7 @@ export class CodexHookService {
     // trust entries are missing/stale. Codex 0.129+ silently drops untrusted
     // hooks, so a green status without trust verification is misleading.
     const command = getManagedCommand(scriptPath)
-    const tomlPath = getCodexConfigTomlPath()
+    const tomlPath = getCodexConfigTomlPath(runtimeHomePath)
     // Why: an unreadable config.toml (EACCES/EIO) is distinct from "file
     // absent" (which returns an empty Map without throwing). Hooks.json may
     // still be fine, so report partial with a specific reason rather than
@@ -1184,7 +1185,7 @@ export class CodexHookService {
     // hashes or wrote fallback hashes. Re-resolving PATH here doubles sync launch work.
     const ledgerHome =
       recentGrantEntries === null
-        ? readCurrentCodexTrustGrantLedgerHome(getOrcaManagedCodexHomePath(), { kind: 'native' })
+        ? readCurrentCodexTrustGrantLedgerHome(runtimeHomePath, { kind: 'native' })
         : null
     const recentGrantHashes = new Map<string, { signature: string; trustedHash: string }>()
     for (const entry of recentGrantEntries ?? []) {
@@ -1295,14 +1296,17 @@ export class CodexHookService {
     return { agent: 'codex', state, configPath, managedHooksPresent, detail }
   }
 
-  install(): AgentHookInstallStatus {
-    const configPath = getConfigPath()
+  // Why: runtimeHomePath defaults to the shared managed mirror, but a managed
+  // account launching against its own self-contained CODEX_HOME passes that
+  // per-account home so hooks.json/config.toml/trust land where codex reads.
+  install(runtimeHomePath: string = getOrcaManagedCodexHomePath()): AgentHookInstallStatus {
+    const configPath = getConfigPath(runtimeHomePath)
     const scriptPath = getManagedScriptPath()
     // Why: must run before this install rewrites hooks.json/config.toml —
     // approvals the user made inside Orca-launched Codex are keyed to the
     // previous launch's runtime layout, and stale-trust cleanup below would
     // delete them once the system config stops backing them.
-    promoteCodexRuntimeHookApprovalsToSystem()
+    promoteCodexRuntimeHookApprovalsToSystem(runtimeHomePath)
     const config = readHooksJson(configPath)
     if (!config) {
       return {
@@ -1320,7 +1324,7 @@ export class CodexHookService {
     // accumulate duplicate hook entries pointing at defunct scripts.
     const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
     const command = getManagedCommand(scriptPath)
-    const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand)
+    const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand, configPath)
     const nextHooks = hookPlan.hooks
     const managedEvents = new Set<string>(CODEX_EVENTS)
 
@@ -1390,8 +1394,11 @@ export class CodexHookService {
     // pointing at a hook that doesn't exist. Surface failures — without this,
     // getStatus would report green for a hook Codex won't actually fire.
     try {
-      const tomlPath = getCodexConfigTomlPath()
-      syncSystemConfigIntoManagedCodexHome()
+      const tomlPath = getCodexConfigTomlPath(runtimeHomePath)
+      syncSystemConfigIntoManagedCodexHome({
+        runtimeHomePath,
+        systemHomePath: getSystemCodexHomePath()
+      })
       // Why: Codex is the only authority on its trust-hash algorithm, so the
       // managed entries are granted through codex app-server RPCs (verified by
       // re-list) whenever the installed CLI supports them; the granted entries
@@ -1399,7 +1406,7 @@ export class CodexHookService {
       // delete what Codex just wrote. Mirrored user trust keeps its existing
       // verbatim-carry lane either way.
       const grant = grantManagedCodexHookTrust({
-        runtimeHomePath: getOrcaManagedCodexHomePath(),
+        runtimeHomePath,
         tomlPath,
         managedCommand: command,
         managedEntries: managedTrustEntries,
@@ -1431,14 +1438,14 @@ export class CodexHookService {
         detail: `Hooks installed but trust entries could not be written: ${error instanceof Error ? error.message : String(error)}. Run /hooks in Codex to approve.`
       }
     }
-    snapshotCodexRuntimeHookTrustProvenance()
+    snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)
     try {
       cleanupLegacySystemManagedHooks()
       cleanupLegacyCodexProfileHooks()
     } catch (error) {
       console.warn('[codex-hook-service] failed to clean legacy Codex hooks', error)
     }
-    return this.getStatusAfterInstall(recentGrantEntries)
+    return this.getStatusAfterInstall(recentGrantEntries, runtimeHomePath)
   }
 
   async installRemote(
@@ -1563,11 +1570,13 @@ export class CodexHookService {
     }
   }
 
-  refreshRuntimeUserHooks(): AgentHookInstallStatus {
-    const configPath = getConfigPath()
+  refreshRuntimeUserHooks(
+    runtimeHomePath: string = getOrcaManagedCodexHomePath()
+  ): AgentHookInstallStatus {
+    const configPath = getConfigPath(runtimeHomePath)
     // Why: same as install() — capture in-Orca approvals before this refresh
     // rewrites the runtime files they are keyed against.
-    promoteCodexRuntimeHookApprovalsToSystem()
+    promoteCodexRuntimeHookApprovalsToSystem(runtimeHomePath)
     const config = readHooksJson(configPath)
     if (!config) {
       // Why: disabled launch prep used to call remove(); preserve its legacy
@@ -1583,14 +1592,17 @@ export class CodexHookService {
     }
 
     const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
-    const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand)
+    const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand, configPath)
     config.hooks = hookPlan.hooks
     writeCodexHooksJson(configPath, hookPlan.hooks)
 
     try {
-      const tomlPath = getCodexConfigTomlPath()
+      const tomlPath = getCodexConfigTomlPath(runtimeHomePath)
       const trustEntries = hookPlan.trustEntries.map(({ entry }) => entry)
-      syncSystemConfigIntoManagedCodexHome()
+      syncSystemConfigIntoManagedCodexHome({
+        runtimeHomePath,
+        systemHomePath: getSystemCodexHomePath()
+      })
       // Why: this path is used when Orca status hooks are disabled. The
       // runtime CODEX_HOME should keep user hooks, but not Orca-managed trust.
       // Write current mirrored user trust first so stale cleanup compares
@@ -1607,10 +1619,10 @@ export class CodexHookService {
         detail: `User hooks refreshed but trust entries could not be written: ${error instanceof Error ? error.message : String(error)}. Run /hooks in Codex to approve.`
       }
     }
-    snapshotCodexRuntimeHookTrustProvenance()
+    snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)
 
     cleanupLegacyManagedHookRepresentations()
-    return this.getStatus()
+    return this.getStatus(runtimeHomePath)
   }
 
   remove(): AgentHookInstallStatus {

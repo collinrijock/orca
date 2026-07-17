@@ -53,16 +53,20 @@ export function codexRolloutHardlinkIdentity(file: {
  *
  * Host real home (null) is canonical: after the real-home flip the managed
  * home's auth.json is no longer refreshed, so resume must not stamp it. The
- * Orca managed runtime home still beats other homes (WSL/remote real homes,
- * custom CODEX_HOMEs) because those lanes have not flipped — their launches
- * keep managed auth, so resume keeps the managed stamp as today.
+ * Orca managed runtime home and each per-account self-contained home
+ * (codex-accounts/<id>/home) beat other homes (WSL/remote real homes, custom
+ * CODEX_HOMEs) because those are the roots codex actually refreshes for their
+ * lane — the shared runtime home for the managed mirror, and the per-account
+ * home once a managed account launches directly against it.
  */
 function codexSessionRootRank(codexHome: string | null): number {
   if (codexHome === null) {
     return 0
   }
   const segments = codexHome.split(/[\\/]/).filter(Boolean)
-  return segments.at(-2) === 'codex-runtime-home' && segments.at(-1) === 'home' ? 1 : 2
+  const isSharedRuntimeHome = segments.at(-2) === 'codex-runtime-home' && segments.at(-1) === 'home'
+  const isPerAccountManagedHome = segments.at(-3) === 'codex-accounts' && segments.at(-1) === 'home'
+  return isSharedRuntimeHome || isPerAccountManagedHome ? 1 : 2
 }
 
 /**
