@@ -102,8 +102,14 @@ export function LinearAgentSkillPane(): React.JSX.Element {
         )}
         command={installCommand}
         installedCommand={updateCommand}
-        terminalTitle="Linear skill setup"
-        terminalAriaLabel="Linear skill install terminal"
+        terminalTitle={translate(
+          'auto.components.settings.LinearAgentSkillPane.terminalTitle',
+          'Linear skill setup'
+        )}
+        terminalAriaLabel={translate(
+          'auto.components.settings.LinearAgentSkillPane.terminalAriaLabel',
+          'Linear skill install terminal'
+        )}
         terminalWorktreeId="settings-linear-skill-terminal"
         terminalShellOverride={activeSkillRuntime.terminalShellOverride}
         installed={linearSkillInstalled}

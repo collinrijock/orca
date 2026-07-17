@@ -101,6 +101,8 @@ describe('LinearAgentSkillPane', () => {
     expect(examples).toHaveLength(5)
     for (const example of examples) {
       expect(markup).toContain(example.title)
+      expect(example.prompt).toContain('/orca-linear')
+      expect(example.prompt).not.toContain('{{value0}}')
     }
   })
 

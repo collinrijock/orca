@@ -6,8 +6,11 @@ import { useAppStore } from '@/store'
 // the rendered section from drifting. The context-key guard rejects a status
 // fetched for a different runtime environment than the active one.
 export function useLinearProviderConnected(): boolean {
-  const linearStatus = useAppStore((s) => s.linearStatus)
-  const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
-  const settings = useAppStore((s) => s.settings)
-  return linearStatusContextKey === getProviderRuntimeContextKey(settings) && linearStatus.connected
+  // Why: Cmd+J keeps this hook mounted globally; project to the visibility bit so
+  // unrelated Linear metadata and settings updates do not rerender the palette.
+  return useAppStore(
+    (state) =>
+      state.linearStatusContextKey === getProviderRuntimeContextKey(state.settings) &&
+      state.linearStatus.connected
+  )
 }

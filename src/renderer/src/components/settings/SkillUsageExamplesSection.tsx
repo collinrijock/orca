@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import type { SkillUsageExample } from '@/lib/skill-usage-example'
 import { SkillUsageExampleDialog } from './SkillUsageExampleDialog'
 
@@ -31,10 +32,11 @@ export function SkillUsageExamplesSection({
         {examples.map((example) => {
           const Icon = resolveIcon(example)
           return (
-            <button
+            <Button
               key={example.id}
               type="button"
-              className="rounded-md border border-border/60 bg-muted/20 px-4 py-3 text-left transition-colors hover:bg-muted/35 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              variant="ghost"
+              className="h-auto w-full justify-start whitespace-normal rounded-md border border-border/60 bg-muted/20 px-4 py-3 text-left hover:bg-muted/35 hover:text-foreground"
               onClick={() => setSelectedExampleId(example.id)}
             >
               <div className="flex items-start gap-3">
@@ -46,7 +48,7 @@ export function SkillUsageExamplesSection({
                   <p className="text-xs leading-relaxed text-muted-foreground">{example.summary}</p>
                 </div>
               </div>
-            </button>
+            </Button>
           )
         })}
       </div>
