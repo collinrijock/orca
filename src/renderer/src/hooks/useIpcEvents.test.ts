@@ -988,6 +988,7 @@ describe('useIpcEvents browser tab create routing', () => {
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
+          onOpenMarkdownTab: () => () => {},
           onRequestTabCreate: (
             listener: NonNullable<typeof requestTabCreateListenerRef.current>
           ) => {
@@ -1211,6 +1212,7 @@ describe('useIpcEvents updater integration', () => {
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
+          onOpenMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: () => () => {},
@@ -1581,6 +1583,7 @@ describe('useIpcEvents updater integration', () => {
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
+          onOpenMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: () => () => {},
@@ -2079,6 +2082,7 @@ describe('useIpcEvents updater integration', () => {
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
+          onOpenMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: () => () => {},
@@ -2988,6 +2992,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
+          onOpenMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: (listener: RequestTabCloseListener) => {
@@ -3528,6 +3533,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
+          onOpenMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: (
@@ -3747,6 +3753,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
+          onOpenMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: (
@@ -3961,6 +3968,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
+          onOpenMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: (
@@ -4202,6 +4210,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
+          onOpenMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: () => () => {},
@@ -4451,6 +4460,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
+          onOpenMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: () => () => {},
@@ -4686,6 +4696,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
+          onOpenMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: () => () => {},

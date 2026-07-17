@@ -418,6 +418,10 @@ export function setupGuestShortcutForwarding(args: {
       renderer.send('ui:newSimulatorTab')
     } else if (keybindingMatchesAction('tab.newMarkdown', input, process.platform, keybindings)) {
       renderer.send('ui:newMarkdownTab')
+    } else if (keybindingMatchesAction('tab.openMarkdown', input, process.platform, keybindings)) {
+      // Why: Cmd/Ctrl+Shift+O opens a markdown picker in the active surface.
+      // Guest pages never hit Terminal.tsx keydown, so forward to the renderer.
+      renderer.send('ui:openMarkdownTab')
     } else if (keybindingMatchesAction('tab.newTerminal', input, process.platform, keybindings)) {
       // Why: Cmd/Ctrl+T opens a terminal in the user's active terminal surface
       // even when focus is inside a browser guest. Cmd/Ctrl+Shift+B is the

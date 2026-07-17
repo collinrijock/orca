@@ -115,6 +115,7 @@ import {
   createFloatingWorkspaceTerminalTab,
   isEmptyFloatingWorkspacePanelVisible,
   isFloatingWorkspacePanelFocused,
+  openFloatingWorkspaceMarkdownTab,
   switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
 import {
@@ -2245,6 +2246,31 @@ export function useIpcEvents(): void {
           store.activeGroupIdByWorktree[worktreeId] ?? store.groupsByWorktree[worktreeId]?.[0]?.id
         if (targetGroupId) {
           void store.openNewMarkdownInActiveWorkspace(targetGroupId)
+        }
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onOpenMarkdownTab(() => {
+        const store = useAppStore.getState()
+        if (isFloatingWorkspacePanelFocused()) {
+          void openFloatingWorkspaceMarkdownTab(store).catch((err) => {
+            toast.error(
+              err instanceof Error
+                ? err.message
+                : translate('auto.hooks.useIpcEvents.3a460c3322', 'Failed to open markdown file.')
+            )
+          })
+          return
+        }
+        const worktreeId = store.activeWorktreeId
+        if (!worktreeId) {
+          return
+        }
+        const targetGroupId =
+          store.activeGroupIdByWorktree[worktreeId] ?? store.groupsByWorktree[worktreeId]?.[0]?.id
+        if (targetGroupId) {
+          void store.openMarkdownFileInActiveWorkspace(targetGroupId)
         }
       })
     )

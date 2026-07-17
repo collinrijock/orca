@@ -689,6 +689,23 @@ describe('setupGuestShortcutForwarding', () => {
     expect(rendererSendMock).not.toHaveBeenCalled()
   })
 
+  it('forwards open-markdown shortcut from focused guest pages', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    const preventDefault = triggerBeforeInput({
+      code: 'KeyO',
+      key: 'o',
+      shift: true
+    })
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:openMarkdownTab')
+  })
+
   it('forwards double-tap window shortcuts from focused guest pages', () => {
     setupGuestShortcutForwarding({
       browserTabId,

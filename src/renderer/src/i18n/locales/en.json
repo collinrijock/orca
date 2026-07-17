@@ -626,6 +626,7 @@
         "f45fa2b03c": "Browser profiles are unavailable while a remote runtime is active",
         "f000b2ff76": "No active worktree",
         "56d3ec4203": "Failed to create untitled markdown file.",
+        "3a460c3322": "Failed to open markdown file.",
         "f6300deb8b": "New Browser Tab",
         "7a64b31991": "Local terminal creation is unavailable while a remote runtime is active",
         "60428567b4": "Local terminal reveal is unavailable while a remote runtime is active",
