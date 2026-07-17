@@ -40,6 +40,30 @@ function scriptedClient(
 }
 
 describe('createWorktreeWithNameRetry', () => {
+  it('waits for capability detection before sending a create', async () => {
+    const attempts: Attempt[] = []
+    const client = scriptedClient([{ id: 'wt-ready' }], attempts)
+    let resolveSupport!: (supported: boolean) => void
+    const support = new Promise<boolean>((resolve) => {
+      resolveSupport = resolve
+    })
+    const pending = createWorktreeWithNameRetry({
+      client,
+      baseName: 'puffin',
+      buildParams: (name) => ({ repo: 'id:r', name }),
+      supportsIdempotentCutoverRetry: support,
+      mintMutationId: () => 'key-ready'
+    })
+
+    await Promise.resolve()
+    expect(attempts).toHaveLength(0)
+    resolveSupport(true)
+
+    await expect(pending).resolves.toEqual({ worktreeId: 'wt-ready', name: 'puffin' })
+    expect(attempts).toHaveLength(1)
+    expect(attempts[0]!.params.clientMutationId).toBe('key-ready')
+  })
+
   it('stamps a clientMutationId on the create request', async () => {
     const attempts: Attempt[] = []
     const client = scriptedClient([{ id: 'wt-1' }], attempts)

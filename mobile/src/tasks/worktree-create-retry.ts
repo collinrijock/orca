@@ -27,7 +27,7 @@ export type CreateWorktreeWithNameRetryArgs = {
   client: RpcClient
   baseName: string
   buildParams: (name: string) => Record<string, unknown>
-  supportsIdempotentCutoverRetry: boolean
+  supportsIdempotentCutoverRetry: boolean | Promise<boolean>
   maxAttempts?: number
   // Injected in tests; production mints a fresh idempotency key per candidate.
   mintMutationId?: () => string
@@ -41,7 +41,10 @@ export type CreateWorktreeWithNameRetryArgs = {
 export async function createWorktreeWithNameRetry(
   args: CreateWorktreeWithNameRetryArgs
 ): Promise<WorktreeCreateResult> {
-  const { client, baseName, buildParams, supportsIdempotentCutoverRetry } = args
+  const { client, baseName, buildParams } = args
+  // Why: creating before status.get settles would silently disable safe replay
+  // during the exact slow-network window this path is meant to recover from.
+  const supportsIdempotentCutoverRetry = await args.supportsIdempotentCutoverRetry
   const maxAttempts = args.maxAttempts ?? CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS
   const mintMutationId = args.mintMutationId ?? defaultWorktreeCreateMutationId
   let lastError: string | null = null

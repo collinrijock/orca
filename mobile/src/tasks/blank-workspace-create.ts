@@ -14,7 +14,7 @@ export async function createBlankWorkspace(args: {
   createdWithAgentId: TuiAgent | undefined
   comment: string | undefined
   setupDecision: WorkspaceCreateSetupDecision
-  supportsIdempotentCutoverRetry: boolean
+  supportsIdempotentCutoverRetry: boolean | Promise<boolean>
 }): Promise<WorktreeCreateResult> {
   return createWorktreeWithNameRetry({
     client: args.client,

@@ -50,8 +50,7 @@ import {
 } from '../worktree/new-workspace-dialog-repo-selection'
 import { createBlankWorkspace } from '../tasks/blank-workspace-create'
 import { createWorkspaceFromComposerSource } from '../tasks/source-workspace-create'
-import { MOBILE_TASKS_CAPABILITY } from '../tasks/mobile-tasks-capability'
-import { MOBILE_WORKTREE_CREATE_IDEMPOTENCY_CAPABILITY } from '../tasks/worktree-create-capability'
+import { useNewWorktreeRuntimeCapabilities } from '../tasks/worktree-create-capability'
 import { normalizeWorkspaceAgent } from '../tasks/workspace-agent-selection'
 import {
   filterAvailableTaskProviders,
@@ -211,8 +210,10 @@ function NewWorktreeModalContent({
   const [sshConnectingTargetId, setSshConnectingTargetId] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const [availableProviders, setAvailableProviders] = useState<TaskProvider[]>([])
-  const [tasksSupported, setTasksSupported] = useState(false)
-  const [idempotentWorktreeCreateSupported, setIdempotentWorktreeCreateSupported] = useState(false)
+  const { tasksSupported, getWorktreeCreateCutoverSupport } = useNewWorktreeRuntimeCapabilities(
+    client,
+    visible
+  )
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [setupHookDetails, setSetupHookDetails] = useState<SetupHookDetails | null>(null)
   const [trustedOrcaHooks, setTrustedOrcaHooks] = useState<PersistedTrustedOrcaHooks>({})
@@ -375,7 +376,6 @@ function NewWorktreeModalContent({
       // linear.status timeout, which rejects rather than resolving {ok:false})
       // can't discard the already-resolved critical settings/ui results.
       const probes = Promise.allSettled([
-        client.sendRequest('status.get'),
         client.sendRequest('preflight.check'),
         client.sendRequest('linear.status')
       ])
@@ -409,19 +409,10 @@ function NewWorktreeModalContent({
         setTrustedOrcaHooks(ui?.trustedOrcaHooks ?? {})
       }
 
-      const [statusRes, preflightRes, linearRes] = await probes
+      const [preflightRes, linearRes] = await probes
       if (stale) {
         return
       }
-      // Tasks is an additive RPC surface, so older paired desktops without the
-      // capability fall back to branch + blank sources only.
-      const statusResult = okResult(statusRes)
-      const capabilities =
-        (statusResult?.result as { capabilities?: string[] } | undefined)?.capabilities ?? []
-      setTasksSupported(capabilities.includes(MOBILE_TASKS_CAPABILITY))
-      setIdempotentWorktreeCreateSupported(
-        capabilities.includes(MOBILE_WORKTREE_CREATE_IDEMPOTENCY_CAPABILITY)
-      )
       const glabInstalled =
         (okResult(preflightRes)?.result as { glab?: { installed?: boolean } } | undefined)?.glab
           ?.installed === true
@@ -704,7 +695,7 @@ function NewWorktreeModalContent({
             workspaceName: trimmedName || undefined,
             note: trimmedNote,
             nameIsAutoManaged: composer.isNameAutoManaged,
-            supportsIdempotentCutoverRetry: idempotentWorktreeCreateSupported
+            supportsIdempotentCutoverRetry: getWorktreeCreateCutoverSupport()
           })
         : await createBlankWorkspace({
             client,
@@ -714,7 +705,7 @@ function NewWorktreeModalContent({
             createdWithAgentId,
             comment: trimmedNote,
             setupDecision,
-            supportsIdempotentCutoverRetry: idempotentWorktreeCreateSupported
+            supportsIdempotentCutoverRetry: getWorktreeCreateCutoverSupport()
           })
       if ('error' in result) {
         setError(result.error)
