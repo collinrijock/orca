@@ -20,6 +20,10 @@ import process from 'node:process'
 import readline from 'node:readline/promises'
 import { pathToFileURL } from 'node:url'
 import { startCodexPrimaryHomeTripwire } from './codex-primary-home-tripwire.mjs'
+import {
+  cleanupValidationDaemons,
+  closeValidationElectronApp
+} from './codex-validation-process-shutdown.mjs'
 
 const RESTRICTED_ENV_KEYS = [
   'HOME',
@@ -223,6 +227,7 @@ function parseArgs(argv) {
   const options = {
     scenario: 'mixed',
     dryRun: false,
+    closeAfterLaunch: false,
     skipBuild: false,
     keep: false,
     reportPath: null,
@@ -249,13 +254,15 @@ function parseArgs(argv) {
       options.configTemplate = path.resolve(readValue())
     } else if (arg === '--dry-run') {
       options.dryRun = true
+    } else if (arg === '--close-after-launch') {
+      options.closeAfterLaunch = true
     } else if (arg === '--skip-build') {
       options.skipBuild = true
     } else if (arg === '--keep') {
       options.keep = true
     } else if (arg === '--help') {
       console.log(
-        'Usage: node config/scripts/run-codex-real-account-validation.mjs [--scenario mixed|managed-only|codex-lb] [--config-template <path>] [--skip-build] [--dry-run] [--keep] [--report <path>]'
+        'Usage: node config/scripts/run-codex-real-account-validation.mjs [--scenario mixed|managed-only|codex-lb] [--config-template <path>] [--skip-build] [--dry-run] [--close-after-launch] [--keep] [--report <path>]'
       )
       process.exit(0)
     } else {
@@ -329,13 +336,23 @@ async function writeReport(reportPath, report) {
 }
 
 async function runInteractiveSession(context) {
+  if (process.stdin.readableEnded) {
+    return
+  }
   const prompt = readline.createInterface({ input: process.stdin, output: process.stdout })
   const closePrompt = () => prompt.close()
+  // Why: redirected stdin can close before `question()` consumes a command.
+  // Race the prompt so EOF still unwinds through app and credential cleanup.
+  const inputClosed = new Promise((resolve) => prompt.once('close', () => resolve(null)))
   context.signal.addEventListener('abort', closePrompt, { once: true })
   console.log('Commands: checkpoint <label>, probe <terminal-handle>, status, done')
   try {
     while (!context.signal.aborted) {
-      const line = (await prompt.question('codex-validation> ')).trim()
+      const answer = await Promise.race([prompt.question('codex-validation> '), inputClosed])
+      if (answer === null) {
+        return
+      }
+      const line = answer.trim()
       const [command, ...rest] = line.split(/\s+/)
       if (command === 'checkpoint') {
         const label = rest.join(' ') || `checkpoint-${context.report.checkpoints.length + 1}`
@@ -389,6 +406,9 @@ async function main() {
   let app = null
   let tripwire = null
   const abortController = new AbortController()
+  const abortForSignal = () => abortController.abort()
+  process.once('SIGINT', abortForSignal)
+  process.once('SIGTERM', abortForSignal)
   const report = {
     scenario: options.scenario,
     startedAt: new Date().toISOString(),
@@ -411,7 +431,6 @@ async function main() {
         console.error('\u001b[31;1m[VALIDATION ABORTED] Primary ~/.codex changed\u001b[0m')
         console.error(JSON.stringify(event, null, 2))
         abortController.abort()
-        void app?.close()
       }
     })
     report.checkpoints.push({
@@ -441,29 +460,40 @@ async function main() {
       }
       app.process().once('exit', () => abortController.abort())
       await writeReport(reportPath, report)
-      await runInteractiveSession({
-        layout,
-        launchEnv,
-        report,
-        reportPath,
-        tripwire,
-        signal: abortController.signal
-      })
+      if (!options.closeAfterLaunch) {
+        await runInteractiveSession({
+          layout,
+          launchEnv,
+          report,
+          reportPath,
+          tripwire,
+          signal: abortController.signal
+        })
+      }
     }
   } finally {
     abortController.abort()
-    await app?.close().catch(() => {})
-    if (tripwire) {
-      report.tripwire = await tripwire.stop()
-    }
-    report.checkpoints.push({ label: 'shutdown', ...(await snapshotValidationState(layout)) })
-    report.completedAt = new Date().toISOString()
-    await writeReport(reportPath, report)
-    if (options.keep) {
-      console.warn(`Credential-bearing disposable root kept at ${layout.tempRoot}`)
-    } else {
-      await rm(layout.tempRoot, { recursive: true })
-      console.log('Removed the credential-bearing disposable root.')
+    try {
+      await closeValidationElectronApp(app)
+      await cleanupValidationDaemons(layout.userDataDir)
+      if (tripwire) {
+        report.tripwire = await tripwire.stop()
+      }
+      report.checkpoints.push({ label: 'shutdown', ...(await snapshotValidationState(layout)) })
+      report.completedAt = new Date().toISOString()
+      await writeReport(reportPath, report)
+    } finally {
+      try {
+        if (options.keep) {
+          console.warn(`Credential-bearing disposable root kept at ${layout.tempRoot}`)
+        } else {
+          await rm(layout.tempRoot, { recursive: true })
+          console.log('Removed the credential-bearing disposable root.')
+        }
+      } finally {
+        process.removeListener('SIGINT', abortForSignal)
+        process.removeListener('SIGTERM', abortForSignal)
+      }
     }
   }
 
