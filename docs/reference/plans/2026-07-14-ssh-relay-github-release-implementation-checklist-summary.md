@@ -9,8 +9,8 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — exact-head Windows
-OpenSSH live-proof diagnosis and fixture correction, 2026-07-15, Codex implementation owner.**
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — pre-execution Windows
+regular-file EOF qualification, 2026-07-15, Codex implementation owner.**
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the portable-fixture
 correction locally green: the no-Orca-publication workflow oracle permits the one exact pinned
 Microsoft fixture release URL while Orca release URLs, `gh release`, and `contents: write` remain
@@ -139,7 +139,19 @@ artifact run `29547488550`, Windows x64 job `87782833321`, and Windows ARM64 job
 time out at 8.03/8.04 seconds with no sentinel and exact profile RED. Next test only an overlapped
 stdin pipe with ordinary stdout/stderr and no `-n`; production remains unchanged. That replacement
 diagnostic is locally green under `E-M6-WINDOWS-NOINPUT-OVERLAPPED-NO-N-LOCAL-001`; commit and run
-the exact head next.
+the exact head next. Exact pushed head `1c391aa851777f36cf81af9adb85d7177d7acff6` was tested in
+artifact run `29548340927`, Windows x64 job `87785371486`, and Windows ARM64 job `87785371526`.
+`E-M6-WINDOWS-NOINPUT-OVERLAPPED-NO-N-CI-RED-001` records the completed native result: x64/ARM64
+time out after 8035.00/8043.47 milliseconds with no sentinel, ended stdout, zero stderr, and only
+termination settlement; both exact profile teardowns are RED. All four non-Windows primary jobs
+and both Linux oldest-userland supplements remain green. Next qualify only a newly created
+zero-length regular-file descriptor as Windows stdin, already at EOF before `CreateProcess` and
+distinct from `NUL`; do not add a launcher unless this narrower boundary is falsified. Require both
+architectures to pass the diagnostic, full-size live transfer, cancellation, reuse, and exact
+profile teardown before changing production. `E-M6-WINDOWS-NOINPUT-REGULAR-FILE-NO-N-LOCAL-001`
+records the disconnected replacement locally green: focused 117+2, all 283 release contracts,
+typecheck, full lint/reliability/max-lines, and formatting pass. Commit/push this exact isolated
+diagnostic and require fresh native x64/ARM64 proof; SignPath remains deferred.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown

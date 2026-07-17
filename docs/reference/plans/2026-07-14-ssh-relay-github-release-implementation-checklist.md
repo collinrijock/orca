@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: native Windows no-input handle qualification**. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **POSIX EOF CORRECTION NATIVELY GREEN / WINDOWS STANDARD PIPE WITHOUT `-n` NATIVELY RED / OVERLAPPED-STDIN DIAGNOSTIC LOCALLY GREEN — 2026-07-15, Codex implementation owner** — exact correction head `4f57b885d24ad1755a5c863eaf37369208cecedb`, artifact run `29545688003`, and Linux x64/ARM64 jobs `87777401256`/`87777401218` prove the separate no-input facade through live SFTP and restricted no-tar POSIX system SSH with bounded full-size transfer, four-file concurrency, cancellation, and cleanup. Exact diagnostic head `da938a7405d0a6c760979358a6c0a38030d9acaf`, artifact run `29546702916`, and Windows x64/ARM64 jobs `87780486286`/`87780486259` prove that mandatory `-n` confounds inherited and overlapped handles. `E-M6-WINDOWS-NOINPUT-PIPE-NO-N-CI-RED-001` records exact pushed head `daffd545d75570f198db093c3ba054ae1fa033ba`, artifact run `29547488550`, Windows x64/ARM64 jobs `87782833321`/`87782833288`, and independent standard-pipe/no-`-n` timeouts after 8.03/8.04 seconds with `sentinel=false`, `stdoutEnded=true`, termination-only null exit/close codes, zero stderr bytes, and exact profile teardown RED. The same run keeps Linux x64/ARM64 full-size live SFTP and restricted POSIX system SSH green. `E-M6-WINDOWS-NOINPUT-OVERLAPPED-NO-N-LOCAL-001` replaces only the disconnected diagnostic with stdin-only `overlapped`, ordinary stdout/stderr, immediate parent destruction, and no `-n`; focused 117+2, 283-contract, format, typecheck, full lint/reliability/max-lines, diff, and protected-resolver gates pass locally. Commit/push and require fresh exact-head x64/ARM64 proof; do not change production or advance Milestone 6 without both native results. Production runtime bytes still cross authenticated SSH and no product remote downloads anything. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: pre-execution Windows regular-file EOF qualification**. `E-M6-WINDOWS-NOINPUT-OVERLAPPED-NO-N-CI-RED-001` falsifies stdin-only overlapped EOF on exact pushed head `1c391aa851777f36cf81af9adb85d7177d7acff6`, artifact run `29548340927`, Windows x64 job `87785371486`, and Windows ARM64 job `87785371526`. `E-M6-WINDOWS-NOINPUT-REGULAR-FILE-NO-N-LOCAL-001` implements only a newly created zero-length regular-file descriptor that is already at EOF before `CreateProcess` and distinct from `NUL`; commit/push the isolated diagnostic and require exact native x64/ARM64 proof. Do not add a launcher unless this narrower disconnected boundary is also falsified. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
+Session checkpoint: **POSIX EOF CORRECTION NATIVELY GREEN / WINDOWS STANDARD AND OVERLAPPED PIPE EOF WITHOUT `-n` NATIVELY RED / REGULAR-FILE EOF DIAGNOSTIC LOCALLY GREEN — 2026-07-15, Codex implementation owner** — exact correction head `4f57b885d24ad1755a5c863eaf37369208cecedb`, artifact run `29545688003`, and Linux x64/ARM64 jobs `87777401256`/`87777401218` prove the separate no-input facade through live SFTP and restricted no-tar POSIX system SSH with bounded full-size transfer, four-file concurrency, cancellation, and cleanup. Exact diagnostic head `da938a7405d0a6c760979358a6c0a38030d9acaf`, artifact run `29546702916`, and Windows x64/ARM64 jobs `87780486286`/`87780486259` prove that mandatory `-n` confounds inherited and overlapped handles. `E-M6-WINDOWS-NOINPUT-PIPE-NO-N-CI-RED-001` records exact pushed head `daffd545d75570f198db093c3ba054ae1fa033ba`, artifact run `29547488550`, Windows x64/ARM64 jobs `87782833321`/`87782833288`, and independent standard-pipe/no-`-n` timeouts after 8.03/8.04 seconds with `sentinel=false`, `stdoutEnded=true`, termination-only null exit/close codes, zero stderr bytes, and exact profile teardown RED. `E-M6-WINDOWS-NOINPUT-OVERLAPPED-NO-N-CI-RED-001` records exact pushed head `1c391aa851777f36cf81af9adb85d7177d7acff6`, artifact run `29548340927`, Windows x64/ARM64 jobs `87785371486`/`87785371526`, and the same independent timeout shape after 8035.00/8043.47 milliseconds; both exact profile teardowns remain RED. All four non-Windows primary jobs and both Linux oldest-userland supplements remain green. `E-M6-WINDOWS-NOINPUT-REGULAR-FILE-NO-N-LOCAL-001` replaces only the disconnected diagnostic with a newly created zero-length regular-file descriptor already at EOF before `CreateProcess` and distinct from `NUL`; focused 117+2, all 283 release contracts, typecheck, full lint/reliability/max-lines, and formatting pass. Commit/push and require fresh x64/ARM64 proof; do not add a launcher unless this boundary is falsified. Production runtime bytes still cross authenticated SSH and no product remote downloads anything. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -19557,6 +19557,70 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 117 cases with two ex
   require exact-head Windows x64 and ARM64 lifecycle plus exact profile/directory teardown before
   any production handle change.
 
+### E-M6-WINDOWS-NOINPUT-OVERLAPPED-NO-N-CI-RED-001 — overlapped EOF after spawn fails without `-n`
+
+- Date/owner/head/run: 2026-07-15, Codex implementation owner; exact pushed head
+  `1c391aa851777f36cf81af9adb85d7177d7acff6`, artifact run `29548340927`, Windows x64 job
+  `87785371486` on `windows-2022`, and Windows ARM64 job `87785371526` on `windows-11-arm`.
+- Exact log command: `gh api repos/stablyai/orca/actions/jobs/<job-id>/logs | rg -n -C 15
+'ssh_windows_no_input_handle_diagnostic|Windows no-input handle diagnostic failed|profile
+teardown:|UsrClass.dat|overlapped-stdin-eof-no-n|sentinel|stderrBytes'` for each job.
+- Native result: x64 returns `success=false`, `timedOut=true`, `sentinel=false`,
+  `stdoutEnded=true`, `processExit=null`, `channelClosed=true`, `closeCode=null`, and
+  `stderrBytes=0` after 8035.00 milliseconds. ARM64 independently returns the same fields after
+  8043.47 milliseconds. The exit/close fields are termination settlement after the timeout, not
+  remote-command success; both server logs show pinned-key authentication and command-session
+  close.
+- Teardown result: both jobs fail `_Classes` hive unload, retain locked `UsrClass.dat`, and retain
+  the fixture profile directory. The workflow correctly stops before the unchanged product
+  full-size test, so no Windows transport cell is green and no tuple is enabled.
+- Preserved evidence: the same run passes Darwin x64/ARM64 jobs `87785371494`/`87785371589`, Linux
+  x64/ARM64 jobs `87785371505`/`87785371622`, and Linux oldest-userland supplements
+  `87785824909`/`87785824893`. Both Linux primary jobs remain green through target-native build,
+  full-size cache, live SFTP, restricted no-tar POSIX system SSH, cancellation, cleanup, and
+  artifact upload.
+- Interpretation/course correction: standard and overlapped Node pipes both expose their writer
+  until after `CreateProcess`, so neither proves the pre-execution EOF boundary. Before introducing
+  a native launcher, test a newly created zero-length regular-file descriptor as stdin: it is
+  already at EOF before `CreateProcess`, is distinct from `NUL`, and leaves ordinary stdout/stderr
+  capture unchanged. Keep the diagnostic disconnected and require both native architectures.
+- Residual boundary: keep product handles/args, legacy default/fallback, Beta, tuple publication,
+  and SignPath unchanged.
+
+### E-M6-WINDOWS-NOINPUT-REGULAR-FILE-NO-N-LOCAL-001 — pre-execution regular-file EOF diagnostic is locally green
+
+- Date/owner/base/runner: 2026-07-15, Codex implementation owner; uncommitted replacement atop exact
+  overlapped RED head `1c391aa851777f36cf81af9adb85d7177d7acff6` on Apple arm64, macOS 26.2
+  build 25C56, Node 26.5.0, pnpm 10.24.0.
+- Diagnostic boundary: the disconnected Windows live test creates an exclusive zero-length regular
+  file, passes its already-at-EOF descriptor as child stdin before `CreateProcess`, closes the
+  parent descriptor after spawn, keeps stdout/stderr as ordinary pipes, and omits OpenSSH `-n`.
+  The file is distinct from `NUL`; bounded lifecycle fields, 8-second timeout, 10-second hard
+  settlement, explicit stdin-fixture removal evidence, fail-closed workflow order, production
+  args/handles, and the product full-size test remain unchanged.
+- Focused command: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
+src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 117 cases with two declared native
+  skips in 5.52 seconds real; maximum RSS is 153,796,608 bytes and peak footprint is 97,949,576
+  bytes.
+- Release contracts: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+--maxWorkers=1 --reporter=dot config/scripts/ssh-relay-runtime-*.test.mjs` passes 50 files and
+  283/283 cases in 26.00 seconds real; maximum RSS is 195,379,200 bytes and peak footprint is
+  97,818,408 bytes.
+- Static gates: `/usr/bin/time -l pnpm typecheck` passes in 7.28 seconds real with maximum RSS
+  1,211,891,712 bytes and peak footprint 98,342,720 bytes. `/usr/bin/time -l pnpm lint` passes in
+  27.13 seconds real with only the same 26 pre-existing warnings, all 41 reliability gates, and the
+  355-entry max-lines ratchet; maximum RSS is 2,045,526,016 bytes and peak footprint 97,408,808
+  bytes. Purpose-file formatting passes after `oxfmt`.
+- Isolation gates: purpose-file formatting, `git diff --check`, and protected-resolver zero-diff
+  pass. The diagnostic additionally reports and requires removal of its exclusive empty-stdin
+  fixture on a successful native result.
+- Residual boundary: local macOS skips both native live cases. Commit/push and require exact-head
+  Windows x64 and ARM64 lifecycle plus exact profile/directory teardown before any production
+  handle change.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -19615,8 +19679,8 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push the stdin-only overlapped/no-`-n` disconnected diagnostic recorded by
-`E-M6-WINDOWS-NOINPUT-OVERLAPPED-NO-N-LOCAL-001`, then require exact-head Windows x64 and ARM64
+Commit and push only the disconnected zero-length regular-file stdin diagnostic recorded by
+`E-M6-WINDOWS-NOINPUT-REGULAR-FILE-NO-N-LOCAL-001`, then require exact-head Windows x64 and ARM64
 lifecycle plus exact profile/directory teardown. Do not
 change the production Windows handle or check the broad Milestone 6 Windows system-SSH item until
 both architectures select the same console-independent strategy. Do not add an

@@ -1,4 +1,7 @@
 import { spawn } from 'node:child_process'
+import { closeSync, mkdtempSync, openSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
 import { describe, expect, it } from 'vitest'
@@ -7,7 +10,7 @@ import type { SshTarget } from '../../shared/ssh-types'
 import { buildSshArgs } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
 
-type DiagnosticMode = 'overlapped-stdin-eof-no-n'
+type DiagnosticMode = 'regular-file-eof-no-n'
 
 type DiagnosticResult = {
   mode: DiagnosticMode
@@ -19,6 +22,7 @@ type DiagnosticResult = {
   channelClosed: boolean
   closeCode: number | null | 'not-observed'
   stderrBytes: number
+  stdinFixtureRemoved: boolean
   elapsedMs: number
 }
 
@@ -47,15 +51,25 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
   if (!sshPath) {
     throw new Error('Native Windows OpenSSH client is unavailable')
   }
-  const mode: DiagnosticMode = 'overlapped-stdin-eof-no-n'
+  const mode: DiagnosticMode = 'regular-file-eof-no-n'
   const startedAt = performance.now()
-  const child = spawn(sshPath, [...buildSshArgs(createTarget()), 'echo ORCA-SYSTEM-SSH-OK'], {
-    // Why: isolate Windows overlapped stdin without changing output capture
-    // or the production no-input command.
-    stdio: ['overlapped', 'pipe', 'pipe'],
-    windowsHide: true
-  })
-  child.stdin?.destroy()
+  const stdinDirectory = mkdtempSync(join(tmpdir(), 'orca-ssh-empty-stdin-'))
+  const stdinPath = join(stdinDirectory, 'stdin')
+  const stdinFd = openSync(stdinPath, 'wx+')
+  let child: ReturnType<typeof spawn>
+  try {
+    child = spawn(sshPath, [...buildSshArgs(createTarget()), 'echo ORCA-SYSTEM-SSH-OK'], {
+      // Why: a zero-length regular file is at EOF before CreateProcess without
+      // triggering Win32-OpenSSH's NUL-handle bug.
+      stdio: [stdinFd, 'pipe', 'pipe'],
+      windowsHide: true
+    })
+  } catch (error) {
+    closeSync(stdinFd)
+    rmSync(stdinDirectory, { recursive: true, force: true })
+    throw error
+  }
+  closeSync(stdinFd)
 
   return new Promise((resolve, reject) => {
     let stdout = ''
@@ -66,6 +80,14 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
     let closeCode: number | null | 'not-observed' = 'not-observed'
     let timedOut = false
     let settled = false
+    const removeStdinFixture = (): boolean => {
+      try {
+        rmSync(stdinDirectory, { recursive: true, force: true })
+        return true
+      } catch {
+        return false
+      }
+    }
     const finish = (): void => {
       if (settled) {
         return
@@ -73,6 +95,7 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
       settled = true
       clearTimeout(timeout)
       clearTimeout(killTimeout)
+      const stdinFixtureRemoved = removeStdinFixture()
       const sentinel = stdout.includes('ORCA-SYSTEM-SSH-OK')
       resolve({
         mode,
@@ -82,7 +105,8 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
           stdoutEnded &&
           processExit === 0 &&
           channelClosed &&
-          closeCode === 0,
+          closeCode === 0 &&
+          stdinFixtureRemoved,
         timedOut,
         sentinel,
         stdoutEnded,
@@ -90,6 +114,7 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
         channelClosed,
         closeCode,
         stderrBytes,
+        stdinFixtureRemoved,
         elapsedMs: performance.now() - startedAt
       })
     }
@@ -124,8 +149,13 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
       finish()
     })
     child.on('error', (error) => {
+      if (settled) {
+        return
+      }
+      settled = true
       clearTimeout(timeout)
       clearTimeout(killTimeout)
+      removeStdinFixture()
       reject(error)
     })
   })
@@ -133,14 +163,14 @@ async function runDiagnostic(): Promise<DiagnosticResult> {
 
 describe.skipIf(!hasLiveInput)('Windows OpenSSH no-input child-handle diagnostic', () => {
   it(
-    'qualifies overlapped stdin EOF without the Windows null-input option',
+    'qualifies regular-file stdin EOF without the Windows null-input option',
     { timeout: 15_000 },
     async () => {
       expect(process.platform).toBe('win32')
-      const pipeEofNoN = await runDiagnostic()
-      console.log(`ssh_windows_no_input_handle_diagnostic=${JSON.stringify({ pipeEofNoN })}`)
+      const regularFileEofNoN = await runDiagnostic()
+      console.log(`ssh_windows_no_input_handle_diagnostic=${JSON.stringify({ regularFileEofNoN })}`)
 
-      expect(pipeEofNoN.success).toBe(true)
+      expect(regularFileEofNoN.success).toBe(true)
     }
   )
 })

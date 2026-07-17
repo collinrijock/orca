@@ -1651,11 +1651,15 @@
                     simultaneously forced through <code>-n</code>, so those runs do not isolate the
                     child handle. Native x64/arm64 evidence further rejects the upstream-recommended
                     standard-pipe EOF when Windows <code>-n</code> is omitted because Node closes
-                    its parent writer only after <code>CreateProcess</code>. Qualify an overlapped
-                    stdin pipe with ordinary stdout/stderr and no <code>-n</code> as the next
-                    disconnected diagnostic. POSIX retains ignored stdin plus <code>-n</code>;
-                    fixture-owned Windows session processes settle before profile hives are
-                    boundedly unloaded and native profile deletion begins;
+                    its parent writer only after <code>CreateProcess</code>. Exact native x64/arm64
+                    evidence also rejects stdin-only overlapped EOF with ordinary stdout/stderr and
+                    no <code>-n</code>. Before adding a launcher, qualify a newly created
+                    zero-length regular-file descriptor as Windows stdin: it is already at EOF
+                    before <code>CreateProcess</code>, is not <code>NUL</code>, and leaves
+                    stdout/stderr unchanged. Keep this disconnected until both architectures pass
+                    full live transfer and exact teardown. POSIX retains ignored stdin plus
+                    <code>-n</code>; fixture-owned Windows session processes settle before profile
+                    hives are boundedly unloaded and native profile deletion begins;
                     <code>MaxSessions=1</code>; interrupted upload; stale lock
                   </td>
                   <td>
