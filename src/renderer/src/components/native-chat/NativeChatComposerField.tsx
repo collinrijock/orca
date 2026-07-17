@@ -122,8 +122,11 @@ export function NativeChatComposerField({
           <div
             data-native-file-drop-target={NATIVE_FILE_DROP_TARGET.composer}
             className={cn(
-              'rounded-lg border border-input bg-card p-1.5 shadow-xs transition-colors',
-              'focus-within:border-ring dark:bg-input/30'
+              // Why: steady hairline fill (no click border flash); keyboard
+              // focus still shows via focus-visible on the inner textarea.
+              'rounded-lg border border-border p-1.5 shadow-xs',
+              'bg-muted/50 dark:bg-input/40',
+              'has-[:focus-visible]:border-ring'
             )}
           >
             {imageAttachments.length > 0 ? (

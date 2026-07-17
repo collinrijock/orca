@@ -13275,15 +13275,15 @@
         "worktreeNotReady": "Worktree not ready — try again in a moment.",
         "uploadingAttachments": "Uploading {{value0}} file(s) to remote…",
         "model": "Model",
-        "modelWithValue": "Model: {{value0}}",
         "effort": "Effort",
-        "effortWithValue": "Effort: {{value0}}",
         "fastMode": "Fast mode",
         "thinking": "Thinking",
         "options": "Options",
         "sessionOptions": "Session options",
         "chooseInAgentPicker": "Choose in agent picker…",
         "toggleOption": "Toggle {{value0}}",
+        "pillAccessibleName": "{{value0}} {{value1}}",
+        "valueUnknown": "Current value unknown — pick On or Off",
         "sentNotConfirmed": "Sent to the agent — not confirmed",
         "setWhenSessionStarts": "Set when the session starts.",
         "availableAfterSessionStarts": "Available after the session starts.",
@@ -13295,7 +13295,9 @@
           "medium": "Medium",
           "high": "High",
           "xhigh": "Extra high",
-          "max": "Max"
+          "max": "Max",
+          "on": "On",
+          "off": "Off"
         }
       },
       "tool": {

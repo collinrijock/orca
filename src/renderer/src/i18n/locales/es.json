@@ -13252,15 +13252,15 @@
         "worktreeNotReady": "Worktree no está listo — intenta de nuevo en un momento.",
         "uploadingAttachments": "Subiendo {{value0}} archivo(s) al remoto…",
         "model": "Modelo",
-        "modelWithValue": "Modelo: {{value0}}",
         "effort": "Esfuerzo",
-        "effortWithValue": "Esfuerzo: {{value0}}",
         "fastMode": "Modo rápido",
         "thinking": "Razonamiento",
         "options": "Opciones",
         "sessionOptions": "Opciones de sesión",
         "chooseInAgentPicker": "Elegir en el selector del agente…",
         "toggleOption": "Alternar {{value0}}",
+        "pillAccessibleName": "{{value0}} {{value1}}",
+        "valueUnknown": "Valor actual desconocido — elige Activado o Desactivado",
         "sentNotConfirmed": "Enviado al agente — sin confirmar",
         "setWhenSessionStarts": "Configúralo al iniciar la sesión.",
         "availableAfterSessionStarts": "Disponible después de iniciar la sesión.",
@@ -13272,7 +13272,9 @@
           "medium": "Medio",
           "high": "Alto",
           "xhigh": "Muy alto",
-          "max": "Máximo"
+          "max": "Máximo",
+          "on": "Activado",
+          "off": "Desactivado"
         }
       },
       "tool": {
