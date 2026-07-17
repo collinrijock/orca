@@ -520,15 +520,20 @@ function shouldHandleUpdaterErrorEvent(): boolean {
   )
 }
 
-function sendErrorStatus(message: string, userInitiated?: boolean): void {
+function sendErrorStatus(message: string, userInitiated?: boolean, retryAction?: 'install'): void {
   if (
     currentStatus.state === 'error' &&
     currentStatus.message === message &&
-    currentStatus.userInitiated === userInitiated
+    currentStatus.userInitiated === userInitiated &&
+    currentStatus.retryAction === retryAction
   ) {
     return
   }
-  sendStatus({ state: 'error', message, userInitiated })
+  sendStatus(
+    retryAction
+      ? { state: 'error', message, userInitiated, retryAction }
+      : { state: 'error', message, userInitiated }
+  )
 }
 
 function getKnownReleaseUrl(): string | undefined {
@@ -594,7 +599,9 @@ async function performQuitAndInstall(): Promise<void> {
       }
     )
     sendErrorStatus(
-      `Another running copy of Orca is blocking the update (PID ${conflictingPids.join(', ')}) — possibly one launched by an agent or test run. Quit it, then install the update again.`
+      `Another running copy of Orca is blocking the update (PID ${conflictingPids.join(', ')}) — possibly one launched by an agent or test run. Quit it, then install the update again.`,
+      undefined,
+      'install'
     )
     return
   }

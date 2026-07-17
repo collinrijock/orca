@@ -183,7 +183,8 @@ describe('updater mac install handoff', () => {
           'updater:status',
           expect.objectContaining({
             state: 'error',
-            message: expect.stringContaining('PID 4242')
+            message: expect.stringContaining('PID 4242'),
+            retryAction: 'install'
           })
         )
       })

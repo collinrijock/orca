@@ -1294,6 +1294,10 @@ describe('updater', () => {
 
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
     expect(isQuittingForUpdate()).toBe(false)
+    if (process.platform === 'darwin') {
+      expect(writeHandoffMarkerMock).toHaveBeenCalledWith('/tmp/orca-test-user-data', '1.0.51')
+      expect(clearHandoffMarkerMock).toHaveBeenCalledWith('/tmp/orca-test-user-data')
+    }
     // Why: destructive prep runs only after quitAndInstall returns still in
     // progress; sync recovery clears flags first so PTYs stay alive.
     expect(killAllPtyMock).not.toHaveBeenCalled()

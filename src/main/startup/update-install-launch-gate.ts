@@ -68,7 +68,9 @@ function readUpdateInstallHandoffMarker(userDataPath: string): UpdateInstallHand
 }
 
 function readProcessCommandList(): string {
-  return execFileSync('ps', ['-xo', 'command='], {
+  // Why: ShipIt can run as root when the app bundle is not user-writable.
+  // The launch gate must see that privileged installer too.
+  return execFileSync('ps', ['-axo', 'command='], {
     encoding: 'utf8',
     timeout: PROCESS_LIST_TIMEOUT_MS,
     maxBuffer: PROCESS_LIST_MAX_BYTES
@@ -91,7 +93,10 @@ export function isBundleShipItRunning(executablePath: string, processCommandList
   )
   // Why: anchor on argv[0]. A shell or grep merely mentioning the ShipIt path
   // in its arguments must not read as a live installer.
-  return processCommandList.split('\n').some((line) => line.trimStart().startsWith(shipItPath))
+  return processCommandList.split('\n').some((line) => {
+    const command = line.trimStart()
+    return command === shipItPath || command.startsWith(`${shipItPath} `)
+  })
 }
 
 export type UpdateInstallLaunchGateDeps = {

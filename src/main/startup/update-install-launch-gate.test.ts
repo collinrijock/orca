@@ -1,7 +1,7 @@
 import { mkdtempSync, existsSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   UPDATE_INSTALL_HANDOFF_MARKER_FILE,
   UPDATE_INSTALL_HANDOFF_MAX_AGE_MS,
@@ -11,9 +11,12 @@ import {
   writeUpdateInstallHandoffMarker
 } from './update-install-launch-gate'
 
+const execFileSyncMock = vi.hoisted(() => vi.fn())
+vi.mock('node:child_process', () => ({ execFileSync: execFileSyncMock }))
+
 const APP_BIN = '/Applications/Orca.app/Contents/MacOS/Orca'
-const SHIPIT_ROW =
-  '/Applications/Orca.app/Contents/Frameworks/Squirrel.framework/Resources/ShipIt com.stablyai.orca.ShipIt'
+const SHIPIT_PATH = '/Applications/Orca.app/Contents/Frameworks/Squirrel.framework/Resources/ShipIt'
+const SHIPIT_ROW = `${SHIPIT_PATH} com.stablyai.orca.ShipIt`
 
 const tempDirs: string[] = []
 
@@ -28,6 +31,7 @@ function markerFile(userData: string): string {
 }
 
 afterEach(() => {
+  execFileSyncMock.mockReset()
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -45,9 +49,33 @@ describe('isBundleShipItRunning', () => {
     const grepRow = `/bin/zsh -c grep ${SHIPIT_ROW}`
     expect(isBundleShipItRunning(APP_BIN, grepRow)).toBe(false)
   })
+
+  it('does not accept another executable whose path only shares the ShipIt prefix', () => {
+    expect(isBundleShipItRunning(APP_BIN, `${SHIPIT_PATH}-backup update`)).toBe(false)
+  })
 })
 
 describe('shouldDeferLaunchForUpdateInstall', () => {
+  it('reads all users so a privileged ShipIt install is visible', () => {
+    const userData = makeUserData()
+    writeUpdateInstallHandoffMarker(userData, '1.0.51')
+    execFileSyncMock.mockReturnValue(SHIPIT_ROW)
+
+    const defer = shouldDeferLaunchForUpdateInstall({
+      isPackaged: true,
+      userDataPath: userData,
+      appVersion: '1.0.51',
+      deps: { platform: 'darwin', executablePath: APP_BIN }
+    })
+
+    expect(defer).toBe(true)
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      'ps',
+      ['-axo', 'command='],
+      expect.objectContaining({ encoding: 'utf8' })
+    )
+  })
+
   it('defers a same-version launch while this bundle’s installer is alive', () => {
     const userData = makeUserData()
     writeUpdateInstallHandoffMarker(userData, '1.0.51')
