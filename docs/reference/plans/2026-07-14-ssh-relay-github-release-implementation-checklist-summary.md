@@ -9,9 +9,13 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — bounded verbose
-Win32-OpenSSH lifecycle capture locally green; exact-head native proof required, 2026-07-16, Codex
-implementation owner.**
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — explicit fixture
+host-key trust correction in progress, 2026-07-16, Codex implementation owner.** Exact head
+`b24dda744892c2ee43a3fb345d889ba97adb4239`, run `29554073553`, and Windows x64/ARM64 jobs
+`87802525440`/`87802525442` prove the bounded verbose diagnostic and show both clients stop before
+authentication while looking for the runner account's missing default `known_hosts`. The next
+single-variable correction passes the fixture's exact pinned file with strict checking; production
+SSH arguments and every product/default path remain unchanged.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the portable-fixture
 correction locally green: the no-Orca-publication workflow oracle permits the one exact pinned
 Microsoft fixture release URL while Orca release URLs, `gh release`, and `contents: write` remain
@@ -225,6 +229,22 @@ output replay; the live suite uses 6 seconds, `-vvv`, outer 8/10-second safety c
 trace tail. Focused 119/119, all 285 release contracts, typecheck, full lint/reliability/max-lines,
 formatting, diff, and protected-resolver isolation pass with honest native skips. Commit/push only
 this artifact and require x64/ARM64 phase classification before selecting ConPTY or another client.
+Exact head `b24dda744892c2ee43a3fb345d889ba97adb4239`, run `29554073553`, and Windows x64/ARM64
+jobs `87802525440`/`87802525442` prove 101 files/863 cases with 19 skips plus the internal timeout,
+replay, and job-termination contracts. Both 6111.6731/6395.98-millisecond traces stop before
+authentication at `hostkeys_find_by_key_hostfile`: Win32-OpenSSH looks under the runner account
+instead of the isolated fixture client home. `E-M6-WINDOWS-VERBOSE-LIFECYCLE-CAPTURE-CI-RED-001`
+therefore replaces the prior session-close hypothesis with one narrower correction: pass only the
+fixture's exact pinned `known_hosts` with strict checking. Both profile teardowns still catch locked
+`UsrClass.dat`; all four non-Windows jobs and both Linux supplements pass.
+`E-M6-WINDOWS-DIAGNOSTIC-HOST-TRUST-CORRECTION-LOCAL-001` records that correction locally green:
+the purpose contract proves `-vvv`, `StrictHostKeyChecking=yes`, and the exact fixture
+`UserKnownHostsFile` occur before `--`, rejects `StrictHostKeyChecking=no`, and compares against an
+unchanged production argument vector. Focused 120/120, all 285 release contracts, typecheck, full
+lint/reliability/max-lines, formatting, diff, and protected-resolver isolation pass with honest
+native/live skips. Commit/push only this runner diagnostic and require fresh x64/ARM64 strict-trust,
+authentication, natural settlement, full-size transfer, and exact teardown proof. Production,
+Beta, fallback, tuple, publication, default, and signing paths remain untouched.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown

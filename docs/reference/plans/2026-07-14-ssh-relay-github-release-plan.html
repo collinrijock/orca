@@ -1669,19 +1669,23 @@
                     queued console EOF before child creation, and shared that console with the SSH
                     child while retaining private output pipes, exact handle inheritance, job
                     ownership, and bounded cancellation. Native x64/arm64 prove the console handle
-                    and zero-byte cooked EOF but the live client still hangs, falsifying stdin alone.
-                    The next one-variable diagnostic retained that console stdin and replaced only
-                    child stdout/stderr pipes with unique delete-on-close regular files under an
-                    explicit per-stream byte ceiling, bounded polling/cancellation, incremental
+                    and zero-byte cooked EOF but the live client still hangs, falsifying stdin
+                    alone. The next one-variable diagnostic retained that console stdin and replaced
+                    only child stdout/stderr pipes with unique delete-on-close regular files under
+                    an explicit per-stream byte ceiling, bounded polling/cancellation, incremental
                     post-exit replay, and exact cleanup. Native x64/arm64 prove those contracts, but
                     the live client still hangs with the same lifecycle tuple, falsifying redirected
-                    output pipes as the remaining cause. Before selecting ConPTY or another SSH
-                    client, the runner-only launcher must boundedly terminate its own diagnostic
-                    child and replay an exact verbose OpenSSH trace to classify the stuck client
-                    phase. Do not package, sign, or add a product caller. POSIX retains ignored
-                    stdin plus <code>-n</code>; fixture-owned Windows session processes settle
-                    before profile hives are boundedly unloaded and native profile deletion begins;
-                    <code>MaxSessions=1</code>; interrupted upload; stale lock
+                    output pipes as the remaining cause. The bounded verbose trace on native
+                    x64/arm64 then shows that Win32-OpenSSH ignores the workflow's overridden
+                    profile variables for host-key discovery and stops before authentication while
+                    looking for the runner account's missing default <code>known_hosts</code>.
+                    Before selecting ConPTY or another SSH client, pass only the fixture's exact
+                    pinned <code>known_hosts</code> path with strict host-key checking and require
+                    both architectures to pass. Do not weaken trust, package, sign, or add a product
+                    caller. POSIX retains ignored stdin plus <code>-n</code>; fixture-owned Windows
+                    session processes settle before profile hives are boundedly unloaded and native
+                    profile deletion begins; <code>MaxSessions=1</code>; interrupted upload; stale
+                    lock
                   </td>
                   <td>
                     Bundled Node hashes the full staged tree before sentinel write;

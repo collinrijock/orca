@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-16<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **Locally green / bounded verbose client-lifecycle native proof required — 2026-07-16, Codex implementation owner**. `E-M6-WINDOWS-VERBOSE-LIFECYCLE-CAPTURE-LOCAL-001` records the runner-temp internal deadline, job settlement, bounded replay, and verbose trace-tail contracts locally green. Commit/push only this diagnostic and require both native architectures to identify the last completed client phase before selecting ConPTY or another client. Every production/default SSH path remains disconnected. Real Apple/SignPath rehearsals remain deferred.<br>
-Session checkpoint: **PRIVATE CONSOLE EOF PROVEN / PRIVATE OUTPUT PIPES FALSIFIED / BOUNDED REGULAR OUTPUT ACTIVE — 2026-07-16, Codex implementation owner** — exact head `5841b12bc94ecd1027e507e4b741e09fcb0a093d`, run `29552101635`, and x64/ARM64 jobs `87796673326`/`87796673353` both pass 101 files/860 cases with 19 skips, legacy compilation, real-console qualification/EOF, argv/binary/exit/handle-exclusion/cancellation, unchanged full-runtime reproducibility, and full-size cache gates. Live diagnostics still time out after 8025.1553/8034.6943 milliseconds with ended stdout, closed channel, no sentinel/process exit, and zero stderr; both exact teardowns catch locked `UsrClass.dat`. All four non-Windows primary jobs and both Linux supplements pass. No product caller, full-size Windows transfer claim, upload, default/fallback, Beta, tuple publication, or signing behavior changed.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — explicit fixture host-key trust correction, 2026-07-16, Codex implementation owner**. Exact head `b24dda744892c2ee43a3fb345d889ba97adb4239`, run `29554073553`, and x64/ARM64 jobs `87802525440`/`87802525442` prove the internal deadline, job settlement, bounded replay, and verbose trace capture. Both clients stop before authentication while resolving the runner account's missing default `known_hosts`; Win32-OpenSSH ignored the workflow's overridden profile variables. Pass only the fixture's exact pinned `known_hosts` path with strict checking, keep production arguments unchanged, and require fresh native proof before selecting ConPTY or another client. Every production/default SSH path remains disconnected. Real Apple/SignPath rehearsals remain deferred.<br>
+Session checkpoint: **VERBOSE TRACE CLASSIFIED / FIXTURE TRUST PATH ACTIVE — 2026-07-16, Codex implementation owner** — x64/ARM64 pass 101 files/863 cases with 19 skips, legacy compilation, launcher internal-timeout/replay/job-termination, unchanged runtime reproducibility, and full-size cache gates. Their 6111.6731/6395.98-millisecond traces both show `C:\\Users\\runneradmin\\.ssh\\known_hosts` lookup and stop at `hostkeys_find_by_key_hostfile` before authentication; lifecycle is `sentinel=false`, `stdoutEnded=true`, `processExit=1`, `channelClosed=true`, `closeCode=1`, and `stderrBytes=7923`. Both exact teardowns still catch locked `UsrClass.dat`. All four non-Windows primary jobs and both Linux supplements pass. No product caller, full-size Windows transfer claim, upload, default/fallback, Beta, tuple publication, or signing behavior changed.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -19867,15 +19867,15 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 119 runnable cases wi
 - Syntax/focused evidence: `node --check config/scripts/build-windows-ssh-no-input-launcher.mjs`
   and `node --check config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs` pass.
   `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
-  src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
-  src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
-  src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
-  config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
-  config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 119 runnable cases with nine declared
+src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
+src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
+config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 119 runnable cases with nine declared
   native/live skips in 2.59 seconds real; maximum RSS is 171,491,328 bytes and peak footprint is
   97,064,696 bytes.
 - Release contracts: `pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
-  --reporter=dot config/scripts/ssh-relay-runtime-*.test.mjs` passes 51 files and 285 runnable cases
+--reporter=dot config/scripts/ssh-relay-runtime-*.test.mjs` passes 51 files and 285 runnable cases
   with seven declared Windows skips in 13.29 seconds.
 - Static gates: `/usr/bin/time -l pnpm typecheck` passes in 2.86 seconds real with
   1,247,576,064-byte maximum RSS and 97,343,320-byte peak footprint. `/usr/bin/time -l pnpm lint`
@@ -19883,7 +19883,7 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 119 runnable cases wi
   355-entry max-lines ratchet; maximum RSS is 2,044,805,120 bytes and peak footprint is 97,163,000
   bytes. Purpose-file formatting and `git diff --check` pass;
   `git diff --exit-code HEAD -- src/main/ssh/ssh-remote-node-resolution.ts
-  src/main/ssh/ssh-remote-node-resolution.test.ts` is empty.
+src/main/ssh/ssh-remote-node-resolution.test.ts` is empty.
 - Residual boundary: local source contracts do not prove legacy .NET Framework compilation,
   delete-on-close behavior, overflow settlement, binary replay, job cancellation, live OpenSSH, or
   exact fixture teardown on Windows. Commit and push only this disconnected package, then require
@@ -19942,11 +19942,11 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 119 runnable cases wi
   and external-cancellation cases remain. The new native case is honestly skipped locally.
 - Syntax/focused evidence: both launcher scripts pass `node --check`.
   `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
-  src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
-  src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
-  src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
-  config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
-  config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 119 runnable cases with ten declared
+src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
+src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
+config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 119 runnable cases with ten declared
   native/live skips in 2.69 seconds real; maximum RSS is 171,212,800 bytes and peak footprint is
   97,179,456 bytes.
 - Release/static evidence: the unquoted release-contract command passes 51 files and 285 runnable
@@ -19959,6 +19959,74 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 119 runnable cases wi
   settlement, output replay, or useful OpenSSH verbose content on Windows. Commit/push this isolated
   package and require exact-head x64/ARM64 evidence. Do not select ConPTY, another client, a product
   caller, Beta, fallback, tuple, publication, default, signing, or SignPath behavior from local proof.
+
+### E-M6-WINDOWS-VERBOSE-LIFECYCLE-CAPTURE-CI-RED-001 — native trace exposes missing fixture host-key path
+
+- Date/owner/source/run: 2026-07-16, Codex implementation owner; exact head
+  `b24dda744892c2ee43a3fb345d889ba97adb4239`, artifact run
+  [29554073553](https://github.com/stablyai/orca/actions/runs/29554073553), Windows x64 job
+  [87802525440](https://github.com/stablyai/orca/actions/runs/29554073553/job/87802525440) on
+  `windows-2022`, and native ARM64 job
+  [87802525442](https://github.com/stablyai/orca/actions/runs/29554073553/job/87802525442) on
+  `windows-11-arm64`; both use Node 24.18.0.
+- Preserved gates: both Windows jobs pass legacy .NET launcher compilation and 101 files/863
+  runnable cases with 19 declared skips, including internal diagnostic timeout, exact replay,
+  job-owned termination, console EOF, argv/binary/exit, output overflow/cleanup, unrelated-handle
+  exclusion, external cancellation, clean-build identity, runtime smoke, and both full-size cache
+  gates. Linux x64/ARM64 jobs `87802525448`/`87802525441`, Darwin x64/ARM64 jobs
+  `87802525450`/`87802525446`, and Linux oldest-userland supplements
+  `87803014758`/`87803014770` pass at the same exact head.
+- Native lifecycle evidence: x64 exits after 6111.6731 ms and ARM64 after 6395.98 ms. Both report
+  `timedOut=false`, `sentinel=false`, `stdoutEnded=true`, `processExit=1`, `channelClosed=true`,
+  `closeCode=1`, and `stderrBytes=7923`. The false outer-timeout field is expected: the new internal
+  6,000 ms launcher deadline terminates and settles the owned job, replays the bounded trace, and
+  returns exit 1 before the 8,000/10,000 ms external safety ceilings.
+- Trace classification: both stock Win32-OpenSSH 9.5 clients establish TCP, complete key exchange,
+  receive the fixture's Ed25519 host key, and then try
+  `C:\Users\runneradmin\.ssh\known_hosts`. They stop at `hostkeys_find_by_key_hostfile` because that
+  default file is absent. The workflow-created pinned file is instead under the isolated
+  `ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_CLIENT_HOME`. Win32-OpenSSH therefore ignored the step's
+  overridden `HOME`/`USERPROFILE` for host-key discovery. Earlier server authentication/session
+  log lines came from the fixture readiness probe and do not prove this diagnostic authenticated.
+- Teardown/residual: both jobs still fail visibly on the owned fixture profile's locked
+  `UsrClass.dat`; the full-size Windows transfer correctly remains unexecuted after the diagnostic.
+  This result does not justify ConPTY or an alternate client. The next single-variable correction
+  must pass only the fixture's exact pinned `known_hosts` path with `StrictHostKeyChecking=yes`,
+  never weaken trust, and keep production SSH argument construction unchanged.
+
+### E-M6-WINDOWS-DIAGNOSTIC-HOST-TRUST-CORRECTION-LOCAL-001 — exact pinned trust path is locally green
+
+- Date/owner/base/runner: 2026-07-16, Codex implementation owner; uncommitted runner-only test
+  correction atop exact verbose-trace head `b24dda744892c2ee43a3fb345d889ba97adb4239` on Apple arm64,
+  macOS 26.2 build 25C56, Node 26.5.0, and pnpm 10.24.0.
+- Boundary: the live diagnostic now requires
+  `ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_CLIENT_HOME`, builds its exact fixture file with
+  `path.join(clientHome, '.ssh', 'known_hosts')`, and inserts `-vvv`,
+  `StrictHostKeyChecking=yes`, and `UserKnownHostsFile=<exact fixture path>` before OpenSSH's `--`
+  separator. The purpose contract compares the complete diagnostic vector with an independently
+  built production vector, rejects `StrictHostKeyChecking=no`, and proves connection reuse and all
+  production arguments are unchanged.
+- Syntax/focused evidence: both launcher scripts pass `node --check`.
+  `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-system-fallback.test.ts
+src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
+src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
+config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 120 runnable cases with ten declared
+  native/live skips in 3.13 seconds real; maximum RSS is 174,571,520 bytes and peak footprint is
+  97,113,848 bytes.
+- Release/static evidence: the unquoted release-contract command passes 51 files and 285 runnable
+  cases with eight declared Windows skips in 16.23 seconds; maximum RSS is 196,100,096 bytes and
+  peak footprint is 97,179,360 bytes. `/usr/bin/time -l pnpm typecheck` passes in 3.38 seconds real
+  with 1,208,680,448-byte maximum RSS and 97,031,952-byte peak footprint. `/usr/bin/time -l pnpm
+lint` passes in 18.59 seconds real with the 26 existing warnings, all 41 reliability gates, and
+  the 355-entry max-lines ratchet; maximum RSS is 2,027,831,296 bytes and peak footprint is
+  97,392,520 bytes.
+- Residual boundary: local execution does not prove the fixture path is accepted by Win32-OpenSSH,
+  authentication completes, the launcher exits naturally, full-size transfer runs, or the fixture
+  profile tears down. Commit/push only this correction and require exact-head x64/ARM64 evidence.
+  No production caller, Beta, fallback, tuple, publication, default, signing, or SignPath behavior
+  is authorized by this local proof.
 
 ## Accepted Gaps
 
@@ -20018,12 +20086,12 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push only the bounded internal-timeout and verbose-output capture recorded by
-`E-M6-WINDOWS-VERBOSE-LIFECYCLE-CAPTURE-LOCAL-001`, then require exact-head Windows x64 and
-ARM64 legacy-compiler, launcher-timeout settlement, verbose-client phase classification, and exact
-profile/directory teardown evidence. Do not
-change the production Windows handle or check the broad Milestone 6 Windows system-SSH item until
-both architectures select the same console-independent strategy. Do not add an
+Commit and push only the explicit diagnostic fixture-trust correction recorded by
+`E-M6-WINDOWS-DIAGNOSTIC-HOST-TRUST-CORRECTION-LOCAL-001`, then require exact-head Windows x64 and
+ARM64 legacy-compiler, launcher, strict host-key authentication, natural client settlement,
+full-size transfer, and exact profile/directory teardown evidence. Do not change the production
+Windows handle or check the broad Milestone 6 Windows system-SSH item until both architectures pass
+the same console-independent strategy. Do not add an
 Electron/startup/product importer, per-target mode wiring, fallback, tuple
 enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets
