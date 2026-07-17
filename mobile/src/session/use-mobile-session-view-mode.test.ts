@@ -3,7 +3,6 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   loadDefaultSessionView,
-  loadSessionViewOverrides,
   readSessionViewOverridesPreference,
   updateSessionViewOverride,
   type MobileSessionView
@@ -44,7 +43,6 @@ vi.mock('expo-router', async () => {
 
 vi.mock('../storage/session-view-preferences', () => ({
   loadDefaultSessionView: vi.fn(),
-  loadSessionViewOverrides: vi.fn(),
   readSessionViewOverridesPreference: vi.fn(),
   updateSessionViewOverride: vi.fn()
 }))
@@ -56,7 +54,6 @@ describe('useMobileSessionViewMode', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     vi.mocked(loadDefaultSessionView).mockReset().mockResolvedValue('terminal')
-    vi.mocked(loadSessionViewOverrides).mockReset().mockResolvedValue(new Map())
     vi.mocked(readSessionViewOverridesPreference)
       .mockReset()
       .mockResolvedValue({ overrides: new Map(), loaded: true })
@@ -208,6 +205,35 @@ describe('useMobileSessionViewMode', () => {
     expect(controller?.isTabChatView('new-tab')).toBe(true)
   })
 
+  it('toggles from the fail-closed view while overrides load under a chat default', async () => {
+    const overridesLoad = deferred<Map<string, MobileSessionView>>()
+    vi.mocked(loadDefaultSessionView).mockResolvedValue('chat')
+    vi.mocked(readSessionViewOverridesPreference).mockReturnValue(
+      overridesLoad.promise.then((overrides) => ({ overrides, loaded: true }))
+    )
+    function Harness(): null {
+      controller = useMobileSessionViewMode({ hostId: 'h', worktreeId: 'w' })
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(controller?.isTabChatView('new-tab')).toBe(false)
+    act(() => controller?.toggleTabChatView('new-tab'))
+
+    expect(updateSessionViewOverride).toHaveBeenCalledWith('h', 'w', 'new-tab', 'chat')
+    expect(controller?.isTabChatView('new-tab')).toBe(true)
+
+    await act(async () => {
+      overridesLoad.resolve(new Map())
+      await overridesLoad.promise
+      await Promise.resolve()
+    })
+  })
+
   it('submits rapid mutations in event order', async () => {
     await mount({ defaultView: 'terminal' })
     act(() => controller?.toggleTabChatView('t1'))
@@ -219,6 +245,15 @@ describe('useMobileSessionViewMode', () => {
 
   it('reconciles the latest optimistic override when persistence fails', async () => {
     vi.mocked(updateSessionViewOverride).mockRejectedValue(new Error('storage unavailable'))
+    vi.mocked(readSessionViewOverridesPreference)
+      .mockResolvedValueOnce({
+        overrides: new Map<string, MobileSessionView>([['t1', 'terminal']]),
+        loaded: true
+      })
+      .mockResolvedValueOnce({
+        overrides: new Map<string, MobileSessionView>([['t1', 'terminal']]),
+        loaded: true
+      })
     await mount({
       defaultView: 'terminal',
       overrides: new Map<string, MobileSessionView>([['t1', 'terminal']])
@@ -231,8 +266,7 @@ describe('useMobileSessionViewMode', () => {
     })
 
     expect(controller?.isTabChatView('t1')).toBe(false)
-    expect(readSessionViewOverridesPreference).toHaveBeenCalledTimes(1)
-    expect(loadSessionViewOverrides).toHaveBeenCalledTimes(1)
+    expect(readSessionViewOverridesPreference).toHaveBeenCalledTimes(2)
   })
 
   it('does not let an older failed override roll back a newer choice', async () => {
@@ -241,7 +275,9 @@ describe('useMobileSessionViewMode', () => {
       .mockRejectedValueOnce(new Error('storage unavailable'))
       .mockResolvedValueOnce(undefined)
     await mount({ defaultView: 'terminal' })
-    vi.mocked(loadSessionViewOverrides).mockReturnValueOnce(recoveryLoad.promise)
+    vi.mocked(readSessionViewOverridesPreference).mockReturnValueOnce(
+      recoveryLoad.promise.then((overrides) => ({ overrides, loaded: true }))
+    )
 
     await act(async () => {
       controller?.toggleTabChatView('t1')
@@ -257,6 +293,30 @@ describe('useMobileSessionViewMode', () => {
 
     expect(controller?.isTabChatView('t1')).toBe(false)
     expect(updateSessionViewOverride).toHaveBeenNthCalledWith(2, 'h', 'w', 't1', 'terminal')
+  })
+
+  it('fails closed when both an override write and its recovery read fail', async () => {
+    vi.mocked(loadDefaultSessionView).mockResolvedValue('chat')
+    vi.mocked(updateSessionViewOverride).mockRejectedValue(new Error('storage unavailable'))
+    vi.mocked(readSessionViewOverridesPreference)
+      .mockResolvedValueOnce({
+        overrides: new Map<string, MobileSessionView>([['t1', 'terminal']]),
+        loaded: true
+      })
+      .mockResolvedValueOnce({ overrides: new Map(), loaded: false })
+    await mount({
+      defaultView: 'chat',
+      overrides: new Map<string, MobileSessionView>([['t1', 'terminal']])
+    })
+
+    await act(async () => {
+      controller?.toggleTabChatView('t1')
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(controller?.isTabChatView('t1')).toBe(false)
+    expect(readSessionViewOverridesPreference).toHaveBeenCalledTimes(2)
   })
 
   it('finishes an early toggle save after the route unmounts', async () => {
@@ -300,7 +360,6 @@ describe('useMobileSessionViewMode', () => {
     })
 
     expect(readSessionViewOverridesPreference).toHaveBeenCalledTimes(1)
-    expect(loadSessionViewOverrides).not.toHaveBeenCalled()
   })
 
   it('fails closed to terminal when overrides cannot be read under a chat default', async () => {

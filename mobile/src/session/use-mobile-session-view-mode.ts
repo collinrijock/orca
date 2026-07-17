@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import {
   loadDefaultSessionView,
-  loadSessionViewOverrides,
   readSessionViewOverridesPreference,
   updateSessionViewOverride,
   type MobileSessionView,
@@ -154,7 +153,8 @@ export function useMobileSessionViewMode(args: {
       const overrides = new Map(currentScope.overrides)
       // Flip from the tab's effective view (its override, else the default), so
       // a tab following a chat default can still be pinned back to terminal.
-      const currentlyChat = (overrides.get(tabId) ?? defaultViewRef.current) === 'chat'
+      const fallbackView = currentScope.loaded ? defaultViewRef.current : 'terminal'
+      const currentlyChat = (overrides.get(tabId) ?? fallbackView) === 'chat'
       const nextView = currentlyChat ? 'terminal' : 'chat'
       overrides.set(tabId, nextView)
       const next = { ...currentScope, overrides }
@@ -171,7 +171,7 @@ export function useMobileSessionViewMode(args: {
         if (!mountedRef.current || viewOverridesRuntimeRef.current !== runtime) {
           return
         }
-        const persisted = await loadSessionViewOverrides(hostId, worktreeId)
+        const preference = await readSessionViewOverridesPreference(hostId, worktreeId)
         // Why: a failed older write must not roll back a newer choice for this tab.
         if (
           !mountedRef.current ||
@@ -180,10 +180,14 @@ export function useMobileSessionViewMode(args: {
         ) {
           return
         }
-        const reconciled = new Map(runtime.currentOverrides)
-        const persistedView = persisted.get(tabId)
-        if (persistedView) {
-          reconciled.set(tabId, persistedView)
+        // Why: if recovery is also unreadable, fail closed instead of treating an
+        // unknown store as empty or restoring an earlier optimistic mutation.
+        const reconciled = preference.loaded
+          ? mergeOverrides(preference.overrides, runtime.currentOverrides)
+          : new Map(runtime.currentOverrides)
+        const recoveredOverride = preference.loaded ? preference.overrides.get(tabId) : 'terminal'
+        if (recoveredOverride) {
+          reconciled.set(tabId, recoveredOverride)
         } else {
           reconciled.delete(tabId)
         }
@@ -192,7 +196,7 @@ export function useMobileSessionViewMode(args: {
         if (!isOverrideScope(latest, hostId, worktreeId)) {
           return
         }
-        const reconciledState = { ...latest, overrides: reconciled }
+        const reconciledState = { ...latest, overrides: reconciled, loaded: preference.loaded }
         viewOverridesStateRef.current = reconciledState
         setViewOverridesState(reconciledState)
       })
