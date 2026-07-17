@@ -2875,6 +2875,9 @@ export type GlobalSettings = {
   /** Why: disabling must persist so startup does not reinstall global agent
    *  hook entries right after the user removes them from Settings or CLI. */
   agentStatusHooksEnabled: boolean
+  /** Dismissed freshness tuples grant no write authority; they only keep the
+   *  same exact official placement/revision from nudging more than once. */
+  dismissedSkillFreshnessNudges?: string[]
   /** Why: generated tab titles are semantic but subjective, so they stay opt-in
    *  and manual renames remain the stronger user intent. */
   tabAutoGenerateTitle: boolean

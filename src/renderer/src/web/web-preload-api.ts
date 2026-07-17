@@ -35,6 +35,7 @@ import type {
   WorkspaceSessionState
 } from '../../../shared/types'
 import type { SkillDiscoveryResult } from '../../../shared/skills'
+import type { SkillFreshnessInventory } from '../../../shared/skill-freshness'
 import type { SshConnectionState, SshTarget } from '../../../shared/ssh-types'
 import {
   getDefaultOnboardingState,
@@ -2743,7 +2744,16 @@ function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
         skills: [],
         sources: [],
         scannedAt: Date.now()
-      }))
+      })),
+    // Why: browser clients have no local skill homes, and remote-host
+    // freshness stays disabled until its update rail has equivalent coverage.
+    freshnessInventory: (): Promise<SkillFreshnessInventory> =>
+      Promise.resolve({
+        schemaVersion: 1,
+        installations: [],
+        eligibleUpdateNames: [],
+        scannedAt: Date.now()
+      })
   }
 }
 
