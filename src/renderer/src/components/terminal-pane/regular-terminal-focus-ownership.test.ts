@@ -154,12 +154,13 @@ describe('regular terminal focus ownership', () => {
     })
 
     expect(synced).toBe(true)
-    expect(syncFocused).toHaveBeenCalledWith(true)
+    expect(syncFocused).not.toHaveBeenCalled()
     // Why: reclaim is deferred so a newer focus owner during reactivation wins.
     expect(focus).not.toHaveBeenCalled()
     for (const run of scheduled) {
       run()
     }
+    expect(syncFocused).toHaveBeenCalledWith(true)
     expect(focus).toHaveBeenCalledOnce()
     expect(document.activeElement).toBe(helper)
   })
@@ -220,6 +221,7 @@ describe('regular terminal focus ownership', () => {
       syncFocused
     })
     document.body.focus()
+    syncFocused.mockClear()
     focus.mockClear()
     const scheduled: (() => void)[] = []
 
@@ -238,6 +240,7 @@ describe('regular terminal focus ownership', () => {
     }
 
     expect(focus).not.toHaveBeenCalled()
+    expect(syncFocused).toHaveBeenCalledWith(false)
     expect(document.activeElement).toBe(outside)
   })
 
@@ -355,6 +358,7 @@ describe('regular terminal focus ownership', () => {
       run()
     }
     expect(focus).not.toHaveBeenCalled()
+    expect(syncFocused).toHaveBeenLastCalledWith(false)
     expect(document.activeElement).toBe(outside)
   })
 

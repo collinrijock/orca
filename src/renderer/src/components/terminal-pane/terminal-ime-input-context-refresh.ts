@@ -3,8 +3,16 @@ export type TerminalImeInputContextRefocusScheduler = (callback: () => void) => 
 export type TerminalImeInputContextRefreshOptions = {
   /** Override the macOS check (tests). Defaults to the navigator user agent. */
   isMac?: boolean
+  /** Called when a newer focus owner prevents the scheduled refocus. */
+  onRefocusSkipped?: () => void
   /** Override the refocus scheduler (tests). Defaults to requestAnimationFrame. */
   scheduleRefocus?: TerminalImeInputContextRefocusScheduler
+}
+
+const refreshingHelpers = new WeakSet<HTMLElement>()
+
+export function isTerminalImeInputContextRefreshing(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && refreshingHelpers.has(target)
 }
 
 function isMacUserAgent(): boolean {
@@ -38,17 +46,25 @@ export function refreshTerminalImeInputContext(
   const ownerDocument = helper.ownerDocument
   // Why: Electron/Chromium can keep a stale NSTextInputContext on the xterm
   // helper after focus handoffs; blur/refocus rebuilds it so CJK IMEs work.
-  helper.blur()
+  refreshingHelpers.add(helper)
+  try {
+    helper.blur()
+  } finally {
+    refreshingHelpers.delete(helper)
+  }
 
   const schedule = options.scheduleRefocus ?? scheduleNextFrame
   schedule(() => {
     const active = ownerDocument.activeElement
     if (!helper.isConnected) {
+      options.onRefocusSkipped?.()
       return
     }
     if (active === helper || isDocumentBodyOrNull(active, ownerDocument)) {
       helper.focus()
+      return
     }
+    options.onRefocusSkipped?.()
   })
 
   return true

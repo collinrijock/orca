@@ -102,8 +102,6 @@ export function resyncTerminalFocusForWindowFocus(args: {
     }
   }
 
-  args.syncFocused(true)
-
   const reclaimedHelper = helper
 
   // Why: defer the reclaim refocus to the next frame and only take focus if
@@ -115,6 +113,7 @@ export function resyncTerminalFocusForWindowFocus(args: {
     const schedule = args.scheduleRefocus ?? scheduleNextFrame
     schedule(() => {
       if (!reclaimedHelper.isConnected) {
+        args.syncFocused(false)
         return
       }
       const active = reclaimedHelper.ownerDocument.activeElement
@@ -122,16 +121,24 @@ export function resyncTerminalFocusForWindowFocus(args: {
         active === reclaimedHelper ||
         isDocumentBodyOrNull(active, reclaimedHelper.ownerDocument)
       ) {
+        args.syncFocused(true)
         reclaimedHelper.focus()
+        return
       }
+      args.syncFocused(false)
     })
     return true
   }
+
+  args.syncFocused(true)
 
   // Why: macOS app reactivation leaves a stale NSTextInputContext on the
   // still-focused helper (electron#32307/#34952); non-mac returns false inside.
   refreshTerminalImeInputContext(reclaimedHelper, {
     isMac: args.isMac,
+    // Why: if another control wins during the refresh frame, the terminal
+    // mirror must follow that owner instead of remaining latched true.
+    onRefocusSkipped: () => args.syncFocused(false),
     scheduleRefocus: args.scheduleRefocus
   })
 
