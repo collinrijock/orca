@@ -7,7 +7,7 @@ import type { SshTarget } from '../../shared/ssh-types'
 import { buildSshArgs } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
 
-type DiagnosticMode = 'inherited' | 'overlapped'
+type DiagnosticMode = 'pipe-eof-no-n'
 
 type DiagnosticResult = {
   mode: DiagnosticMode
@@ -42,28 +42,20 @@ function createTarget(): SshTarget {
   }
 }
 
-async function runDiagnostic(mode: DiagnosticMode): Promise<DiagnosticResult> {
+async function runDiagnostic(): Promise<DiagnosticResult> {
   const sshPath = findSystemSsh()
   if (!sshPath) {
     throw new Error('Native Windows OpenSSH client is unavailable')
   }
+  const mode: DiagnosticMode = 'pipe-eof-no-n'
   const startedAt = performance.now()
-  const child = spawn(
-    sshPath,
-    [...buildSshArgs(createTarget(), { noInput: true }), 'echo ORCA-SYSTEM-SSH-OK'],
-    {
-      // Why: qualify a console-independent overlapped pipe against the
-      // upstream inherited-handle control before changing production.
-      stdio:
-        mode === 'overlapped'
-          ? ['overlapped', 'overlapped', 'overlapped']
-          : ['inherit', 'pipe', 'pipe'],
-      windowsHide: true
-    }
-  )
-  if (mode === 'overlapped') {
-    child.stdin?.destroy()
-  }
+  const child = spawn(sshPath, [...buildSshArgs(createTarget()), 'echo ORCA-SYSTEM-SSH-OK'], {
+    // Why: isolate the upstream-recommended pipe EOF from Win32-OpenSSH's
+    // null-input path before changing the production no-input command.
+    stdio: ['pipe', 'pipe', 'pipe'],
+    windowsHide: true
+  })
+  child.stdin?.destroy()
 
   return new Promise((resolve, reject) => {
     let stdout = ''
@@ -141,18 +133,14 @@ async function runDiagnostic(mode: DiagnosticMode): Promise<DiagnosticResult> {
 
 describe.skipIf(!hasLiveInput)('Windows OpenSSH no-input child-handle diagnostic', () => {
   it(
-    'compares inherited stdin with a console-independent overlapped EOF pipe',
-    { timeout: 30_000 },
+    'qualifies a standard EOF pipe without the Windows null-input option',
+    { timeout: 15_000 },
     async () => {
       expect(process.platform).toBe('win32')
-      const inherited = await runDiagnostic('inherited')
-      const overlapped = await runDiagnostic('overlapped')
-      console.log(
-        `ssh_windows_no_input_handle_diagnostic=${JSON.stringify({ inherited, overlapped })}`
-      )
+      const pipeEofNoN = await runDiagnostic()
+      console.log(`ssh_windows_no_input_handle_diagnostic=${JSON.stringify({ pipeEofNoN })}`)
 
-      // The inherited control must settle or this fixture cannot distinguish handle strategies.
-      expect(inherited.success).toBe(true)
+      expect(pipeEofNoN.success).toBe(true)
     }
   )
 })

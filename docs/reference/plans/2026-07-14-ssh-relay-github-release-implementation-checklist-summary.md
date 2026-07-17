@@ -123,12 +123,17 @@ independently returns the same lifecycle RED. The corrected POSIX contract uses 
 `Writable` facade so ending it cannot half-close the command channel. Exact correction head
 `4f57b885d24ad1755a5c863eaf37369208cecedb`, artifact run `29545688003`, and Linux x64/ARM64
 jobs `87777401256`/`87777401218` are green through live SFTP and restricted no-tar POSIX system
-SSH. Windows x64/ARM64 jobs `87777401200`/`87777401195` independently falsify the standard
-anonymous-pipe EOF hypothesis with the unchanged four-field timeout and profile RED. Next compare a
-console-independent overlapped pipe against inherited stdin as a diagnostic control; do not change
-the production Windows handle until native evidence selects it. The disconnected bounded diagnostic
-and workflow ordering are locally green under
-`E-M6-WINDOWS-NOINPUT-HANDLE-DIAGNOSTIC-LOCAL-001`; native x64/ARM64 execution is next.
+SSH. Windows x64/ARM64 jobs `87777401200`/`87777401195` reproduce the unchanged four-field timeout
+with a standard pipe plus mandatory `-n`. Exact diagnostic head
+`da938a7405d0a6c760979358a6c0a38030d9acaf`, artifact run `29546702916`, and Windows x64/ARM64 jobs
+`87780486286`/`87780486259` prove that inherited and overlapped handles also time out when every
+candidate retains `-n`; the invalid inherited control and shared `-n` mean these runs do not isolate
+the child handle. `E-M6-WINDOWS-NOINPUT-HANDLE-DIAGNOSTIC-CI-RED-001` therefore requires the next
+single-variable diagnostic to use the upstream-recommended standard stdin pipe with immediate EOF
+and omit `-n` only on Windows. POSIX retains ignored stdin plus `-n`; production stays unchanged
+until x64 and ARM64 select the same console-independent strategy. The replacement disconnected
+diagnostic is locally green under `E-M6-WINDOWS-NOINPUT-PIPE-NO-N-LOCAL-001`; commit and run that
+exact head next.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown

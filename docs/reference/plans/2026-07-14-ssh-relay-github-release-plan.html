@@ -1646,13 +1646,15 @@
                     stdout-end, sentinel, and channel-close settlement; POSIX no-input probes use an
                     OS-level ignored stdin handle plus OpenSSH <code>-n</code>; Windows must not map
                     stdin to <code>NUL</code> because Win32-OpenSSH issues #856/#1330 document a
-                    redirected-handle hang; a standard anonymous pipe with its parent write end
-                    destroyed is also rejected by native x64/arm64 evidence; qualify a
-                    console-independent overlapped-pipe EOF strategy against an inherited-stdin
-                    control before selecting the Windows handle, always with <code>-n</code>;
-                    fixture-owned Windows session processes settle before profile hives are
-                    boundedly unloaded and native profile deletion begins;
-                    <code>MaxSessions=1</code>; interrupted upload; stale lock
+                    redirected-handle hang; native x64/arm64 evidence also proves that inherited,
+                    standard-pipe, and overlapped-pipe handles all hang when the Windows client is
+                    simultaneously forced through <code>-n</code>, so those runs do not isolate the
+                    child handle. Qualify the upstream-recommended standard-pipe EOF with Windows
+                    <code>-n</code> omitted as the next single-variable diagnostic; only test an
+                    overlapped stdin pipe, also without <code>-n</code>, if the standard pipe fails.
+                    POSIX retains ignored stdin plus <code>-n</code>; fixture-owned Windows session
+                    processes settle before profile hives are boundedly unloaded and native profile
+                    deletion begins; <code>MaxSessions=1</code>; interrupted upload; stale lock
                   </td>
                   <td>
                     Bundled Node hashes the full staged tree before sentinel write;
