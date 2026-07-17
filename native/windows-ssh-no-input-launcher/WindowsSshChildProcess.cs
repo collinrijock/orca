@@ -11,7 +11,7 @@ internal static class WindowsSshChildProcess
     private const uint CreateNoWindow = 0x08000000;
     private const uint StartfUseStdHandles = 0x00000100;
     private const uint JobObjectLimitKillOnJobClose = 0x00002000;
-    private const int JobObjectExtendedLimitInformation = 9;
+    private const int JobObjectExtendedLimitInformationClass = 9;
     private const int ProcThreadAttributeHandleList = 0x00020002;
     private const uint Infinite = 0xffffffff;
     private const uint WaitObject0 = 0x00000000;
@@ -203,7 +203,12 @@ internal static class WindowsSshChildProcess
         try
         {
             Marshal.StructureToPtr(limits, buffer, false);
-            if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, buffer, (uint)size))
+            if (!SetInformationJobObject(
+                job,
+                JobObjectExtendedLimitInformationClass,
+                buffer,
+                (uint)size
+            ))
             {
                 int error = Marshal.GetLastWin32Error();
                 CloseHandle(job);

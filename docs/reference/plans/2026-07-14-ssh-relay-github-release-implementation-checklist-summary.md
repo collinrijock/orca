@@ -10,7 +10,7 @@ A checked box means the work has evidence in the detailed ledger. Design approva
 complete a box.
 
 Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — disconnected Windows
-no-input launcher native qualification, 2026-07-15, Codex implementation owner.**
+launcher compiler correction, 2026-07-15, Codex implementation owner.**
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the portable-fixture
 correction locally green: the no-Orca-publication workflow oracle permits the one exact pinned
 Microsoft fixture release URL while Orca release URLs, `gh release`, and `contents: write` remain
@@ -164,6 +164,11 @@ formatting, diff, and resolver isolation pass. Its Windows-native suite requires
 argv/EOF/binary/exit, unrelated-handle exclusion, job cancellation, and bounded settlement proof;
 all four native cases are declared skips locally. Commit/push this exact package and require x64/
 ARM64 live evidence next. Do not package or call it from production; SignPath remains deferred.
+`E-M6-WINDOWS-NOINPUT-LAUNCHER-COMPILE-CI-RED-001` records exact head `1f220a713`, run
+`29550660572`, and independent x64/ARM64 jobs `87792250731`/`87792250710`: both legacy compilers
+reject one constant/structure identifier collision before emitting an executable. The isolated
+correction renames only the integer information-class constant; focused 12/12 and release contracts
+285/285 pass locally. Commit/push and rerun both architectures next.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown

@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-15<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected Windows no-input launcher native qualification**. `E-M6-WINDOWS-NOINPUT-LAUNCHER-LOCAL-001` records the unpackaged, unsigned launcher and its local source/workflow/static contracts green. Commit/push only this exact artifact-only package and require native Windows x64/ARM64 legacy-compiler, argv/EOF/binary/exit/handle-exclusion/cancellation, live diagnostic, and exact teardown proof before any product caller. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain an explicit late gate and are not on this package's critical path.<br>
-Session checkpoint: **DIRECT WINDOWS NODE STDIN BOUNDARIES NATIVELY RED / DISCONNECTED PRIVATE-PIPE LAUNCHER LOCALLY GREEN / NATIVE QUALIFICATION NEXT — 2026-07-15, Codex implementation owner** — `E-M6-WINDOWS-NOINPUT-REGULAR-FILE-NO-N-CI-RED-001` records exact head `eee686d7f6203c88f00d607711d3816aaf444c61`, artifact run `29549252407`, Windows x64/ARM64 jobs `87788106340`/`87788106351`, and independent 8036.46/8042.17-millisecond timeouts after the last direct-Node boundary. `E-M6-WINDOWS-NOINPUT-LAUNCHER-LOCAL-001` adds only a runner-temp launcher with private anonymous stdio pipes, pre-execution stdin EOF, exact three-handle inheritance, suspended/job-owned hidden child creation, pump-failure cancellation, bounded pump settlement, and exit propagation. Focused 119/119, release contracts 285/285, typecheck, full lint/reliability/max-lines, formatting, diff, and resolver isolation pass locally; four launcher-native and two live Windows cases are declared skips. Production runtime bytes still cross authenticated SSH and no product remote downloads anything. Do not connect a product caller, change legacy upload/fallback/default behavior, enable a tuple, publish an artifact, or perform SignPath work. Merging to `main` remains prohibited, SignPath is deferred, and legacy remains the production default.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — 2026-07-15, Codex implementation owner: disconnected Windows launcher compiler correction**. `E-M6-WINDOWS-NOINPUT-LAUNCHER-COMPILE-CI-RED-001` records exact head `1f220a7135b83ef4c5f035ab729c114e828bf5b3`, run `29550660572`, and the same `CS0102` identifier collision from Windows x64/ARM64 jobs `87792250731`/`87792250710`. Rename only the integer job-information-class constant, re-prove local contracts, and require fresh native x64/ARM64 evidence. Keep every capability disconnected from every production/default SSH path. Real Apple/SignPath rehearsals remain deferred.<br>
+Session checkpoint: **LAUNCHER LOCAL CONTRACTS GREEN / X64 AND ARM64 LEGACY COMPILERS RED / ONE-IDENTIFIER CORRECTION ACTIVE — 2026-07-15, Codex implementation owner** — local focused 119/119, release contracts 285/285, typecheck, full lint/reliability/max-lines, formatting, diff, and resolver isolation pass. Both native jobs independently reject the constant/structure name collision before producing an executable or reaching live SSH; the runner-temp build, live fixture, full-size test, upload, production caller, legacy behavior, Beta, tuple publication, and SignPath remain untouched. Rename only `JobObjectExtendedLimitInformation` constant to `JobObjectExtendedLimitInformationClass`, commit/push, and rerun both native architectures.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -19703,6 +19703,32 @@ config/scripts/ssh-relay-runtime-workflow.test.mjs` passes 117 cases with two de
   product full-size test is expected to remain separately gated until both architectures prove the
   disconnected launcher and a subsequent product integration package is reviewed.
 
+### E-M6-WINDOWS-NOINPUT-LAUNCHER-COMPILE-CI-RED-001 — native compiler rejects a name collision
+
+- Date/owner/head/run: 2026-07-15, Codex implementation owner; exact pushed head
+  `1f220a7135b83ef4c5f035ab729c114e828bf5b3`, artifact run `29550660572`, Windows x64 job
+  `87792250731` on `windows-2022`, and Windows ARM64 job `87792250710` on `windows-11-arm`.
+- Exact log command: `gh api repos/stablyai/orca/actions/jobs/<job-id>/logs | rg -n -C 8
+  'WindowsSshChildProcess.cs\\(14|error CS0102|Failed Suites|runtime-windows-no-input-launcher'`
+  for each job.
+- Native result: both architectures reach the purpose-named contract suite and the .NET Framework
+  compiler independently returns `CS0102`: the integer job-information-class constant and the
+  marshalled structure both used `JobObjectExtendedLimitInformation`. X64 otherwise records 100
+  passing test files, 854 passing cases, and 24 declared skips before failing the one launcher
+  suite; ARM64 records the same single compiler failure shape. No executable or Win32 behavior was
+  tested, so no native capability is claimed.
+- Workflow containment: both jobs fail before the separate runner-temp build, Node input download,
+  runtime build, live OpenSSH fixture, full-size test, or artifact upload. The always-run teardown
+  settles without a created fixture. Linux x64/ARM64 and Darwin ARM64 remain green in the same run;
+  Darwin x64 was still running when the isolated correction was prepared.
+- Correction: rename only the integer constant to
+  `JobObjectExtendedLimitInformationClass`; the structure, P/Invoke layout, handle behavior,
+  packaging boundary, production behavior, and every signing/default/fallback decision remain
+  unchanged. Focused launcher/workflow contracts pass 12 runnable cases with four declared Windows
+  skips; the exact release-contract command passes 51 files and 285/285 runnable cases with four
+  declared Windows skips. Syntax, `git diff --check`, and protected-resolver zero-diff pass. Commit/
+  push the correction and require both native architectures from the corrected exact head.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -19761,8 +19787,8 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push only the disconnected launcher package recorded by
-`E-M6-WINDOWS-NOINPUT-LAUNCHER-LOCAL-001`, then require exact-head Windows x64 and ARM64 legacy-
+Commit and push only the one-identifier compiler correction recorded by
+`E-M6-WINDOWS-NOINPUT-LAUNCHER-COMPILE-CI-RED-001`, then require exact-head Windows x64 and ARM64 legacy-
 compiler, argv/EOF/binary/exit/handle-exclusion/cancellation, live diagnostic, and exact profile/
 directory teardown evidence. Do not
 change the production Windows handle or check the broad Milestone 6 Windows system-SSH item until
