@@ -119,11 +119,20 @@ describe('orca CLI install stub', () => {
   })
 
   it('gives older binaries a bounded fallback instead of a dead end', () => {
-    const stub = readSkill(stubPath)
+    const stub = readSkill(stubPath).replace(/\s+/gu, ' ')
 
-    expect(stub).toContain('If `skills get` is unavailable')
+    expect(stub).toContain('explicitly reports that `skills get` is an unknown command')
     expect(stub).toContain('do not invent commands')
     expect(stub).toContain('ask the user rather than guessing')
+  })
+
+  it('does not mistake resolution or execution failures for an older binary', () => {
+    const stub = readSkill(stubPath).replace(/\s+/gu, ' ')
+
+    // Falling through can silently pair a version-matched guide with the wrong Orca build.
+    expect(stub).toContain('report its exact error and stop')
+    expect(stub).toContain('Do not fall through to another executable')
+    expect(stub).toContain('Another failure is not proof of an older binary')
   })
 
   it('drops the changing command reference from the installable file', () => {

@@ -41,17 +41,17 @@
       "name": "orca-cli",
       "sourcePath": "skills/orca-cli",
       "releaseRevision": 33,
-      "packageDigest": "729da1e492d7d8461c12995d74e23dd034176cd51c731bccdc0f449e35cf72bf",
-      "gitTreeSha": "387fd327e8eaefae2979f377843f50a47c85150d",
+      "packageDigest": "72f63dcaad3dea8bea54838835fe46c689c37b63cd96a9ef2f2537f0c2f6b8c8",
+      "gitTreeSha": "97f6596bb43a56c6e81246f077c35144c9025343",
       "files": [
         {
           "path": "SKILL.md",
-          "size": 3485,
+          "size": 3835,
           "executable": false,
           "classification": "text",
-          "exactSha256": "3082f7c7425ebe37d6ed33ad05f404268af2b51b675ea53d0731a912f16d76f6",
-          "textNormalizedSha256": "3082f7c7425ebe37d6ed33ad05f404268af2b51b675ea53d0731a912f16d76f6",
-          "identitySha256": "3082f7c7425ebe37d6ed33ad05f404268af2b51b675ea53d0731a912f16d76f6"
+          "exactSha256": "90228630bc4daab4ccf67b691153976d1f28ec064d7069a4c170621ed2ea99b5",
+          "textNormalizedSha256": "90228630bc4daab4ccf67b691153976d1f28ec064d7069a4c170621ed2ea99b5",
+          "identitySha256": "90228630bc4daab4ccf67b691153976d1f28ec064d7069a4c170621ed2ea99b5"
         }
       ]
     },

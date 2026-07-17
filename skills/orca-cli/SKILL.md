@@ -42,6 +42,9 @@ Below, `ORCA` is a placeholder for the executable you resolved. Substitute it be
 running anything; do not create a shell variable or run `ORCA` literally. This works the
 same way in POSIX shells, PowerShell, and cmd.exe.
 
+If the selected executable cannot run, report its exact error and stop. Do not fall through
+to another executable, which could silently target a different Orca build.
+
 ## Load the full guide before running Orca commands
 
 ```text
@@ -57,10 +60,12 @@ change between Orca releases, and this file deliberately no longer lists them. C
 app is up with `ORCA status --json` (start it with `ORCA open --json` if needed), and
 prefer `--json` for agent-driven calls.
 
-## If `skills get` is unavailable (older Orca)
+## If an older Orca does not recognize `skills get`
 
-A pre-guide Orca binary does not know `skills get` and exits nonzero. Do not dead-end and
-do not invent commands. Use only this bounded, read-only bootstrap to orient:
+Use this fallback only when the selected binary explicitly reports that `skills get` is an
+unknown command. Another failure is not proof of an older binary; report it rather than
+guessing or changing executables. For a confirmed pre-guide binary, use only this bounded,
+read-only bootstrap to orient. Do not dead-end and do not invent commands:
 
 ```text
 ORCA status --json
