@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner'
 import type { GlobalSettings, OrcaHooks, ProjectHostSetup, Repo } from '../../../../shared/types'
 import type { SpeechModelState } from '../../../../shared/speech-types'
+import type { SkillFreshnessInventory } from '../../../../shared/skill-freshness'
 import type {
   SourceControlAiSettings,
   SourceControlAiSettingsPatch
@@ -101,6 +102,7 @@ import {
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
+import { getSkillFreshnessDisplayStatus } from '@/lib/skill-freshness-display-status'
 import { deriveNeededSectionIds, getInitialMountedSectionIds } from './settings-load-performance'
 import { translate } from '@/i18n/i18n'
 import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
@@ -206,9 +208,10 @@ function getSettingsNavGroupDefinitionsForSearch(
 }
 
 function getSkillNavInstallStatus(skill: {
+  name: string
   installed: boolean
   loading: boolean
-  updateAvailable?: boolean
+  inventory: SkillFreshnessInventory | null
 }): SettingsNavInstallStatus {
   if (skill.loading) {
     return 'checking'
@@ -216,7 +219,7 @@ function getSkillNavInstallStatus(skill: {
   if (!skill.installed) {
     return 'install'
   }
-  return skill.updateAvailable ? 'update-available' : 'installed'
+  return getSkillFreshnessDisplayStatus(skill.inventory, skill.name)
 }
 
 function hasReadyVoiceModel(
@@ -733,16 +736,16 @@ function Settings(): React.JSX.Element {
     orchestrationSkill
   const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
     computerUseSkill
-  const eligibleUpdateSkillNames = skillFreshnessInventory?.eligibleUpdateNames
   const capabilityInstallStatusBySectionId = useMemo(() => {
-    const eligibleUpdates = new Set(skillFreshnessApplies ? (eligibleUpdateSkillNames ?? []) : [])
+    const applicableFreshnessInventory = skillFreshnessApplies ? skillFreshnessInventory : null
     const next = new Map<string, SettingsNavInstallStatus>([
       [
         'orchestration',
         getSkillNavInstallStatus({
+          name: ORCHESTRATION_SKILL_NAME,
           installed: orchestrationSkillInstalled,
           loading: orchestrationSkillLoading,
-          updateAvailable: eligibleUpdates.has(ORCHESTRATION_SKILL_NAME)
+          inventory: applicableFreshnessInventory
         })
       ]
     ])
@@ -750,9 +753,10 @@ function Settings(): React.JSX.Element {
       next.set(
         'computer-use',
         getSkillNavInstallStatus({
+          name: COMPUTER_USE_SKILL_NAME,
           installed: computerUseSkillInstalled,
           loading: computerUseSkillLoading,
-          updateAvailable: eligibleUpdates.has(COMPUTER_USE_SKILL_NAME)
+          inventory: applicableFreshnessInventory
         })
       )
       if (settings) {
@@ -770,13 +774,13 @@ function Settings(): React.JSX.Element {
   }, [
     computerUseSkillInstalled,
     computerUseSkillLoading,
-    eligibleUpdateSkillNames,
     modelStates,
     orchestrationSkillInstalled,
     orchestrationSkillLoading,
     settings,
     showDesktopOnlySettings,
     skillFreshnessApplies,
+    skillFreshnessInventory,
     voiceModelStatesLoading
   ])
   const navSections = useMemo(

@@ -138,6 +138,9 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
   const [terminalCommand, setTerminalCommand] = useState<string | null>(null)
   const [awaitingExitRefresh, setAwaitingExitRefresh] = useState(false)
   const terminalSubmittedRef = useRef(false)
+  const terminalWrapperRef = useRef<HTMLDivElement>(null)
+  const terminalFocusTargetRef = useRef<HTMLElement | null>(null)
+  const terminalAuthorizationWasPendingRef = useRef(false)
   const inventoryAtTerminalExitRef = useRef<SkillFreshnessInventory | null>(null)
   const inventory = state.inventory
   const eligibleNames = useMemo(() => inventory?.eligibleUpdateNames ?? [], [inventory])
@@ -149,14 +152,26 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
   const hasBlockedGroup = groups.some((group) => group.status === 'cannot-update')
   const updateCommand = buildTargetedSkillUpdateCommand(eligibleNames)
   const summaryKind = summarizeInventory(inventory, hasBlockedGroup)
+  const terminalAuthorizationPending =
+    terminalCommand !== null &&
+    !terminalSubmittedRef.current &&
+    (state.loading ||
+      state.error !== null ||
+      inventory === null ||
+      terminalCommand !== updateCommand)
 
   useEffect(() => {
     if (!open) {
       return
     }
-    if (state.loading || state.error || !inventory) {
+    if (state.loading) {
+      // Why: keep the PTY mounted across focus revalidation, but the inert
+      // wrapper below prevents stale draft input until fresh authority returns.
+      return
+    }
+    if (state.error || !inventory) {
       // Why: a scan invalidates the authorization behind an unsubmitted draft.
-      // A running command keeps its PTY until exit, but stale drafts fail closed.
+      // A failed scan cannot restore it, so stale drafts fail closed.
       if (!terminalSubmittedRef.current && terminalCommand !== null) {
         setTerminalCommand(null)
       }
@@ -185,6 +200,27 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
     terminalCommand,
     updateCommand
   ])
+
+  useEffect(() => {
+    if (terminalCommand === null) {
+      // Why: the dialog stays mounted while closed, so do not retain a detached
+      // xterm subtree after the draft exits or loses authorization.
+      terminalFocusTargetRef.current = null
+    }
+    const wasPending = terminalAuthorizationWasPendingRef.current
+    terminalAuthorizationWasPendingRef.current = terminalAuthorizationPending
+    if (!wasPending || terminalAuthorizationPending) {
+      return
+    }
+    const focusTarget = terminalFocusTargetRef.current
+    if (!focusTarget?.isConnected || !terminalWrapperRef.current?.contains(focusTarget)) {
+      terminalFocusTargetRef.current = null
+      return
+    }
+    // Why: Chromium drops focus when an ancestor becomes inert; unchanged
+    // authorization should return focus to the preserved xterm instance.
+    focusTarget.focus()
+  }, [terminalAuthorizationPending, terminalCommand])
 
   const handleOpenChange = (next: boolean): void => {
     // Why: closing is the natural point to re-observe bytes so a completed update
@@ -237,28 +273,49 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
         )}
 
         {terminalCommand ? (
-          <OnboardingInlineCommandTerminal
-            key={terminalCommand}
-            command={terminalCommand}
-            title={translate(
-              'auto.components.skills.SkillFreshnessUpdateDialog.terminalTitle',
-              'Update Orca skills'
-            )}
-            description={translate(
-              'auto.components.skills.SkillFreshnessUpdateDialog.terminalDescription',
-              'Review the pre-filled command, then press Enter to run it.'
-            )}
-            ariaLabel={translate(
-              'auto.components.skills.SkillFreshnessUpdateDialog.terminalAria',
-              'Orca skill update terminal'
-            )}
-            worktreeId="skill-freshness-update-terminal"
-            terminalHeightPx={200}
-            terminalTopMarginPx={0}
-            autoScrollIntoView={false}
-            onInteracted={handleTerminalInteraction}
-            onTerminalExit={handleTerminalExit}
-          />
+          <div
+            ref={terminalWrapperRef}
+            data-skill-update-terminal=""
+            aria-busy={terminalAuthorizationPending}
+            inert={terminalAuthorizationPending}
+            className={terminalAuthorizationPending ? 'opacity-50' : undefined}
+            onFocusCapture={(event) => {
+              terminalFocusTargetRef.current = event.target as HTMLElement
+            }}
+            onBlurCapture={(event) => {
+              // Why: a concrete next target means the user moved focus; inert
+              // uses a null target, which should be restored after revalidation.
+              if (
+                event.relatedTarget instanceof Node &&
+                !event.currentTarget.contains(event.relatedTarget)
+              ) {
+                terminalFocusTargetRef.current = null
+              }
+            }}
+          >
+            <OnboardingInlineCommandTerminal
+              key={terminalCommand}
+              command={terminalCommand}
+              title={translate(
+                'auto.components.skills.SkillFreshnessUpdateDialog.terminalTitle',
+                'Update Orca skills'
+              )}
+              description={translate(
+                'auto.components.skills.SkillFreshnessUpdateDialog.terminalDescription',
+                'Review the pre-filled command, then press Enter to run it.'
+              )}
+              ariaLabel={translate(
+                'auto.components.skills.SkillFreshnessUpdateDialog.terminalAria',
+                'Orca skill update terminal'
+              )}
+              worktreeId="skill-freshness-update-terminal"
+              terminalHeightPx={200}
+              terminalTopMarginPx={0}
+              autoScrollIntoView={false}
+              onInteracted={handleTerminalInteraction}
+              onTerminalExit={handleTerminalExit}
+            />
+          </div>
         ) : null}
 
         {/* Why: Radix reads defaultOpen only on mount. Remount when a scan
