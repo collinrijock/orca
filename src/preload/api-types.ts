@@ -254,6 +254,7 @@ import type {
   GetProjectViewTableResult,
   GitHubProjectCommentMutationResult,
   GitHubProjectMutationResult,
+  ListAccessibleProjectsArgs,
   ListAccessibleProjectsResult,
   ListAssignableUsersBySlugArgs,
   ListAssignableUsersBySlugResult,
@@ -1728,7 +1729,9 @@ export type PreloadApi = {
      */
     diagnoseAuth: () => Promise<GhAuthDiagnostic>
     // ── ProjectV2 (GitHub Projects) ─────────────────────────────────
-    listAccessibleProjects: () => Promise<ListAccessibleProjectsResult>
+    listAccessibleProjects: (
+      args?: ListAccessibleProjectsArgs
+    ) => Promise<ListAccessibleProjectsResult>
     resolveProjectRef: (args: ResolveProjectRefArgs) => Promise<ResolveProjectRefResult>
     listProjectViews: (args: ListProjectViewsArgs) => Promise<ListProjectViewsResult>
     getProjectViewTable: (args: GetProjectViewTableArgs) => Promise<GetProjectViewTableResult>
