@@ -17,6 +17,11 @@ import {
   armUpdateInstallExitWatchdog,
   disarmUpdateInstallExitWatchdog
 } from './update-install-exit-watchdog'
+import { findConflictingAppInstancePids } from './updater-conflicting-app-instances'
+import {
+  clearUpdateInstallHandoffMarker,
+  writeUpdateInstallHandoffMarker
+} from './startup/update-install-launch-gate'
 import { registerAutoUpdaterHandlers } from './updater-events'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 import {
@@ -572,6 +577,28 @@ async function performQuitAndInstall(): Promise<void> {
     pendingQuitAndInstallTimer = null
   }
 
+  // Why: Squirrel.Mac's ShipIt waits for ALL instances of the installed
+  // bundle to exit before installing (and aborts if one appears mid-install),
+  // so a second packaged Orca — often an invisible agent/e2e-launched one —
+  // makes "Restart to Update" quit the app and then silently never install
+  // or relaunch. Surface those instances instead of starting a doomed quit.
+  const conflictingPids = await findConflictingAppInstancePids()
+  if (conflictingPids.length > 0) {
+    quitAndInstallInProgress = false
+    recordUpdaterLifecycle(
+      'quit_and_install_blocked_by_other_instances',
+      { pids: conflictingPids.join(','), count: conflictingPids.length },
+      {
+        level: 'warn',
+        message: `Update install blocked: ${conflictingPids.length} other running instance(s) of this app (pids ${conflictingPids.join(', ')})`
+      }
+    )
+    sendErrorStatus(
+      `Another running copy of Orca is blocking the update (PID ${conflictingPids.join(', ')}) — possibly one launched by an agent or test run. Quit it, then install the update again.`
+    )
+    return
+  }
+
   markMacQuitAndInstallInFlight()
 
   // Set this BEFORE anything else so the `activate` handler in index.ts
@@ -610,6 +637,11 @@ async function performQuitAndInstall(): Promise<void> {
       // Why: mark before the call so a sync 'error' during quitAndInstall can
       // recover; pre-native errors must not look like install failure.
       quitAndInstallNativeInvoked = true
+      if (process.platform === 'darwin') {
+        // Why: lets a launch that races Squirrel's install back off instead of
+        // aborting it (see update-install-launch-gate). Cleared on recovery.
+        writeUpdateInstallHandoffMarker(app.getPath('userData'), app.getVersion())
+      }
       // Why: invoke quitAndInstall before killAllPty/remove close listeners so a
       // sync 'error' (common "no filepath" path) recovers while windows and
       // local PTYs are still intact.
@@ -668,6 +700,9 @@ function resetQuitForUpdateState(): void {
   quitAndInstallNativeInvoked = false
   disarmUpdateInstallExitWatchdog()
   resetMacInstallState()
+  // Why: install recovery keeps this process alive, so the handoff marker
+  // would otherwise gate the user's next manual relaunch for no reason.
+  clearUpdateInstallHandoffMarker(app.getPath('userData'))
 }
 
 // Why: electron-updater often reports quitAndInstall failures via the 'error'

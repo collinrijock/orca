@@ -64,6 +64,7 @@ const {
     appMock: {
       isPackaged: true,
       getVersion: vi.fn(() => '1.0.51'),
+      getPath: vi.fn(() => '/tmp/orca-test-user-data'),
       on: appOn,
       emit: appEmit,
       quit: vi.fn()
@@ -117,6 +118,20 @@ vi.mock('./updater-nudge', () => ({
   shouldApplyNudge: vi.fn().mockReturnValue(false)
 }))
 
+const findConflictingAppInstancePidsMock = vi.hoisted(() => vi.fn(async () => [] as number[]))
+vi.mock('./updater-conflicting-app-instances', () => ({
+  findConflictingAppInstancePids: findConflictingAppInstancePidsMock
+}))
+
+const { writeHandoffMarkerMock, clearHandoffMarkerMock } = vi.hoisted(() => ({
+  writeHandoffMarkerMock: vi.fn(),
+  clearHandoffMarkerMock: vi.fn()
+}))
+vi.mock('./startup/update-install-launch-gate', () => ({
+  writeUpdateInstallHandoffMarker: writeHandoffMarkerMock,
+  clearUpdateInstallHandoffMarker: clearHandoffMarkerMock
+}))
+
 describe('updater mac install handoff', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -131,9 +146,63 @@ describe('updater mac install handoff', () => {
     appMock.isPackaged = true
     isMock.dev = false
     killAllPtyMock.mockReset()
+    findConflictingAppInstancePidsMock.mockReset()
+    findConflictingAppInstancePidsMock.mockResolvedValue([])
+    writeHandoffMarkerMock.mockReset()
+    clearHandoffMarkerMock.mockReset()
     vi.unstubAllGlobals()
     vi.useRealTimers()
   })
+
+  it.runIf(process.platform === 'darwin')(
+    'blocks the install handoff while another instance of the app bundle is running',
+    async () => {
+      const sendMock = vi.fn()
+      const mainWindow = { webContents: { send: sendMock } }
+
+      autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+      const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+
+      setupAutoUpdater(mainWindow as never)
+      await vi.waitFor(() => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+      })
+      autoUpdaterMock.emit('checking-for-update')
+      autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      await new Promise((r) => setTimeout(r, 0))
+      autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+      const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
+        ([eventName]) => eventName === 'update-downloaded'
+      )?.[1] as (() => void) | undefined
+      nativeDownloadedHandler?.()
+
+      findConflictingAppInstancePidsMock.mockResolvedValue([4242])
+      quitAndInstall()
+      await vi.waitFor(() => {
+        expect(sendMock).toHaveBeenCalledWith(
+          'updater:status',
+          expect.objectContaining({
+            state: 'error',
+            message: expect.stringContaining('PID 4242')
+          })
+        )
+      })
+      expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+      expect(killAllPtyMock).not.toHaveBeenCalled()
+
+      // Once the conflicting instance is gone, a retry must install normally.
+      findConflictingAppInstancePidsMock.mockResolvedValue([])
+      quitAndInstall()
+      await vi.waitFor(() => {
+        expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(false, true)
+      })
+      // The relaunch-race handoff marker must be down before the native call.
+      expect(writeHandoffMarkerMock).toHaveBeenCalledWith('/tmp/orca-test-user-data', '1.0.51')
+      expect(writeHandoffMarkerMock.mock.invocationCallOrder[0]).toBeLessThan(
+        autoUpdaterMock.quitAndInstall.mock.invocationCallOrder[0]
+      )
+    }
+  )
 
   it.runIf(process.platform === 'darwin')(
     'waits for Squirrel.Mac before honoring a manual quit that should install the update',

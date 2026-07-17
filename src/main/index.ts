@@ -100,6 +100,7 @@ import {
   shouldBypassSingleInstanceLock,
   shouldSkipSingleInstanceLock
 } from './startup/single-instance-lock'
+import { shouldDeferLaunchForUpdateInstall } from './startup/update-install-launch-gate'
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
 import { startMainThreadChurnProbe } from './diagnostics/main-thread-churn-probe'
 import {
@@ -464,6 +465,24 @@ if (app.isPackaged && process.platform !== 'win32') {
 }
 configureDevUserDataPath(is.dev)
 configureOrcaUserDataPathEnv()
+
+// Why: a launch that races Squirrel's in-flight update install would abort it
+// ("App Still Running Error") and silently strand the user on the old
+// version. Exit instead — ShipIt finishes the install and relaunches the
+// updated app itself, so this click still ends with Orca open. Must run
+// before the single-instance lock and all userData side effects.
+if (
+  shouldDeferLaunchForUpdateInstall({
+    isPackaged: app.isPackaged,
+    userDataPath: app.getPath('userData'),
+    appVersion: app.getVersion()
+  })
+) {
+  console.warn(
+    '[updater] update install in flight for this bundle; exiting so the installer can finish and relaunch'
+  )
+  app.exit(0)
+}
 
 // Why: just past createMainWindow's 10s ready-to-show reveal fallback,
 // so a window revealed on that path still gets its tray icon.
