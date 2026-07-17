@@ -9,6 +9,7 @@ import {
   measureDivergence,
   missingSetsOverlap,
   reachRenderInternals,
+  releaseRenderDesyncReadback,
   type SentinelRendererState,
   type SentinelRenderInternals
 } from './terminal-render-desync-frame'
@@ -46,8 +47,8 @@ export type SentinelEvidence = {
   divergence: { textCells: number; missing: number; missPct: number }
   paused: boolean
   rendererState: SentinelRendererState
-  livePngDataUrl: string
-  bufferText: string
+  livePngDataUrl?: string
+  bufferText?: string
   persistedDirectory?: string
 }
 
@@ -94,6 +95,12 @@ export function sampleRenderDesyncOnce(
       missingHistoryByPane.delete(paneKey)
       return
     }
+    if (divergence.missPct < MISSING_PCT_THRESHOLD) {
+      // Why: only consecutive threshold breaches prove persistence; retaining a
+      // subthreshold frame lets one later spike create a false field capture.
+      missingHistoryByPane.delete(paneKey)
+      return
+    }
     const history = missingHistoryByPane.get(paneKey) ?? []
     history.push(divergence.missingCells)
     while (history.length > PERSISTENT_SAMPLES) {
@@ -101,7 +108,7 @@ export function sampleRenderDesyncOnce(
     }
     missingHistoryByPane.set(paneKey, history)
 
-    if (divergence.missPct < MISSING_PCT_THRESHOLD || history.length < PERSISTENT_SAMPLES) {
+    if (history.length < PERSISTENT_SAMPLES) {
       return
     }
     for (let i = 1; i < history.length; i++) {
@@ -111,13 +118,21 @@ export function sampleRenderDesyncOnce(
     }
 
     missingHistoryByPane.delete(paneKey)
-    pendingPaneKeys.add(paneKey)
     recordTerminalWebglDiagnostic('webgl-render-desync', {
       paneKey,
       textCells: divergence.textCells,
       missing: divergence.missing,
       missPct: Math.round(divergence.missPct * 10) / 10
     })
+    if (evidence.length >= MAX_EVIDENCE_ENTRIES) {
+      // Why: captures can contain full terminal canvases and buffer contents.
+      // Keep recovery available after the per-session evidence budget is spent.
+      console.warn(`[terminal] render desync detected on pane ${paneKey}; capture budget exhausted`)
+      resetAndRefreshAllTerminalWebglAtlases()
+      stopSampleBurst()
+      return
+    }
+    pendingPaneKeys.add(paneKey)
     const entry: SentinelEvidence = {
       captureId: createCaptureId(paneKey),
       paneKey,
@@ -132,9 +147,7 @@ export function sampleRenderDesyncOnce(
       livePngDataUrl: internals.canvas.toDataURL(),
       bufferText: bufferSnapshot(buffer, internals.rows)
     }
-    if (evidence.length < MAX_EVIDENCE_ENTRIES) {
-      evidence.push(entry)
-    }
+    evidence.push(entry)
     console.warn(
       `[terminal] render desync detected on pane ${paneKey} ` +
         `(${divergence.missing}/${divergence.textCells} cells, ${divergence.missPct.toFixed(1)}%) — persisting evidence`
@@ -220,6 +233,7 @@ function stopSampleBurst(): void {
   }
   burstTerminal = null
   missingHistoryByPane.clear()
+  releaseRenderDesyncReadback()
 }
 
 async function persistEvidenceThenRecover(
@@ -227,17 +241,22 @@ async function persistEvidenceThenRecover(
   internals: SentinelRenderInternals
 ): Promise<void> {
   try {
+    const pngDataUrl = entry.livePngDataUrl
+    const bufferText = entry.bufferText
+    if (!pngDataUrl || bufferText == null) {
+      throw new Error('Render-desync evidence payload was released before persistence')
+    }
     const persisted = await window.api.app.writeTerminalRenderDesyncEvidence({
       captureId: entry.captureId,
       phase: 'corrupt',
-      pngDataUrl: entry.livePngDataUrl,
+      pngDataUrl,
       metadata: {
         paneKey: entry.paneKey,
         when: entry.when,
         divergence: entry.divergence,
         paused: entry.paused,
         rendererState: entry.rendererState,
-        bufferText: entry.bufferText
+        bufferText
       }
     })
     entry.persistedDirectory = persisted.directory
@@ -247,6 +266,11 @@ async function persistEvidenceThenRecover(
     console.error('[terminal] could not persist render-desync evidence; leaving pane intact', error)
     pendingPaneKeys.delete(entry.paneKey)
     return
+  } finally {
+    // Why: persistence owns a successful payload, while a failed write leaves
+    // the live pane intact; neither path should retain duplicate full-canvas data.
+    entry.livePngDataUrl = undefined
+    entry.bufferText = undefined
   }
 
   resetAndRefreshAllTerminalWebglAtlases()

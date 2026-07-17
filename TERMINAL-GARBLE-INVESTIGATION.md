@@ -67,10 +67,10 @@ atlas as unseen instead of adopting its current layout generation.
   terminal contents may be sensitive.
 
 The installed rc.2 build did not contain PR #8899, so it was impossible to
-extract live renderer internals from this occurrence. The current #8899 design
-also redraws before measuring and waits three five-second samples; either choice
-could erase a failure that self-heals in about five seconds. It must be changed
-before field use.
+extract live renderer internals from this occurrence. The initial #8899 design
+also redrew before measuring and waited three five-second samples; either choice
+could erase a failure that self-heals in about five seconds. The revised design
+below corrects both problems.
 
 ## Reproduction follow-up — 2026-07-15
 
@@ -215,6 +215,10 @@ On trip it does three things:
 3. Only after the corrupt evidence write succeeds, runs the same recovery a tab
    switch performs and saves a healed reference PNG beside the capture.
 
+The renderer keeps at most four capture records and releases their large pixel
+and buffer payloads after persistence. The main process independently retains
+at most four capture directories under a 96 MiB aggregate budget.
+
 **Lifetime is bounded:** the sentinel is scaffolding. It comes out once the
 root cause is fixed — or in ~a month if it never trips (which would itself be
 signal). Review should come from the terminal-rendering owners, not
@@ -244,6 +248,7 @@ transition.
 - Red/green + regression harnesses for the atlas fixes: `/tmp/glyph-overflow-repro/`,
   `/tmp/xterm-garble-repro/`
 - Live-rig tooling (replayer for Orca terminal-history logs, CDP driver):
-  `/tmp/garble-rig/` — do not rerun without stubbing `shell.openUrl`
+  the platform temp directory's `garble-rig/` — `shell.openExternal` is stubbed
+  by default; pass `--allow-open-url` only when a real browser handoff is required
 - PRs: [#8672](https://github.com/stablyai/orca/pull/8672) (merged),
   [#8899](https://github.com/stablyai/orca/pull/8899) (open)

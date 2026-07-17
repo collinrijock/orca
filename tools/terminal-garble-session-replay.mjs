@@ -7,6 +7,9 @@ const loop = process.argv.includes('--loop')
 const tickMs = Number(
   (process.argv.find((arg) => arg.startsWith('--tick=')) ?? '--tick=12').split('=')[1]
 )
+if (!Number.isFinite(tickMs) || tickMs <= 0) {
+  throw new Error('--tick must be a positive number of milliseconds')
+}
 const url = (
   process.argv.find((arg) => arg.startsWith('--url=')) ??
   '--url=https://example.com/orca-terminal-garble-repro'

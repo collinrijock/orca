@@ -16,6 +16,9 @@ export function analyzeTerminalFrame(buffer, geometry, viewport, terminalSnapsho
     const y0 = Math.max(0, Math.floor(bounds.y * scaleY))
     const x1 = Math.min(png.width, Math.ceil((bounds.x + bounds.width) * scaleX))
     const y1 = Math.min(png.height, Math.ceil((bounds.y + bounds.height) * scaleY))
+    if (x0 >= x1 || y0 >= y1) {
+      throw new Error(`Terminal pane ${pane.index} falls outside the captured screenshot`)
+    }
     const histogram = new Map()
     for (let y = y0; y < y1; y += 4) {
       for (let x = x0; x < x1; x += 4) {
@@ -24,7 +27,11 @@ export function analyzeTerminalFrame(buffer, geometry, viewport, terminalSnapsho
         histogram.set(key, (histogram.get(key) ?? 0) + 1)
       }
     }
-    const background = [...histogram.entries()].sort((a, b) => b[1] - a[1])[0][0]
+    const backgroundEntry = [...histogram.entries()].sort((a, b) => b[1] - a[1])[0]
+    if (!backgroundEntry) {
+      throw new Error(`Terminal pane ${pane.index} has no pixels available for analysis`)
+    }
+    const background = backgroundEntry[0]
     const [br, bg, bb] = background.split(',').map((part) => Number(part) * 8 + 4)
     let different = 0
     let sampled = 0
@@ -90,9 +97,7 @@ export function analyzeTerminalFrame(buffer, geometry, viewport, terminalSnapsho
 export function findPersistentCellDivergences(attempts) {
   const suspects = []
   for (const attempt of attempts) {
-    const baseline = new Map(
-      (attempt.frames[0]?.panes ?? []).map((pane) => [pane.pane, pane.missPct])
-    )
+    const baseline = new Map(attempt.baselinePanes.map((pane) => [pane.pane, pane.missPct]))
     const histories = new Map()
     const reported = new Set()
     for (const frame of attempt.frames) {

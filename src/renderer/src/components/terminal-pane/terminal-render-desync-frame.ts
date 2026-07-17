@@ -23,6 +23,7 @@ export type SentinelRenderInternals = {
   canvas: HTMLCanvasElement
   cellWidth: number
   cellHeight: number
+  backgroundRgb: readonly [red: number, green: number, blue: number]
   rendererState: SentinelRendererState
 }
 
@@ -37,8 +38,10 @@ export type BufferLike = {
   getLine: (y: number) => BufferLineLike | undefined
 }
 
-const INK_LUMINANCE_FLOOR = 38
+const INK_BACKGROUND_DISTANCE = 36
 const MISSING_SET_MIN_OVERLAP = 0.5
+let readbackCanvas: HTMLCanvasElement | null = null
+let readbackContext: CanvasRenderingContext2D | null = null
 
 export function reachRenderInternals(terminal: unknown): SentinelRenderInternals | null {
   try {
@@ -65,6 +68,7 @@ export function reachRenderInternals(terminal: unknown): SentinelRenderInternals
                   _vertices?: { count?: number }
                 }
               }
+              _themeService?: { colors?: { background?: { rgba?: number } } }
               dimensions?: { device?: { cell?: { width?: number; height?: number } } }
             }
           }
@@ -74,11 +78,13 @@ export function reachRenderInternals(terminal: unknown): SentinelRenderInternals
     const service = term._core?._renderService
     const renderer = service?._renderer?.value
     const cell = renderer?.dimensions?.device?.cell
+    const backgroundRgba = renderer?._themeService?.colors?.background?.rgba
     if (
       typeof term.rows !== 'number' ||
       typeof term.cols !== 'number' ||
       !renderer?._canvas ||
       !renderer._charAtlas ||
+      typeof backgroundRgba !== 'number' ||
       typeof cell?.width !== 'number' ||
       typeof cell?.height !== 'number'
     ) {
@@ -92,6 +98,13 @@ export function reachRenderInternals(terminal: unknown): SentinelRenderInternals
       canvas: renderer._canvas,
       cellWidth: cell.width,
       cellHeight: cell.height,
+      // xterm packs colors as RRGGBBAA; compare against the active theme so
+      // light terminals do not make every background pixel look like glyph ink.
+      backgroundRgb: [
+        backgroundRgba >>> 24,
+        (backgroundRgba >>> 16) & 255,
+        (backgroundRgba >>> 8) & 255
+      ],
       rendererState: {
         atlasPages: renderer._charAtlas.pages?.length ?? -1,
         atlasClearModelGeneration: renderer._charAtlas.clearModelGeneration ?? null,
@@ -118,14 +131,11 @@ export function measureDivergence(
   internals: SentinelRenderInternals,
   buffer: BufferLike
 ): SentinelDivergence | null {
-  const { canvas, cellWidth, cellHeight, rows, cols } = internals
+  const { canvas, cellWidth, cellHeight, rows, cols, backgroundRgb } = internals
   if (!canvas.width || !canvas.height) {
     return null
   }
-  const offscreen = document.createElement('canvas')
-  offscreen.width = canvas.width
-  offscreen.height = canvas.height
-  const ctx = offscreen.getContext('2d', { willReadFrequently: true })
+  const ctx = getReadbackContext(canvas.width, canvas.height)
   if (!ctx) {
     return null
   }
@@ -164,9 +174,11 @@ export function measureDivergence(
             continue
           }
           const index = (py * canvas.width + px) * 4
-          const luminance =
-            0.299 * image[index] + 0.587 * image[index + 1] + 0.114 * image[index + 2]
-          if (luminance > INK_LUMINANCE_FLOOR) {
+          const distance =
+            Math.abs(image[index] - backgroundRgb[0]) +
+            Math.abs(image[index + 1] - backgroundRgb[1]) +
+            Math.abs(image[index + 2] - backgroundRgb[2])
+          if (distance > INK_BACKGROUND_DISTANCE) {
             ink++
           }
           sampled++
@@ -188,6 +200,34 @@ export function measureDivergence(
     missingCells,
     missPct: textCells ? (100 * missing) / textCells : 0
   }
+}
+
+function getReadbackContext(width: number, height: number): CanvasRenderingContext2D | null {
+  if (!readbackCanvas) {
+    readbackCanvas = document.createElement('canvas')
+    readbackContext = readbackCanvas.getContext('2d', { willReadFrequently: true })
+  }
+  if (!readbackContext) {
+    return null
+  }
+  if (readbackCanvas.width !== width) {
+    readbackCanvas.width = width
+  }
+  if (readbackCanvas.height !== height) {
+    readbackCanvas.height = height
+  }
+  return readbackContext
+}
+
+export function releaseRenderDesyncReadback(): void {
+  // Why: the diagnostic reuses one backing store during its burst, then drops
+  // the potentially multi-megabyte canvas instead of retaining it for the app lifetime.
+  if (readbackCanvas) {
+    readbackCanvas.width = 0
+    readbackCanvas.height = 0
+  }
+  readbackCanvas = null
+  readbackContext = null
 }
 
 export function missingSetsOverlap(a: Set<number>, b: Set<number>): boolean {

@@ -55,6 +55,7 @@ function fakePane(overrides: { paused?: boolean } = {}) {
           value: {
             _canvas: { width: 800, height: 480, toDataURL: () => 'data:image/png;base64,' },
             _charAtlas: {},
+            _themeService: { colors: { background: { rgba: 0x000000ff } } },
             dimensions: { device: { cell: { width: 10, height: 20 } } }
           }
         }
@@ -96,10 +97,14 @@ describe('terminal-render-desync-sentinel', () => {
     vi.unstubAllGlobals()
   })
 
-  function sampleWith(divergence: ReturnType<typeof divergenceOf> | null, paused = false) {
+  function sampleWith(
+    divergence: ReturnType<typeof divergenceOf> | null,
+    paused = false,
+    paneKey = 'm1:p1'
+  ) {
     const { pane, refreshRows } = fakePane({ paused })
     forEachLivePaneForDesyncSentinel.mockImplementation(
-      (visit: (key: string, pane: unknown) => void) => visit('m1:p1', pane)
+      (visit: (key: string, pane: unknown) => void) => visit(paneKey, pane)
     )
     sampleRenderDesyncOnce(() => divergence)
     return { refreshRows }
@@ -116,10 +121,14 @@ describe('terminal-render-desync-sentinel', () => {
     )
     await vi.waitFor(() => expect(resetAndRefreshAllTerminalWebglAtlases).toHaveBeenCalledTimes(1))
     expect(writeTerminalRenderDesyncEvidence).toHaveBeenCalledWith(
-      expect.objectContaining({ phase: 'corrupt' })
+      expect.objectContaining({
+        phase: 'corrupt',
+        metadata: expect.objectContaining({ bufferText: expect.stringContaining('x') })
+      })
     )
     expect(getRenderDesyncEvidence()).toHaveLength(1)
-    expect(getRenderDesyncEvidence()[0].bufferText).toContain('x')
+    expect(getRenderDesyncEvidence()[0].bufferText).toBeUndefined()
+    expect(getRenderDesyncEvidence()[0].livePngDataUrl).toBeUndefined()
   })
 
   it('does not redraw before measuring the compositor-presented canvas', () => {
@@ -141,6 +150,27 @@ describe('terminal-render-desync-sentinel', () => {
     sampleWith(divergenceOf(few))
     sampleWith(divergenceOf(few))
     expect(recordTerminalWebglDiagnostic).not.toHaveBeenCalled()
+  })
+
+  it('requires consecutive threshold breaches', () => {
+    const cells = manyCells(0)
+    sampleWith(divergenceOf(cells))
+    sampleWith(divergenceOf(Array.from({ length: 10 }, (_, i) => i)))
+    sampleWith(divergenceOf(cells))
+
+    expect(recordTerminalWebglDiagnostic).not.toHaveBeenCalled()
+    expect(resetAndRefreshAllTerminalWebglAtlases).not.toHaveBeenCalled()
+  })
+
+  it('caps capture writes while preserving recovery after the budget is spent', async () => {
+    for (let pane = 1; pane <= 5; pane++) {
+      sampleWith(divergenceOf(manyCells(0)), false, `m1:p${pane}`)
+      sampleWith(divergenceOf(manyCells(0)), false, `m1:p${pane}`)
+    }
+
+    await vi.waitFor(() => expect(writeTerminalRenderDesyncEvidence).toHaveBeenCalledTimes(4))
+    expect(getRenderDesyncEvidence()).toHaveLength(4)
+    expect(resetAndRefreshAllTerminalWebglAtlases).toHaveBeenCalledTimes(5)
   })
 
   it('resets tracking for paused panes instead of sampling them', () => {

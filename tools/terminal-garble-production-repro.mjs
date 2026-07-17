@@ -29,8 +29,9 @@ const DEFAULT_EXECUTABLE = '/Applications/Orca.app/Contents/MacOS/Orca'
 const DEFAULT_PROFILE = path.join(os.homedir(), 'Library', 'Application Support', 'orca')
 const URL = 'https://example.com/orca-terminal-garble-repro'
 const MODIFIER = process.platform === 'darwin' ? 'Meta' : 'Control'
-const REPLAY_A = '/tmp/garble-rig/frames-A.jsonl'
-const REPLAY_B = '/tmp/garble-rig/frames-B.jsonl'
+const replayRoot = path.join(os.tmpdir(), 'garble-rig')
+const REPLAY_A = path.join(replayRoot, 'frames-A.jsonl')
+const REPLAY_B = path.join(replayRoot, 'frames-B.jsonl')
 const REPLAY_SCRIPT = path.resolve('tools/terminal-garble-session-replay.mjs')
 const PANE_COUNT = Number(argValue('--panes', '2'))
 const TAB_COUNT = Number(argValue('--tabs', '1'))
@@ -46,11 +47,19 @@ function argValue(name, fallback) {
   return process.argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length) ?? fallback
 }
 
+function quoteShellArgument(value) {
+  if (process.platform === 'win32') {
+    return `"${value.replaceAll('"', '""')}"`
+  }
+  return `'${value.replaceAll("'", `'\\''`)}'`
+}
+
 const executablePath = argValue('--executable', DEFAULT_EXECUTABLE)
 const mainPath = argValue('--main', '')
 const sourceProfile = argValue('--profile', DEFAULT_PROFILE)
 const keepProfile = process.argv.includes('--keep-profile')
-const stubOpenUrl = process.argv.includes('--stub-open-url')
+const allowOpenUrl = process.argv.includes('--allow-open-url')
+const stubOpenUrl = !allowOpenUrl || process.argv.includes('--stub-open-url')
 const stubOpenUrlAfterFirst = process.argv.includes('--stub-open-url-after-first')
 const focusChurn = process.argv.includes('--focus-churn')
 const runRoot = mkdtempSync(path.join(os.tmpdir(), 'orca-terminal-garble-'))
@@ -110,11 +119,17 @@ async function configurePanes(page) {
     }
     for (let pane = 0; pane < PANE_COUNT; pane++) {
       const frames = (tab + pane) % 2 === 0 ? REPLAY_A : REPLAY_B
-      const churnArg = glyphChurn ? ` --glyph-churn=${tab * PANE_COUNT + pane}` : ''
-      await runInActivePane(
-        page,
-        `clear; node ${REPLAY_SCRIPT} ${frames} --loop --tick=${250 + ((tab + pane) % 5) * 20} --url=${URL}${churnArg}`
-      )
+      const args = [
+        quoteShellArgument(REPLAY_SCRIPT),
+        quoteShellArgument(frames),
+        '--loop',
+        `--tick=${250 + ((tab + pane) % 5) * 20}`,
+        `--url=${quoteShellArgument(URL)}`
+      ]
+      if (glyphChurn) {
+        args.push(`--glyph-churn=${tab * PANE_COUNT + pane}`)
+      }
+      await runInActivePane(page, `node ${args.join(' ')}`)
       if (pane + 1 < PANE_COUNT) {
         await page.keyboard.press(pane % 2 === 0 ? `${MODIFIER}+d` : `${MODIFIER}+Shift+d`)
         await page.waitForTimeout(500)
@@ -351,11 +366,13 @@ async function clickUrlAndCapture(electronApp, page, geometry, viewport, attempt
     { timeout: 10_000 }
   )
 
+  const beforeState = await terminalState(page)
   const before = await page.screenshot()
+  const baselinePanes = analyzeTerminalFrame(before, geometry, viewport, beforeState)
   writeFileSync(path.join(attemptDir, 'before.png'), before)
   writeFileSync(
     path.join(attemptDir, 'state-before.json'),
-    `${JSON.stringify(await terminalState(page), null, 2)}\n`
+    `${JSON.stringify(beforeState, null, 2)}\n`
   )
   const initialCalls = await readOpenUrlCalls(electronApp)
   const initialCallCount = initialCalls.opened.length + initialCalls.stubbed.length
@@ -452,6 +469,7 @@ async function clickUrlAndCapture(electronApp, page, geometry, viewport, attempt
     focusSinkReleased,
     hoverState,
     focusTransition,
+    baselinePanes,
     frames
   }
 }
@@ -477,12 +495,18 @@ try {
   await configurePanes(page)
   const recoveredTerminals = await exposeProductionTerminals(page)
   const geometry = await paneGeometry(page)
+  const oracleState = await terminalState(page)
   const viewport = await page.evaluate(() => ({
     width: document.documentElement.clientWidth,
     height: document.documentElement.clientHeight
   }))
   if (geometry.length < PANE_COUNT) {
     throw new Error(`Expected ${PANE_COUNT} visible panes, found ${geometry.length}`)
+  }
+  if (oracleState.panes.length < geometry.length) {
+    throw new Error(
+      `Terminal buffer recovery found ${oracleState.panes.length} panes for ${geometry.length} captured panes`
+    )
   }
   writeFileSync(path.join(evidenceDir, 'geometry.json'), `${JSON.stringify(geometry, null, 2)}\n`)
 
