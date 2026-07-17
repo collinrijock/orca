@@ -459,10 +459,13 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
   })
 
-  it('retires stale host-owned terminal handles without surfacing pane errors', async () => {
+  it('keeps the regular TUI surface and draft through stale-handle reconnect', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onError = vi.fn()
     const onPtyExit = vi.fn()
+    const onExit = vi.fn()
+    const onDisconnect = vi.fn()
+    const renderedScreen: string[] = []
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-tab-1',
@@ -474,19 +477,97 @@ describe('createRemoteRuntimePtyTransport', () => {
       existingPtyId: 'remote:env-1@@terminal-stale',
       cols: 80,
       rows: 24,
-      callbacks: { onError }
+      callbacks: {
+        onError,
+        onExit,
+        onDisconnect,
+        onData: (data) => renderedScreen.push(data),
+        onReplayData: (data) => renderedScreen.push(data)
+      }
     })
     await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
-    const { streamId } = latestSubscribePayload()
+    const initialStreamId = latestSubscribePayload().streamId
+    const draft = 'QA regular reconnect draft - keep this unsent'
+    emitOutput(initialStreamId, draft)
+
+    runtimeCall.mockImplementation(async (args: { method: string }) =>
+      args.method === 'session.tabs.list'
+        ? {
+            ok: true,
+            result: {
+              worktree: 'wt-1',
+              publicationEpoch: 'epoch-1',
+              snapshotVersion: 2,
+              activeGroupId: null,
+              activeTabId: 'tab-1::pane:1',
+              activeTabType: 'terminal',
+              tabs: [
+                {
+                  type: 'terminal',
+                  id: 'tab-1::pane:1',
+                  parentTabId: 'tab-1',
+                  leafId: 'pane:1',
+                  title: 'Claude Code',
+                  isActive: true,
+                  status: 'ready',
+                  terminal: 'terminal-reconnected'
+                }
+              ]
+            }
+          }
+        : { ok: true, result: {} }
+    )
 
     subscriptionCallbacks?.onResponse({
       ok: true,
-      result: { type: 'error', streamId, message: 'terminal_handle_stale' }
+      result: { type: 'error', streamId: initialStreamId, message: 'terminal_handle_stale' }
     })
 
+    await vi.waitFor(() =>
+      expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-reconnected' })
+    )
+    const replacementStreamId = latestSubscribePayload().streamId
+    emitSnapshot(replacementStreamId, draft)
+
     expect(onError).not.toHaveBeenCalled()
-    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-stale')
+    expect(onPtyExit).not.toHaveBeenCalled()
+    expect(onExit).not.toHaveBeenCalled()
+    expect(onDisconnect).not.toHaveBeenCalled()
+    expect(transport.getPtyId()).toBe('remote:env-1@@terminal-reconnected')
+    expect(transport.isConnected()).toBe(true)
+    expect(renderedScreen.at(-1)).toBe(draft)
+  })
+
+  it('still retires the regular TUI surface after an explicit terminal exit', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtyExit = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-tab-1',
+      leafId: 'pane:1',
+      onPtyExit
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-exited',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: {
+        type: 'error',
+        streamId: latestSubscribePayload().streamId,
+        message: 'terminal_exited'
+      }
+    })
+
+    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-exited')
     expect(transport.getPtyId()).toBeNull()
+    expect(transport.isConnected()).toBe(false)
   })
 
   it('ignores stale stream end after reattaching a newer remote terminal', async () => {

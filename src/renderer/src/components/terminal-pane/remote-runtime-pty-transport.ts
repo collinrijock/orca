@@ -42,9 +42,12 @@ const REMOTE_TERMINAL_VIEWPORT_FLUSH_MS = 33
 const HOST_SESSION_ATTACH_POLL_MS = 150
 const HOST_SESSION_ATTACH_TIMEOUT_MS = 15_000
 
+function isRemoteTerminalStaleMessage(message: string): boolean {
+  return message.includes('terminal_handle_stale')
+}
+
 function isRemoteTerminalGoneMessage(message: string): boolean {
   return (
-    message.includes('terminal_handle_stale') ||
     message.includes('terminal_exited') ||
     message.includes('terminal_gone') ||
     message.includes('no_connected_pty')
@@ -421,10 +424,20 @@ export function createRemoteRuntimePtyTransport(
       // flowing — informational, not fatal, so never surface a red xterm banner.
       return
     }
+    if (isRemoteTerminalStaleMessage(message)) {
+      if (tabId && isWebTerminalSurfaceTabId(tabId)) {
+        // Why: reconnect can re-mint a mirrored pane's handle while its host tab
+        // remains alive. Keep xterm/composer state mounted while we re-resolve it.
+        closeMultiplexedStream()
+        scheduleResubscribeAfterTransportClose()
+      } else {
+        retireRemoteTerminalId()
+      }
+      return
+    }
     if (isRemoteTerminalGoneMessage(message)) {
-      // Why: paired web clients consume host-published PTY handles. If the host
-      // retires one between snapshots, clear this mirror and wait for the next
-      // session-tabs update instead of surfacing a red xterm error.
+      // Why: an explicit terminal-gone response is terminal lifecycle evidence,
+      // unlike a replaceable stale handle observed during reconnect.
       retireRemoteTerminalId()
       return
     }

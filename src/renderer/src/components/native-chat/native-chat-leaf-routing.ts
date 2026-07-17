@@ -71,13 +71,15 @@ export function resolveNativeChatLeafRoute(args: {
   chatLeafId: string | null
   activeLeafId: string | null
   chatLeafStillMounted: boolean
-  chatLeafIsEligible: boolean
   activeLeafIsEligible: boolean
 }): NativeChatLeafRoute {
   if (!args.isChatViewMode) {
     return { chatLeafId: null, exitChat: false }
   }
-  if (args.chatLeafId && args.chatLeafStillMounted && args.chatLeafIsEligible) {
+  if (args.chatLeafId && args.chatLeafStillMounted) {
+    // Why: agent/title evidence can disappear while local, SSH, or runtime
+    // transports reconnect. A mounted owning pane is not a terminal lifecycle
+    // event, so keep its chat surface until the pane itself is removed.
     return { chatLeafId: args.chatLeafId, exitChat: false }
   }
   // Manager hydration can briefly have no active pane; preserve the requested
@@ -88,7 +90,7 @@ export function resolveNativeChatLeafRoute(args: {
   if (args.activeLeafIsEligible) {
     return { chatLeafId: args.activeLeafId, exitChat: false }
   }
-  // Why: closing or invalidating the chat-owning leaf must not move its composer
-  // onto a plain-shell sibling. Return the tab to terminal mode instead.
+  // Why: removing the chat-owning leaf must not move its composer onto a
+  // plain-shell sibling. Return the tab to terminal mode instead.
   return { chatLeafId: null, exitChat: true }
 }

@@ -2987,7 +2987,6 @@ export default function TerminalPane({
       chatLeafId,
       activeLeafId,
       chatLeafStillMounted,
-      chatLeafIsEligible: isChatEligibleForLeaf(chatLeafId),
       activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId)
     })
     if (route.chatLeafId !== chatLeafId) {

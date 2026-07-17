@@ -430,6 +430,7 @@ function NativeChatResolvedView({
         <NativeChatComposer
           ref={composerRef}
           terminalTabId={terminalTabId}
+          paneKey={paneKey}
           targetPtyId={targetPtyId}
           agent={agent}
           canSend={canSend}
