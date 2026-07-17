@@ -107,6 +107,9 @@ async function renderPrompt(
       <LinearAgentSkillSetupPrompt linked={true} remote={false} surface="modal" {...props} />
     )
   })
+  await act(async () => {
+    await vi.dynamicImportSettled()
+  })
   await act(async () => {})
 }
 

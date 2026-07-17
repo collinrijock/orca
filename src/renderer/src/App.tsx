@@ -134,7 +134,7 @@ import { reconnectSshTargetForRendererStartup } from './startup/ssh-startup-reco
 import { shouldRenderPetOverlay } from './components/pet/pet-overlay-visibility'
 import { applyDocumentTheme } from './lib/document-theme'
 import { getSystemPrefersDark } from './lib/terminal-theme'
-import { publishTerminalViewAttributesAtAppStart } from './components/terminal-pane/terminal-appearance'
+import { publishTerminalViewAttributesAtAppStart } from './components/terminal-pane/terminal-startup-view-attributes'
 import { isEditableTarget } from './lib/editable-target'
 import { getSelectedTextForFileSearch } from './lib/file-search-selection'
 import { useShortcutLabel } from './hooks/useShortcutLabel'
@@ -413,10 +413,12 @@ function shouldMountUpdateCardForStatus(status: UpdateStatus): boolean {
 }
 
 function App(): React.JSX.Element {
+  const renderStartedAt = performance.now()
   const clearUnreadDockBadge = useUnreadDockBadge()
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
   const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(false)
+  const startupCommitCountRef = useRef(0)
   const floatingWorkspaceTourInteractionSnapshotRef = useRef<{
     wasPreviouslyInteracted?: boolean
     persisted?: Promise<void>
@@ -650,6 +652,31 @@ function App(): React.JSX.Element {
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
+  useLayoutEffect(() => {
+    if (startupCommitCountRef.current >= 20) {
+      return
+    }
+    startupCommitCountRef.current += 1
+    const state = useAppStore.getState()
+    logRendererStartupDiagnostic('app-commit', {
+      commit: startupCommitCountRef.current,
+      renderToCommitMs: Math.round(performance.now() - renderStartedAt),
+      persistedUIReady: state.persistedUIReady,
+      workspaceSessionReady: state.workspaceSessionReady,
+      repos: state.repos.length,
+      worktrees: Object.values(state.worktreesByRepo).reduce(
+        (count, entries) => count + entries.length,
+        0
+      ),
+      terminalTabs: Object.values(state.tabsByWorktree).reduce(
+        (count, entries) => count + entries.length,
+        0
+      )
+    })
+    if (state.workspaceSessionReady) {
+      startupCommitCountRef.current = 20
+    }
+  })
   const shouldMountContextualTourOverlay = activeContextualTourId !== null
   const shouldMountSetupGuideTelemetryObserver = persistedUIReady
   const shouldMountUpdateCard = shouldMountUpdateCardForStatus(updateStatus)

@@ -148,6 +148,8 @@ export function attachMainWindowServices(
       return
     }
     updaterSetupDone = true
+    const startedAt = performance.now()
+    logStartupMilestone('updater-setup-start')
     setupAutoUpdater(mainWindow, {
       getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
       onBeforeQuit: async () => {
@@ -179,7 +181,9 @@ export function attachMainWindowServices(
         store.updateUI({ dismissedUpdateNudgeId: id })
       }
     })
-    logStartupMilestone('updater-setup-done')
+    logStartupMilestone('updater-setup-done', {
+      durationMs: Math.round(performance.now() - startedAt)
+    })
   }
   pendingAutoUpdaterSetup = setupAutoUpdaterDeferred
   mainWindow.once('ready-to-show', () => setImmediate(setupAutoUpdaterDeferred))

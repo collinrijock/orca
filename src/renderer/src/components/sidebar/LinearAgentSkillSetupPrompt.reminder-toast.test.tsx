@@ -119,6 +119,9 @@ async function renderPrompt(
   await act(async () => {
     root?.render(<LinearAgentSkillSetupPrompt {...props} />)
   })
+  await act(async () => {
+    await vi.dynamicImportSettled()
+  })
   await act(async () => {})
 }
 
@@ -289,6 +292,10 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     await act(async () => {
       action?.onClick?.()
     })
+    await act(async () => {
+      await vi.dynamicImportSettled()
+    })
+    await act(async () => {})
 
     expect(document.body.textContent).toContain(
       'Enable agents to read and edit the attached Linear ticket.'
@@ -341,6 +348,10 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     await act(async () => {
       action?.onClick?.()
     })
+    await act(async () => {
+      await vi.dynamicImportSettled()
+    })
+    await act(async () => {})
     mocks.toastDismiss.mockClear()
     await act(async () => {
       findBodyButton("Don't show again")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))

@@ -18,6 +18,7 @@ import {
   type HostSessionSlices,
   type HostIdByWorktreeId
 } from './workspace-session-host-split'
+import { logRendererStartupDiagnostic } from '../startup/startup-diagnostics'
 
 export type HostPersistenceState = {
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
@@ -213,10 +214,16 @@ export function patchWorkspaceSessionByHost(
   patch: WorkspaceSessionPatch,
   state: HostPersistenceState
 ): Promise<void> {
+  const splitStartedAt = performance.now()
   const slices = splitWorkspaceSessionByHost(
     patch as WorkspaceSessionState,
     buildHostIdByWorktreeId(state)
   )
+  logRendererStartupDiagnostic('session-host-split-done', {
+    durationMs: Math.round(performance.now() - splitStartedAt),
+    patchFields: Object.keys(patch).length,
+    partitions: Object.keys(slices).length
+  })
   const local = (slices[LOCAL_EXECUTION_HOST_ID] ?? patch) as WorkspaceSessionPatch
   const localWrite = api.patch(local)
   for (const [hostId, slice] of nonLocalEntries(slices)) {

@@ -83,6 +83,12 @@ import {
 
 type HandlerMap = Record<string, (_event?: unknown, args?: unknown) => Promise<unknown>>
 
+function mockResolvedLocalCommands(paths: Record<string, string>): void {
+  resolveCliCommandsMock.mockImplementation(
+    (commands: string[]) => new Map(commands.map((command) => [command, paths[command] ?? command]))
+  )
+}
+
 describe('preflight', () => {
   const originalPlatform = process.platform
   const handlers: HandlerMap = {}
@@ -113,8 +119,8 @@ describe('preflight', () => {
     getAzureDevOpsAuthStatusMock.mockReset()
     getGiteaAuthStatusMock.mockReset()
     mergePersistedWindowsPathMock.mockReset()
-    // Why: existing tests should keep treating `which` as the only source
-    // unless a case explicitly exercises the install-dir fallback.
+    // Why: unresolved commands remain bare names; local detection accepts only
+    // absolute paths returned by the bulk PATH/install-directory resolver.
     resolveCliCommandsMock.mockReset()
     resolveCliCommandsMock.mockImplementation(
       (commands: string[]) => new Map(commands.map((command) => [command, command]))
@@ -470,54 +476,29 @@ describe('preflight', () => {
     })
   })
 
-  it('only reports agents when which/where resolves to a real executable path', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-
-      const target = String(args[0])
-      if (target === 'claude') {
-        return { stdout: '/Users/test/.local/bin/claude\n' }
-      }
-      if (target === 'continue') {
-        return { stdout: 'continue: shell built-in command\n' }
-      }
-      if (target === 'cursor-agent') {
-        return { stdout: '/Users/test/.local/bin/cursor-agent\n' }
-      }
-      throw new Error('not found')
+  it('only reports agents when bulk resolution returns a real executable path', async () => {
+    mockResolvedLocalCommands({
+      claude: '/Users/test/.local/bin/claude',
+      continue: 'continue: shell built-in command',
+      'cursor-agent': '/Users/test/.local/bin/cursor-agent'
     })
 
     await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'cursor'])
+    expect(execFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('does not report Claude Agent Teams when only the Orca shim is present', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'orca') {
-        return { stdout: '/Applications/Orca.app/Contents/MacOS/orca\n' }
-      }
-      throw new Error('not found')
+    mockResolvedLocalCommands({
+      orca: '/Applications/Orca.app/Contents/MacOS/orca'
     })
 
     await expect(detectInstalledAgents()).resolves.toEqual([])
   })
 
   it('reports Claude Agent Teams when both Orca and Claude are present', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'claude') {
-        return { stdout: '/Users/test/.local/bin/claude\n' }
-      }
-      if (String(args[0]) === 'orca') {
-        return { stdout: '/Applications/Orca.app/Contents/MacOS/orca\n' }
-      }
-      throw new Error('not found')
+    mockResolvedLocalCommands({
+      claude: '/Users/test/.local/bin/claude',
+      orca: '/Applications/Orca.app/Contents/MacOS/orca'
     })
 
     await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'claude-agent-teams'])
@@ -528,81 +509,37 @@ describe('preflight', () => {
       configurable: true,
       value: 'win32'
     })
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'where') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'claude') {
-        return { stdout: '/mock/windows/npm/claude.cmd\n' }
-      }
-      if (String(args[0]) === 'orca') {
-        return { stdout: '/mock/windows/programs/orca.cmd\n' }
-      }
-      throw new Error('not found')
+    mockResolvedLocalCommands({
+      claude: '/mock/windows/npm/claude.cmd',
+      orca: '/mock/windows/programs/orca.cmd'
     })
 
     await expect(detectInstalledAgents()).resolves.toEqual(['claude'])
   })
 
-  it('detects agents via the install-dir resolver when which fails (stripped GUI PATH)', async () => {
+  it('detects agents via install directories when the GUI PATH is stripped', async () => {
     // Why: cold GUI launches can run detection before shell-PATH hydration
-    // adds user install dirs, so `which` can miss runnable CLIs.
-    execFileAsyncMock.mockImplementation(async (command) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      throw new Error('not found')
+    // adds user install dirs, so the bulk resolver checks both in one pass.
+    mockResolvedLocalCommands({
+      claude: '/Users/test/.local/bin/claude',
+      codex: '/Users/test/.asdf/shims/codex',
+      opencode: '/Users/test/Library/pnpm/opencode'
     })
-    resolveCliCommandsMock.mockImplementation(
-      (commands: string[]) =>
-        new Map(
-          commands.map((cmd) => {
-            if (cmd === 'claude') {
-              return [cmd, '/Users/test/.local/bin/claude']
-            }
-            if (cmd === 'codex') {
-              return [cmd, '/Users/test/.asdf/shims/codex']
-            }
-            if (cmd === 'opencode') {
-              return [cmd, '/Users/test/Library/pnpm/opencode']
-            }
-            return [cmd, cmd]
-          })
-        )
-    )
 
     await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'codex', 'opencode'])
     expect(resolveCliCommandsMock).toHaveBeenCalledTimes(1)
   })
 
-  it('does not double-count an agent already found on PATH via the install-dir resolver', async () => {
-    // Why: the fallback should not duplicate ids when PATH already finds a CLI.
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'claude') {
-        return { stdout: '/Users/test/.local/bin/claude\n' }
-      }
-      throw new Error('not found')
-    })
-    resolveCliCommandsMock.mockImplementation(
-      (commands: string[]) => new Map(commands.map((cmd) => [cmd, cmd]))
-    )
+  it('resolves the complete local command set in one bulk pass', async () => {
+    mockResolvedLocalCommands({ claude: '/Users/test/.local/bin/claude' })
 
     await expect(detectInstalledAgents()).resolves.toEqual(['claude'])
     expect(resolveCliCommandsMock).toHaveBeenCalledTimes(1)
-    expect(resolveCliCommandsMock).toHaveBeenCalledWith(expect.not.arrayContaining(['claude']))
+    expect(resolveCliCommandsMock).toHaveBeenCalledWith(expect.arrayContaining(['claude', 'codex']))
   })
 
-  it('treats an agent as not installed when the install-dir resolver throws', async () => {
-    // Why: transient fs errors in the fallback must not crash detection.
-    execFileAsyncMock.mockImplementation(async (command) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      throw new Error('not found')
-    })
+  it('treats an agent as not installed when the bulk resolver throws', async () => {
+    // Why: transient fs errors in PATH/install-dir scans must not crash detection.
     resolveCliCommandsMock.mockImplementation(() => {
       throw new Error('EACCES: permission denied')
     })
@@ -611,17 +548,9 @@ describe('preflight', () => {
   })
 
   it('registers agent detection through the shared launch config commands', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'openclaude') {
-        return { stdout: '/Users/test/.local/bin/openclaude\n' }
-      }
-      if (String(args[0]) === 'cursor-agent') {
-        return { stdout: '/Users/test/.local/bin/cursor-agent\n' }
-      }
-      throw new Error('not found')
+    mockResolvedLocalCommands({
+      openclaude: '/Users/test/.local/bin/openclaude',
+      'cursor-agent': '/Users/test/.local/bin/cursor-agent'
     })
 
     registerPreflightHandlers()
@@ -641,14 +570,13 @@ describe('preflight', () => {
       process.env.PATH = [...segments, '/usr/bin'].join(':')
       return segments
     })
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'codex' && process.env.PATH?.startsWith('/home/test/.local/bin')) {
-        return { stdout: '/home/test/.local/bin/codex\n' }
-      }
-      throw new Error('not found')
+    resolveCliCommandsMock.mockImplementation((commands: string[]) => {
+      const codexPath = process.env.PATH?.startsWith('/home/test/.local/bin')
+        ? '/home/test/.local/bin/codex'
+        : 'codex'
+      return new Map(
+        commands.map((command) => [command, command === 'codex' ? codexPath : command])
+      )
     })
 
     try {
@@ -709,28 +637,15 @@ describe('preflight', () => {
   })
 
   it('detects Mistral Vibe from the installed vibe executable', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'vibe') {
-        return { stdout: '/home/test/.local/bin/vibe\n' }
-      }
-      throw new Error('not found')
-    })
+    mockResolvedLocalCommands({ vibe: '/home/test/.local/bin/vibe' })
 
     await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe'])
   })
 
   it('deduplicates Mistral Vibe when both current and legacy executables exist', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'vibe' || String(args[0]) === 'mistral-vibe') {
-        return { stdout: `/home/test/.local/bin/${String(args[0])}\n` }
-      }
-      throw new Error('not found')
+    mockResolvedLocalCommands({
+      vibe: '/home/test/.local/bin/vibe',
+      'mistral-vibe': '/home/test/.local/bin/mistral-vibe'
     })
 
     await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe'])
@@ -955,22 +870,14 @@ describe('preflight', () => {
   it('refreshes via preflight:refreshAgents by re-hydrating PATH before re-detecting', async () => {
     // Why: the Agents settings Refresh button calls this path. It must (1) ask
     // the shell hydrator for a fresh PATH, (2) merge any new segments, then
-    // (3) re-run `which` so newly-installed CLIs appear without a restart.
+    // (3) rerun bulk command resolution so new CLIs appear without a restart.
     hydrateShellPathMock.mockResolvedValueOnce({
       segments: ['/Users/test/.opencode/bin'],
       ok: true,
       failureReason: 'none'
     })
     mergePathSegmentsMock.mockReturnValueOnce(['/Users/test/.opencode/bin'])
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'opencode') {
-        return { stdout: '/Users/test/.opencode/bin/opencode\n' }
-      }
-      throw new Error('not found')
-    })
+    mockResolvedLocalCommands({ opencode: '/Users/test/.opencode/bin/opencode' })
 
     registerPreflightHandlers()
 
@@ -998,15 +905,7 @@ describe('preflight', () => {
       ok: false,
       failureReason: 'timeout'
     })
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'claude') {
-        return { stdout: '/Users/test/.local/bin/claude\n' }
-      }
-      throw new Error('not found')
-    })
+    mockResolvedLocalCommands({ claude: '/Users/test/.local/bin/claude' })
 
     registerPreflightHandlers()
 

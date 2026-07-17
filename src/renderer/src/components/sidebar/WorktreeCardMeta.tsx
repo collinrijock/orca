@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
-import CommentMarkdown from './CommentMarkdown'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from './WorktreeContextMenu'
 import {
   WorktreeCardDetailSection,
@@ -28,6 +28,10 @@ import { WorktreeCardReviewDetailSection } from './WorktreeCardReviewDetailSecti
 import { WorktreeCardAutomationDetailSection } from './WorktreeCardAutomationDetailSection'
 import { WorktreeCardIssueDetailSection } from './WorktreeCardIssueDetailSection'
 import { WorktreeCardHoverIdentityHeader } from './WorktreeCardHoverIdentityHeader'
+
+const CommentMarkdown = lazyWithRetry(() => import('./CommentMarkdown'), {
+  reloadKey: 'worktree-card-comment-markdown'
+})
 
 export type {
   WorktreeCardIssueDisplay,
@@ -385,10 +389,19 @@ export function WorktreeCardDetailsHover({
                 }
               />
               <WorktreeCardDetailSectionContent className="space-y-2">
-                <CommentMarkdown
-                  content={comment ?? ''}
-                  className="text-[11.5px] text-foreground break-words leading-normal [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1"
-                />
+                <React.Suspense
+                  // Why: notes remain readable as plain text while Markdown loads off the startup path.
+                  fallback={
+                    <div className="text-[11.5px] text-foreground break-words leading-normal">
+                      {comment}
+                    </div>
+                  }
+                >
+                  <CommentMarkdown
+                    content={comment ?? ''}
+                    className="text-[11.5px] text-foreground break-words leading-normal [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1"
+                  />
+                </React.Suspense>
               </WorktreeCardDetailSectionContent>
             </WorktreeCardDetailSection>
           )}

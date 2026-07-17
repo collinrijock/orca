@@ -10,7 +10,13 @@ type ResolveCommandOptions = {
 
 function getExecutableNames(platform: NodeJS.Platform, commandName: string): string[] {
   if (platform === 'win32') {
-    return [`${commandName}.cmd`, `${commandName}.exe`, `${commandName}.bat`, commandName]
+    return [
+      `${commandName}.cmd`,
+      `${commandName}.exe`,
+      `${commandName}.bat`,
+      `${commandName}.com`,
+      commandName
+    ]
   }
 
   return [commandName]
@@ -65,6 +71,43 @@ function findFirstExecutable(
   }
 
   return null
+}
+
+function resolveCommandsInDirectories(
+  platform: NodeJS.Platform,
+  directories: readonly string[],
+  executableNamesByCommand: ReadonlyMap<string, readonly string[]>,
+  resolved: Map<string, string>
+): void {
+  for (const directory of directories) {
+    let entries: string[]
+    try {
+      entries = readdirSync(directory)
+    } catch {
+      continue
+    }
+    const entryByLookupName = new Map(
+      entries.map((entry) => [platform === 'win32' ? entry.toLowerCase() : entry, entry])
+    )
+    for (const [commandName, executableNames] of executableNamesByCommand) {
+      if (resolved.has(commandName)) {
+        continue
+      }
+      for (const executableName of executableNames) {
+        const entry = entryByLookupName.get(
+          platform === 'win32' ? executableName.toLowerCase() : executableName
+        )
+        if (!entry) {
+          continue
+        }
+        const candidate = join(directory, entry)
+        if (isRunnableCommand(platform, candidate)) {
+          resolved.set(commandName, candidate)
+          break
+        }
+      }
+    }
+  }
 }
 
 function isRunnableCommand(platform: NodeJS.Platform, candidate: string): boolean {
@@ -192,14 +235,23 @@ export function resolveCliCommands(
     ...getNvmVersionDirectories(homePath),
     ...getBaseVersionManagerDirectories(platform, homePath)
   ]
+  const commandNamesUnique = [...new Set(commandNames)]
+  const executableNamesByCommand = new Map(
+    commandNamesUnique.map((commandName) => [
+      commandName,
+      getExecutableNames(platform, commandName)
+    ])
+  )
   const resolved = new Map<string, string>()
 
-  for (const commandName of new Set(commandNames)) {
-    const executableNames = getExecutableNames(platform, commandName)
-    const pathCandidate = findFirstExecutable(platform, pathDirectories, executableNames)
-    const installCandidate =
-      pathCandidate ?? findFirstExecutable(platform, installDirectories, executableNames)
-    resolved.set(commandName, installCandidate ?? commandName)
+  // Why: agent detection resolves many commands at once. Reading each PATH
+  // directory once avoids hundreds of synchronous failed stat calls at startup.
+  resolveCommandsInDirectories(platform, pathDirectories, executableNamesByCommand, resolved)
+  resolveCommandsInDirectories(platform, installDirectories, executableNamesByCommand, resolved)
+  for (const commandName of commandNamesUnique) {
+    if (!resolved.has(commandName)) {
+      resolved.set(commandName, commandName)
+    }
   }
 
   return resolved

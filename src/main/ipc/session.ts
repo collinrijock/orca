@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import type { WorkspaceSessionPatch, WorkspaceSessionState } from '../../shared/types'
+import { logStartupMilestone } from '../startup/startup-diagnostics'
 
 export function registerSessionHandlers(store: Store): void {
   // Why: hostId is an optional second arg so an older renderer that invokes
@@ -15,7 +16,13 @@ export function registerSessionHandlers(store: Store): void {
   })
 
   ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
+    const startedAt = performance.now()
     store.patchWorkspaceSession(args, hostId)
+    logStartupMilestone('session-patch-done', {
+      durationMs: Math.round(performance.now() - startedAt),
+      patchFields: Object.keys(args).length,
+      host: hostId ?? 'local'
+    })
   })
 
   ipcMain.handle('session:flush', () => {

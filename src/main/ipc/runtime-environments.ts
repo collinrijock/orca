@@ -14,6 +14,7 @@ import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { RemoteRuntimeSubscription } from '../../shared/remote-runtime-client'
 import type { Store } from '../persistence'
+import { logStartupMilestone } from '../startup/startup-diagnostics'
 import { clearActiveRuntimeEnvironmentFocusIfMatches } from '../runtime-environment-focus-self-heal'
 import { closeRemoteRuntimeRequestConnection } from './runtime-environment-request-connections'
 import {
@@ -74,9 +75,15 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
   }
   ipcMain.removeAllListeners('runtimeEnvironments:subscriptionBinary')
 
-  ipcMain.handle('runtimeEnvironments:list', (): PublicKnownRuntimeEnvironment[] =>
-    listPublicRuntimeEnvironments()
-  )
+  ipcMain.handle('runtimeEnvironments:list', (): PublicKnownRuntimeEnvironment[] => {
+    const startedAt = performance.now()
+    const environments = listPublicRuntimeEnvironments()
+    logStartupMilestone('runtime-environments-list-done', {
+      durationMs: Math.round(performance.now() - startedAt),
+      count: environments.length
+    })
+    return environments
+  })
   ipcMain.handle(
     'runtimeEnvironments:addFromPairingCode',
     (

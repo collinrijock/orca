@@ -12,6 +12,8 @@
  *   node tools/benchmarks/startup-time-bench.mjs --label baseline
  *     [--iterations 5] [--files 28000] [--fixture-dir <path>]
  *     [--state-profile none|restored-local-tabs] [--session-tabs 200]
+ *     [--workspaces 1] [--unified-tabs 200] [--tab-groups 1] [--terminal-panes 200]
+ *     [--active-workspaces 1] [--open-files 0] [--browser-tabs 0]
  *     [--github-repos 3] [--gh-hang-ms 30000]
  *     [--wait-for-event renderer-startup-hydration-done]
  *     [--exe <path-to-packaged-Orca>] [--timeout-ms 240000]
@@ -27,17 +29,11 @@
  * Results: tools/benchmarks/results/startup-<label>-<timestamp>.json
  */
 import { spawn, spawnSync } from 'node:child_process'
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  realpathSync,
-  unlinkSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import os from 'node:os'
 import { delimiter, join, resolve } from 'node:path'
+import { ensureStartupBenchmarkFixture } from './startup-time-benchmark-fixture.mjs'
 
 const scriptDir = import.meta.dirname
 const repoRoot = resolve(scriptDir, '..', '..')
@@ -53,13 +49,20 @@ function parseArgs(argv) {
     timeoutMs: 240000,
     stateProfile: 'none',
     sessionTabs: 0,
+    workspaces: 1,
+    unifiedTabs: null,
+    tabGroups: null,
+    terminalPanes: null,
+    activeWorkspaces: 1,
+    openFiles: 0,
+    browserTabs: 0,
     githubRepos: 0,
     ghHangMs: 0,
-    waitForEvent: 'did-finish-load',
-    // How long the app stays alive after did-finish-load before the harness
-    // kills it. Raise to let background work (e.g. the async win32 ACL grant)
-    // complete the way it would in a real session.
-    lingerMs: 500
+    waitForEvent: 'renderer-startup-hydration-done',
+    // Why: post-hydration migration saves and the main event-loop probe report
+    // after the old 500ms default. Keep the process alive long enough to capture
+    // that user-visible post-update work instead of declaring success early.
+    lingerMs: 2_500
   }
   for (let i = 2; i < argv.length; i++) {
     const next = () => argv[++i]
@@ -88,6 +91,27 @@ function parseArgs(argv) {
       case '--session-tabs':
         args.sessionTabs = Number(next())
         break
+      case '--workspaces':
+        args.workspaces = Number(next())
+        break
+      case '--unified-tabs':
+        args.unifiedTabs = Number(next())
+        break
+      case '--tab-groups':
+        args.tabGroups = Number(next())
+        break
+      case '--terminal-panes':
+        args.terminalPanes = Number(next())
+        break
+      case '--active-workspaces':
+        args.activeWorkspaces = Number(next())
+        break
+      case '--open-files':
+        args.openFiles = Number(next())
+        break
+      case '--browser-tabs':
+        args.browserTabs = Number(next())
+        break
       case '--github-repos':
         args.githubRepos = Number(next())
         break
@@ -105,223 +129,6 @@ function parseArgs(argv) {
     }
   }
   return args
-}
-
-/**
- * Build a userData tree shaped like a real long-lived profile. The file count
- * drives the win32 icacls walk cost; contents are irrelevant, so files are
- * tiny. Layout mirrors Chromium cache dirs plus a few Orca-owned dirs.
- */
-function ensureFixture(fixtureDir, options) {
-  const { fileCount, stateProfile, sessionTabs, githubRepos } = options
-  const manifestPath = join(fixtureDir, 'bench-fixture-manifest.json')
-  if (existsSync(manifestPath)) {
-    try {
-      const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
-      if (
-        manifest.files === fileCount &&
-        manifest.stateProfile === stateProfile &&
-        manifest.sessionTabs === sessionTabs &&
-        (manifest.githubRepos ?? 0) === githubRepos
-      ) {
-        console.log(`[fixture] reusing ${fixtureDir} (${fileCount} files, state=${stateProfile})`)
-        return
-      }
-    } catch {
-      // fall through and rebuild
-    }
-  }
-  console.log(`[fixture] creating ${fixtureDir} with ~${fileCount} synthetic files…`)
-  const buckets = [
-    ['Cache', 'Cache_Data'],
-    ['Code Cache', 'js'],
-    ['Code Cache', 'wasm'],
-    ['GPUCache'],
-    ['DawnGraphiteCache'],
-    ['blob_storage', 'blobs'],
-    ['Service Worker', 'CacheStorage'],
-    ['terminal-scrollback-snapshots']
-  ]
-  const payload = 'x'.repeat(1024)
-  let written = 0
-  const started = Date.now()
-  for (let b = 0; written < fileCount; b = (b + 1) % buckets.length) {
-    const dir = join(fixtureDir, ...buckets[b], `g${Math.floor(written / 512)}`)
-    mkdirSync(dir, { recursive: true })
-    const batch = Math.min(512, fileCount - written)
-    for (let i = 0; i < batch; i++) {
-      writeFileSync(join(dir, `f_${String(written + i).padStart(6, '0')}`), payload)
-    }
-    written += batch
-  }
-  const persistedStateBytes = writePersistedStateFixture(fixtureDir, {
-    stateProfile,
-    sessionTabs,
-    githubRepos
-  })
-  writeFileSync(
-    manifestPath,
-    JSON.stringify({
-      files: fileCount,
-      stateProfile,
-      sessionTabs,
-      githubRepos,
-      persistedStateBytes,
-      createdAt: Date.now()
-    })
-  )
-  console.log(`[fixture] done in ${((Date.now() - started) / 1000).toFixed(1)}s`)
-}
-
-function initFixtureGitRepo(repoDir) {
-  mkdirSync(repoDir, { recursive: true })
-  if (!existsSync(join(repoDir, '.git'))) {
-    const init = spawnSync('git', ['init', repoDir], { stdio: 'ignore' })
-    if (init.status !== 0) {
-      throw new Error(`Failed to create git repo fixture at ${repoDir}`)
-    }
-  }
-  return realpathSync(repoDir)
-}
-
-/**
- * Seed repos whose hydration reaches the `gh` login probe: a GitHub `origin`
- * remote and no github.user/user.username config (the bench also points
- * GIT_CONFIG_GLOBAL away from the developer's real config at launch).
- */
-function buildGithubRepoFixtures(fixtureDir, githubRepos) {
-  const repos = []
-  for (let i = 0; i < githubRepos; i++) {
-    const repoPath = initFixtureGitRepo(join(fixtureDir, `bench-gh-repo-${i}`))
-    const remote = spawnSync(
-      'git',
-      [
-        '-C',
-        repoPath,
-        'remote',
-        'add',
-        'origin',
-        `https://github.com/orca-bench/bench-gh-repo-${i}.git`
-      ],
-      { stdio: 'ignore' }
-    )
-    // Exit 3 (remote exists) is fine on fixture reuse; anything else is not.
-    if (remote.status !== 0 && remote.status !== 3) {
-      throw new Error(`Failed to add GitHub remote to ${repoPath}`)
-    }
-    repos.push({
-      id: `bench-gh-repo-${i}`,
-      path: repoPath,
-      displayName: `Bench GH Repo ${i}`,
-      badgeColor: '#000000',
-      addedAt: 1,
-      externalWorktreeVisibility: 'show'
-    })
-  }
-  return repos
-}
-
-function writePersistedStateFixture(fixtureDir, { stateProfile, sessionTabs, githubRepos }) {
-  const dataPath = join(fixtureDir, 'orca-data.json')
-  if (stateProfile === 'none' && githubRepos === 0) {
-    try {
-      unlinkSync(dataPath)
-    } catch {
-      // no persisted state fixture
-    }
-    return 0
-  }
-  if (!['none', 'restored-local-tabs'].includes(stateProfile)) {
-    throw new Error(`Unknown state profile: ${stateProfile}`)
-  }
-
-  const githubRepoEntries = buildGithubRepoFixtures(fixtureDir, githubRepos)
-  if (stateProfile === 'none') {
-    const state = {
-      schemaVersion: 1,
-      repos: githubRepoEntries,
-      settings: {
-        telemetry: {
-          installId: 'startup-bench',
-          optedIn: false,
-          existedBeforeTelemetryRelease: true
-        }
-      }
-    }
-    const json = JSON.stringify(state, null, 2)
-    writeFileSync(dataPath, json, 'utf-8')
-    return Buffer.byteLength(json)
-  }
-
-  const repoPath = initFixtureGitRepo(join(fixtureDir, 'bench-repo'))
-  const repoId = 'bench-repo'
-  const worktreeId = `${repoId}::${repoPath}`
-  const tabCount = Math.max(1, sessionTabs)
-  const tabs = []
-  const terminalLayoutsByTabId = {}
-  const activeTabIdByWorktree = {}
-  for (let i = 0; i < tabCount; i++) {
-    const tabId = `bench-tab-${String(i).padStart(5, '0')}`
-    const ptyId = `bench-pty-${String(i).padStart(5, '0')}`
-    tabs.push({
-      id: tabId,
-      ptyId,
-      worktreeId,
-      title: `Terminal ${i + 1}`,
-      customTitle: null,
-      color: null,
-      sortOrder: i,
-      createdAt: 1
-    })
-    terminalLayoutsByTabId[tabId] = {
-      root: null,
-      activeLeafId: null,
-      expandedLeafId: null
-    }
-  }
-  activeTabIdByWorktree[worktreeId] = tabs[0]?.id ?? null
-  const state = {
-    schemaVersion: 1,
-    repos: [
-      {
-        id: repoId,
-        path: repoPath,
-        displayName: 'Bench Repo',
-        badgeColor: '#000000',
-        addedAt: 1,
-        externalWorktreeVisibility: 'show'
-      },
-      ...githubRepoEntries
-    ],
-    settings: {
-      telemetry: {
-        installId: 'startup-bench',
-        optedIn: false,
-        existedBeforeTelemetryRelease: true
-      }
-    },
-    ui: {
-      lastActiveRepoId: repoId,
-      lastActiveWorktreeId: worktreeId
-    },
-    workspaceSession: {
-      activeRepoId: repoId,
-      activeWorktreeId: worktreeId,
-      activeTabId: tabs[0]?.id ?? null,
-      tabsByWorktree: {
-        [worktreeId]: tabs
-      },
-      terminalLayoutsByTabId,
-      activeTabIdByWorktree,
-      activeWorktreeIdsOnShutdown: [worktreeId],
-      defaultTerminalTabsAppliedByWorktreeId: {
-        [worktreeId]: true
-      }
-    }
-  }
-  const json = JSON.stringify(state, null, 2)
-  writeFileSync(dataPath, json, 'utf-8')
-  return Buffer.byteLength(json)
 }
 
 /**
@@ -391,12 +198,12 @@ function killProcessTree(proc) {
 }
 
 function parseStartupLine(line) {
-  const match = /^\[startup\] (\S+)(.*)$/.exec(line)
+  const match = /^\[(startup|bootstrap)\] (\S+)(.*)$/.exec(line)
   if (!match) {
     return null
   }
   const details = {}
-  const detailText = match[2].trim()
+  const detailText = match[3].trim()
   if (detailText) {
     for (const pair of detailText.match(/(\S+?)=("[^"]*"|\S+)/g) ?? []) {
       const eq = pair.indexOf('=')
@@ -410,7 +217,7 @@ function parseStartupLine(line) {
       details[key] = value
     }
   }
-  return { event: match[1], details }
+  return { event: match[2], details, source: match[1] }
 }
 
 function runIteration({ exe, timeoutMs, lingerMs, waitForEvent, launchEnv }) {
@@ -481,6 +288,8 @@ function derivePhases(events) {
   const aclStart = eventTime(events, 'acl-grant-start', 't')
   const aclDone = eventTime(events, 'acl-grant-done', 't')
   return {
+    spawnToBundleEntry: eventTime(events, 'bundle-enter', 'harness'),
+    bundleEntryToAppReady: harnessDelta(events, 'bundle-enter', 'app-ready'),
     startupJsonParseMs: delta(
       events,
       'persistence-json-parse-start',
@@ -510,6 +319,38 @@ function derivePhases(events) {
         'renderer-first-window-services-await-done',
         'renderer-reconnect-terminals-done'
       ),
+    rendererMaxAppCommitMs: maxEventDetailsNumber(
+      events,
+      'renderer-app-commit',
+      'renderToCommitMs'
+    ),
+    mainRuntimeEnvironmentsListMs: eventDetailsNumber(
+      events,
+      'runtime-environments-list-done',
+      'durationMs'
+    ),
+    rendererSessionPatchBuildMs: eventDetailsNumber(
+      events,
+      'renderer-session-patch-build-done',
+      'durationMs'
+    ),
+    rendererSessionHostSplitMs: eventDetailsNumber(
+      events,
+      'renderer-session-host-split-done',
+      'durationMs'
+    ),
+    mainSessionPatchMs: eventDetailsNumber(events, 'session-patch-done', 'durationMs'),
+    mainSessionNormalizationMs: eventDetailsNumber(
+      events,
+      'session-full-normalization-done',
+      'durationMs'
+    ),
+    persistenceStateHashMs: eventDetailsNumber(events, 'persistence-state-hash-done', 'durationMs'),
+    persistencePayloadBuildMs: eventDetailsNumber(
+      events,
+      'persistence-payload-build-done',
+      'durationMs'
+    ),
     // Worst single main-thread stall observed by the event-loop probe — the
     // direct measurement of issue #7225's "Not Responding" freeze.
     maxEventLoopStallMs: maxEventDetailsNumber(events, 'event-loop-stall', 'maxGapMs')
@@ -539,6 +380,12 @@ function delta(events, from, to) {
   const a = eventTime(events, from, 't')
   const b = eventTime(events, to, 't')
   return a !== null && b !== null ? b - a : null
+}
+
+function harnessDelta(events, from, to) {
+  const start = eventTime(events, from, 'harness')
+  const end = eventTime(events, to, 'harness')
+  return start !== null && end !== null ? end - start : null
 }
 
 function median(values) {
@@ -571,19 +418,61 @@ async function main() {
   if (!['none', 'restored-local-tabs'].includes(args.stateProfile)) {
     throw new Error(`Unknown state profile: ${args.stateProfile}`)
   }
+  args.unifiedTabs ??= args.sessionTabs
+  args.tabGroups ??= args.workspaces
+  args.terminalPanes ??= args.sessionTabs
+  const countArgs = [
+    ['session tabs', args.sessionTabs],
+    ['workspaces', args.workspaces],
+    ['unified tabs', args.unifiedTabs],
+    ['tab groups', args.tabGroups],
+    ['terminal panes', args.terminalPanes],
+    ['active workspaces', args.activeWorkspaces],
+    ['open files', args.openFiles],
+    ['browser tabs', args.browserTabs]
+  ]
+  for (const [label, value] of countArgs) {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new Error(`Invalid ${label} count: ${value}`)
+    }
+  }
+  if (args.stateProfile === 'restored-local-tabs') {
+    if (args.workspaces < 1 || args.sessionTabs < args.workspaces) {
+      throw new Error('A restored fixture needs at least one terminal tab per workspace')
+    }
+    if (args.unifiedTabs < args.sessionTabs) {
+      throw new Error('Unified tab count cannot be smaller than terminal tab count')
+    }
+    if (args.terminalPanes < args.sessionTabs) {
+      throw new Error('Terminal pane count cannot be smaller than terminal tab count')
+    }
+    if (args.tabGroups < args.workspaces || args.tabGroups > args.unifiedTabs) {
+      throw new Error('Tab group count must be between workspace and unified tab counts')
+    }
+    if (args.openFiles + args.browserTabs > args.unifiedTabs - args.sessionTabs) {
+      throw new Error('Open-file and browser-tab counts exceed non-terminal unified tabs')
+    }
+  }
   const fixtureDir = resolve(
     args.fixtureDir ??
       join(
         os.tmpdir(),
         'orca-startup-bench',
-        `userdata-${args.files}-${args.stateProfile}-${args.sessionTabs}-gh${args.githubRepos}`
+        `userdata-${args.files}-${args.stateProfile}-${args.sessionTabs}-w${args.workspaces}-u${args.unifiedTabs}-g${args.tabGroups}-p${args.terminalPanes}-a${args.activeWorkspaces}-f${args.openFiles}-b${args.browserTabs}-gh${args.githubRepos}`
       )
   )
   mkdirSync(fixtureDir, { recursive: true })
-  ensureFixture(fixtureDir, {
+  ensureStartupBenchmarkFixture(fixtureDir, {
     fileCount: args.files,
     stateProfile: args.stateProfile,
     sessionTabs: args.sessionTabs,
+    workspaces: args.workspaces,
+    unifiedTabs: args.unifiedTabs,
+    tabGroups: args.tabGroups,
+    terminalPanes: args.terminalPanes,
+    activeWorkspaces: args.activeWorkspaces,
+    openFiles: args.openFiles,
+    browserTabs: args.browserTabs,
     githubRepos: args.githubRepos
   })
   const ghShimDir = writeGhShim(fixtureDir, args.ghHangMs)
@@ -610,7 +499,7 @@ async function main() {
     const phases = derivePhases(result.events)
     iterations.push({ ...result, phases })
     console.log(
-      `${result.outcome} total=${formatMs(phases.totalToDidFinishLoad)} acl=${formatMs(phases.aclGrantMs)} maxStall=${formatMs(phases.maxEventLoopStallMs)}`
+      `${result.outcome} ready=${formatMs(phases.totalToWorkspaceReady)} window=${formatMs(phases.totalToDidFinishLoad)} acl=${formatMs(phases.aclGrantMs)} maxStall=${formatMs(phases.maxEventLoopStallMs)}`
     )
     // Let the OS settle between launches (process teardown, file handles).
     await new Promise((resolveSleep) => setTimeout(resolveSleep, 1500))
@@ -638,6 +527,13 @@ async function main() {
         fixtureFiles: args.files,
         stateProfile: args.stateProfile,
         sessionTabs: args.sessionTabs,
+        workspaces: args.workspaces,
+        unifiedTabs: args.unifiedTabs,
+        tabGroups: args.tabGroups,
+        terminalPanes: args.terminalPanes,
+        activeWorkspaces: args.activeWorkspaces,
+        openFiles: args.openFiles,
+        browserTabs: args.browserTabs,
         githubRepos: args.githubRepos,
         ghHangMs: args.ghHangMs,
         waitForEvent: args.waitForEvent,

@@ -6,6 +6,7 @@
 
 import type { HookInstallAgent } from '../../shared/telemetry-events'
 import { track } from '../telemetry/client'
+import { logStartupMilestone } from '../startup/startup-diagnostics'
 
 // Why: install errors are about config-file shape (malformed JSON, ACL
 // denial), not user content — but messages can include paths or stack
@@ -32,7 +33,10 @@ function describeError(error: unknown): string {
 }
 
 export function runManagedHookInstallers(installers: readonly ManagedHookInstaller[]): void {
+  const startedAt = performance.now()
+  logStartupMilestone('managed-hook-installers-start', { count: installers.length })
   for (const [agent, install] of installers) {
+    const installerStartedAt = performance.now()
     try {
       install()
     } catch (error) {
@@ -48,6 +52,14 @@ export function runManagedHookInstallers(installers: readonly ManagedHookInstall
       } catch (telemetryError) {
         console.error('[agent-hooks] Failed to record install-failure telemetry:', telemetryError)
       }
+    } finally {
+      logStartupMilestone('managed-hook-installer-done', {
+        agent,
+        durationMs: Math.round(performance.now() - installerStartedAt)
+      })
     }
   }
+  logStartupMilestone('managed-hook-installers-done', {
+    durationMs: Math.round(performance.now() - startedAt)
+  })
 }

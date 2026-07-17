@@ -8,6 +8,11 @@ export function logRendererStartupDiagnostic(
   event: string,
   details: StartupDiagnosticDetails = {}
 ): void {
+  // Why: persistence modules also run in Node unit tests and headless tooling;
+  // diagnostics must not make those environment-agnostic paths require Electron.
+  if (typeof window === 'undefined') {
+    return
+  }
   const api = window.api?.app
   if (!api?.startupDiagnostic) {
     return

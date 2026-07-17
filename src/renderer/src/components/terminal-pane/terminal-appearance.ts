@@ -19,11 +19,13 @@ import {
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import type { PtyTransport } from './pty-transport'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
-import { HEX_COLOR_RE } from '../../../../shared/color-validation'
-import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
 import { publishTerminalViewAttributes } from './terminal-view-attributes-publisher'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
+import { composeActiveTerminalTheme } from './composed-terminal-theme'
+
+export { composeActiveTerminalTheme, hexToRgba, isHexColor } from './composed-terminal-theme'
+export { publishTerminalViewAttributesAtAppStart } from './terminal-startup-view-attributes'
 
 // Why Pick<IParser, ...> over a hand-rolled structural type: keeps the helper
 // tied to xterm's canonical signature so any upstream tightening (added
@@ -108,98 +110,6 @@ export function installMode2031Handlers(deps: Mode2031HandlerDeps): IDisposable[
       })
     )
   ]
-}
-
-export function hexToRgba(hex: string, alpha: number): string {
-  let clean = hex.replace('#', '')
-  if (clean.length === 3) {
-    clean = clean
-      .split('')
-      .map((c) => c + c)
-      .join('')
-  }
-  const r = Number.parseInt(clean.slice(0, 2), 16)
-  const g = Number.parseInt(clean.slice(2, 4), 16)
-  const b = Number.parseInt(clean.slice(4, 6), 16)
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
-}
-
-export function isHexColor(value: string): boolean {
-  return HEX_COLOR_RE.test(value)
-}
-
-// Why: extracted from applyTerminalAppearance so the settings preview can
-// derive the same composed theme without depending on PaneManager. Keep
-// pure — no DOM, no manager, no side effects.
-export function composeActiveTerminalTheme(
-  baseTheme: ITheme | null,
-  settings: Pick<
-    GlobalSettings,
-    'terminalColorOverrides' | 'terminalBackgroundOpacity' | 'terminalCursorOpacity'
-  >
-): ITheme | null {
-  if (!baseTheme) {
-    return null
-  }
-  // Why: setting scrollbar.width enables xterm's overview ruler, whose border
-  // defaults to the foreground color and paints a bright vertical line beside
-  // the scrollbar. We only want the slimmer scrollbar, not the ruler chrome.
-  // Why: xterm's default slider alpha (~0.2) is nearly invisible on dark
-  // backgrounds; raise the contrast so the thumb reads. Placed before the
-  // spread so an explicit theme value still wins.
-  let theme: ITheme = {
-    overviewRulerBorder: 'transparent',
-    scrollbarSliderBackground: 'rgba(180, 180, 185, 0.4)',
-    scrollbarSliderHoverBackground: 'rgba(180, 180, 185, 0.6)',
-    scrollbarSliderActiveBackground: 'rgba(180, 180, 185, 0.8)',
-    ...baseTheme
-  }
-  // Why: merge user-imported Ghostty color overrides on top of the resolved
-  // base theme so individual colors can be tweaked without losing the rest.
-  if (settings.terminalColorOverrides) {
-    theme = { ...theme, ...settings.terminalColorOverrides }
-  }
-  // Why: Ghostty's background-opacity controls the terminal's base alpha.
-  // Convert the hex background to rgba so xterm honors it when allowTransparency
-  // is also set on the Terminal instance.
-  if (settings.terminalBackgroundOpacity !== undefined && theme.background) {
-    theme = {
-      ...theme,
-      background: hexToRgba(theme.background, settings.terminalBackgroundOpacity)
-    }
-  }
-  // Why: Ghostty's cursor-opacity applies alpha to the cursor color. Only
-  // converted when the resolved cursor is a hex value; named CSS colors are
-  // left untouched because hexToRgba expects a hex input.
-  if (settings.terminalCursorOpacity !== undefined && theme.cursor && isHexColor(theme.cursor)) {
-    theme = {
-      ...theme,
-      cursor: hexToRgba(theme.cursor, settings.terminalCursorOpacity)
-    }
-  }
-  return theme
-}
-
-/** App-start publication (terminal-query-authority.md §Phase 6
- *  prerequisites): hidden-at-launch PTYs can query OSC 10/11 before any
- *  terminal pane mounts, and main's responder is silent-until-first-push.
- *  Composes the same theme applyTerminalAppearance would and publishes it
- *  through the same deduped publisher, so the later pane-mount apply is a
- *  no-op re-push. Returns whether a publish actually went out. */
-export function publishTerminalViewAttributesAtAppStart(
-  settings: GlobalSettings | null | undefined,
-  systemPrefersDark: boolean,
-  send?: (attributes: TerminalViewAttributes) => boolean
-): boolean {
-  if (!settings) {
-    return false
-  }
-  const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
-  const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
-  const theme = composeActiveTerminalTheme(baseTheme, settings)
-  return send !== undefined
-    ? publishTerminalViewAttributes(theme, appearance.mode, settings, send)
-    : publishTerminalViewAttributes(theme, appearance.mode, settings)
 }
 
 // Value equality over composed ITheme objects (flat string slots plus the

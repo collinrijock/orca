@@ -362,6 +362,10 @@ async function renderWorktreeList(): Promise<HTMLDivElement> {
       <WorktreeList scrollOffsetRef={{ current: 0 }} scrollAnchorRef={{ current: null }} />
     )
   })
+  await act(async () => {
+    await vi.dynamicImportSettled()
+  })
+  await act(async () => {})
   return container
 }
 

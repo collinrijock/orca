@@ -230,6 +230,27 @@ describe('renderer startup runtime routing', () => {
     )
   })
 
+  it('loads the Linear installer terminal only after the setup dialog opens', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.tsx'),
+      'utf8'
+    )
+
+    expect(source).toContain("import('./LinearAgentSkillSetupDialog').then")
+    expect(source).not.toContain("from './LinearAgentSkillSetupDialog'")
+    expect(source).toContain('const setupDialog = setupDialogOpen ?')
+  })
+
+  it('loads worktree note Markdown only with the hover detail surface', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/renderer/src/components/sidebar/WorktreeCardMeta.tsx'),
+      'utf8'
+    )
+
+    expect(source).toContain("lazyWithRetry(() => import('./CommentMarkdown')")
+    expect(source).not.toContain("from './CommentMarkdown'")
+  })
+
   it('does not eagerly import optional status-bar segments on startup', () => {
     const source = readFileSync(
       join(process.cwd(), 'src/renderer/src/components/status-bar/StatusBar.tsx'),

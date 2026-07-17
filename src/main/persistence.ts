@@ -3681,13 +3681,21 @@ export class Store {
   }
 
   private computeStateHash(): string {
-    return createHash('sha1').update(JSON.stringify(this.getDurableState())).digest('hex')
+    const startedAt = performance.now()
+    const serialized = JSON.stringify(this.getDurableState())
+    const hash = createHash('sha1').update(serialized).digest('hex')
+    logPersistenceStartupMilestone('persistence-state-hash-done', {
+      durationMs: Math.round(performance.now() - startedAt),
+      bytes: Buffer.byteLength(serialized)
+    })
+    return hash
   }
 
   // Why: builds the on-disk payload synchronously so the hash and the
   // serialized bytes reflect the same state tick (no mutation can interleave
   // before an await).
   private buildStateToSave(): string {
+    const startedAt = performance.now()
     // Why: secrets must be encrypted on disk. Clone state so the in-memory
     // this.state stays plaintext for the rest of the app.
     const stateToSave = {
@@ -3702,7 +3710,12 @@ export class Store {
         browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
       }
     }
-    return JSON.stringify(stateToSave, null, 2)
+    const payload = JSON.stringify(stateToSave, null, 2)
+    logPersistenceStartupMilestone('persistence-payload-build-done', {
+      durationMs: Math.round(performance.now() - startedAt),
+      bytes: Buffer.byteLength(payload)
+    })
+    return payload
   }
 
   // Why: async writes avoid blocking the main Electron thread on every
@@ -3711,11 +3724,15 @@ export class Store {
     if (this.writesFrozen) {
       return
     }
+    const writeStartedAt = performance.now()
     const gen = this.writeGeneration
     const stateHash = this.computeStateHash()
     // Why: a mutation burst that nets out to already-persisted state (or a
     // flush that raced ahead) must not rewrite a byte-identical multi-MB file.
     if (stateHash === this.lastWrittenStateHash) {
+      logPersistenceStartupMilestone('persistence-async-write-skipped', {
+        durationMs: Math.round(performance.now() - writeStartedAt)
+      })
       return
     }
     const payload = this.buildStateToSave()
@@ -3759,6 +3776,9 @@ export class Store {
     if (this.shouldRotateBackups(now, dataFile)) {
       await this.rotateBackupsAsync(dataFile)
     }
+    logPersistenceStartupMilestone('persistence-async-write-done', {
+      durationMs: Math.round(performance.now() - writeStartedAt)
+    })
   }
 
   // Why: synchronous variant kept only for flush() at shutdown, where the
@@ -3767,6 +3787,7 @@ export class Store {
     if (this.writesFrozen) {
       return
     }
+    const writeStartedAt = performance.now()
     const stateHash = this.computeStateHash()
     // Why: skipping is safe under flushOrThrow's durability contract — a
     // matching hash means this exact state is already the file's content.
@@ -3774,6 +3795,9 @@ export class Store {
     // rename may already be dispatched past the generation check, and only
     // an unconditional sync write afterwards reliably out-orders it.
     if (!opts.force && stateHash === this.lastWrittenStateHash) {
+      logPersistenceStartupMilestone('persistence-sync-write-skipped', {
+        durationMs: Math.round(performance.now() - writeStartedAt)
+      })
       return
     }
     const dataFile = this.dataFile
@@ -3807,6 +3831,10 @@ export class Store {
     if (this.shouldRotateBackups(now, dataFile)) {
       this.rotateBackupsSync(dataFile)
     }
+    logPersistenceStartupMilestone('persistence-sync-write-done', {
+      durationMs: Math.round(performance.now() - writeStartedAt),
+      forced: opts.force === true
+    })
   }
 
   flushOrThrow(): void {
@@ -5874,7 +5902,13 @@ export class Store {
       ...patch
     }
     if (workspaceSessionPatchNeedsFullNormalization(patch)) {
+      const normalizationStartedAt = performance.now()
       this.setWorkspaceSession(next, resolved)
+      logPersistenceStartupMilestone('session-full-normalization-done', {
+        durationMs: Math.round(performance.now() - normalizationStartedAt),
+        patchFields: Object.keys(patch).length,
+        host: resolved
+      })
       return
     }
     if (Object.hasOwn(patch, 'browserUrlHistory')) {

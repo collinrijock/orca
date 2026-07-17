@@ -1,12 +1,9 @@
 import path from 'node:path'
 import { resolveCliCommands } from '../codex-cli/command'
 
-// Why: local agent detection may run before shell-PATH hydration, but the
-// fallback must stay bounded because it runs on the main process.
-export function detectCommandsInInstallDirs(commands: readonly string[]): Set<string> {
-  if (commands.length === 0) {
-    return new Set()
-  }
+// Why: one bulk filesystem pass avoids a `which`/`where` subprocess per agent;
+// spawning that fan-out can hold Electron's main loop for over a second on macOS.
+export function detectLocalCommands(commands: readonly string[]): Set<string> {
   try {
     const resolvedCommands = resolveCliCommands(commands)
     return new Set(

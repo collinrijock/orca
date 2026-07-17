@@ -7,14 +7,13 @@ import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { getActiveMultiplexer } from './ssh'
 import { detectWslCommandsOnPath, type WslPreflightTarget } from './preflight-wsl-agent-detection'
-import { detectCommandsInInstallDirs } from './local-agent-install-dir-detection'
+import { detectLocalCommands } from './local-agent-command-detection'
 import { getPreflightWslTarget, type PreflightRuntimeContext } from './preflight-runtime-target'
 import { hydrateShellPathForAgentDetection } from './agent-detection-shell-path'
 import {
   execCommandInWsl,
   execLocalPreflightCommand,
   isCommandAvailable,
-  isCommandOnPath,
   shellQuote
 } from './preflight-command-exec'
 import {
@@ -26,6 +25,7 @@ import {
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
   resolveDetectedTuiAgentIds
 } from './tui-agent-detection-commands'
+import { logStartupMilestone } from '../startup/startup-diagnostics'
 
 export type PreflightStatus = {
   git: { installed: boolean }
@@ -85,45 +85,57 @@ async function detectCommandRuntime(
 }
 
 export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
+  const startedAt = performance.now()
+  logStartupMilestone('agent-detection-start', {
+    runtime: getPreflightWslTarget(context) ? 'wsl' : 'local'
+  })
   const wslTarget = getPreflightWslTarget(context)
   if (wslTarget) {
     const foundCommands = await detectWslCommandsOnPath(
       wslTarget,
       getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, 'wsl')
     )
-    return resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, 'wsl')
+    const agents = resolveDetectedTuiAgentIds(
+      KNOWN_TUI_AGENT_DETECTION_COMMANDS,
+      foundCommands,
+      'wsl'
+    )
+    logStartupMilestone('agent-detection-done', {
+      runtime: 'wsl',
+      durationMs: Math.round(performance.now() - startedAt),
+      count: agents.length
+    })
+    return agents
   }
 
   const probeCommands = getTuiAgentDetectionProbeCommands(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     process.platform
   )
-  const pathChecks = await Promise.all(
-    probeCommands.map(async (cmd) => ({
-      cmd,
-      installedOnPath: await isCommandOnPath(cmd)
-    }))
-  )
-  const missedCommands = pathChecks.filter((check) => !check.installedOnPath).map(({ cmd }) => cmd)
-  // Why: PATH may still be unhydrated on a cold GUI launch; bulk resolution
-  // computes user install dirs once instead of blocking once per missed CLI.
-  const installDirCommands = detectCommandsInInstallDirs(missedCommands)
-  const foundCommands = new Set(
-    pathChecks
-      .filter(({ cmd, installedOnPath }) => installedOnPath || installDirCommands.has(cmd))
-      .map(({ cmd }) => cmd)
-  )
-  return resolveDetectedTuiAgentIds(
+  const foundCommands = detectLocalCommands(probeCommands)
+  const agents = resolveDetectedTuiAgentIds(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     foundCommands,
     process.platform
   )
+  logStartupMilestone('agent-detection-done', {
+    runtime: 'local',
+    durationMs: Math.round(performance.now() - startedAt),
+    probes: probeCommands.length,
+    count: agents.length
+  })
+  return agents
 }
 
 export async function detectInstalledAgentsWithShellPathHydration(
   context?: PreflightRuntimeContext
 ): Promise<string[]> {
+  const startedAt = performance.now()
+  logStartupMilestone('agent-shell-hydration-start')
   await hydrateShellPathForAgentDetection(context)
+  logStartupMilestone('agent-shell-hydration-done', {
+    durationMs: Math.round(performance.now() - startedAt)
+  })
   return detectInstalledAgents(context)
 }
 

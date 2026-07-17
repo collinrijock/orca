@@ -10,6 +10,10 @@ import {
   LinearAgentSkillSetupPrompt,
   _linearAgentSkillSetupPromptInternalsForTests
 } from './LinearAgentSkillSetupPrompt'
+import {
+  createLinearAgentSkillTestCliStatus as cliStatus,
+  installLinearAgentSkillTestLocalStorage
+} from './linear-agent-skill-setup-test-fixtures'
 
 const HOST_DISMISS_STORAGE_KEY = 'orca.linearTicketsSkill.setupDismissed.host'
 const FEDORA_DISMISS_STORAGE_KEY = 'orca.linearTicketsSkill.setupDismissed.wsl.Fedora'
@@ -107,37 +111,6 @@ vi.mock('../settings/AgentSkillSetupPanel', () => ({
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 
-function installLocalStorageShim(): void {
-  const values = new Map<string, string>()
-  Object.defineProperty(window, 'localStorage', {
-    configurable: true,
-    value: {
-      clear: () => values.clear(),
-      getItem: (key: string) => values.get(key) ?? null,
-      removeItem: (key: string) => values.delete(key),
-      setItem: (key: string, value: string) => values.set(key, value)
-    }
-  })
-}
-
-function cliStatus(overrides: Partial<CliInstallStatus>): CliInstallStatus {
-  return {
-    platform: 'darwin',
-    commandName: 'orca',
-    commandPath: '/usr/local/bin/orca',
-    pathDirectory: '/usr/local/bin',
-    pathConfigured: true,
-    launcherPath: '/Applications/Orca.app/Contents/MacOS/Orca',
-    installMethod: 'symlink',
-    supported: true,
-    state: 'installed',
-    currentTarget: '/Applications/Orca.app/Contents/MacOS/Orca',
-    unsupportedReason: null,
-    detail: null,
-    ...overrides
-  }
-}
-
 async function renderPrompt(
   props: ComponentProps<typeof LinearAgentSkillSetupPrompt>
 ): Promise<HTMLDivElement> {
@@ -146,6 +119,9 @@ async function renderPrompt(
   root = createRoot(container)
   await act(async () => {
     root?.render(<LinearAgentSkillSetupPrompt {...props} />)
+  })
+  await act(async () => {
+    await vi.dynamicImportSettled()
   })
   await act(async () => {})
   return container
@@ -156,6 +132,9 @@ async function updatePrompt(
 ): Promise<void> {
   await act(async () => {
     root?.render(<LinearAgentSkillSetupPrompt {...props} />)
+  })
+  await act(async () => {
+    await vi.dynamicImportSettled()
   })
   await act(async () => {})
 }
@@ -178,6 +157,9 @@ function findBodyButton(label: string): HTMLButtonElement | undefined {
 }
 
 async function settleRender(): Promise<void> {
+  await act(async () => {
+    await vi.dynamicImportSettled()
+  })
   await act(async () => {})
   await act(async () => {})
 }
@@ -213,7 +195,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     mocks.ensureCli.mockClear()
     mocks.ensureWslCli.mockClear()
     mocks.panelProps.length = 0
-    installLocalStorageShim()
+    installLinearAgentSkillTestLocalStorage()
     window.localStorage.clear()
     _linearAgentSkillSetupPromptInternalsForTests.resetSessionReminders()
     Object.defineProperty(window, 'api', {
@@ -343,6 +325,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     await act(async () => {
       setupButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
+    await settleRender()
 
     expect(document.body.textContent).toContain("wsl.exe -d 'Fedora' -- bash -lc 'npx skills add")
     expect(mocks.panelProps.at(-1)).toEqual(
@@ -436,6 +419,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     await act(async () => {
       setupButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
+    await settleRender()
 
     expect(document.body.querySelector('[data-testid="linear-skill-inline-panel"]')).not.toBeNull()
     expect(document.body.textContent).toContain('orca-linear')

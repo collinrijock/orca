@@ -272,6 +272,41 @@ describe('resolveCliCommands', () => {
     expect([...resolved.keys()]).toEqual(['claude'])
     expect(resolved.get('claude')).toBe(pathClaude)
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'skips non-runnable batch candidates and continues through PATH',
+    () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-cli-commands-'))
+      const badDir = join(root, 'bad-bin')
+      const goodDir = join(root, 'good-bin')
+      makeNonExecutableFile(join(badDir, 'codex'))
+      const goodCodex = join(goodDir, 'codex')
+      makeExecutable(goodCodex)
+
+      const resolved = resolveCliCommands(['codex'], {
+        platform: 'darwin',
+        pathEnv: [badDir, goodDir].join(delimiter),
+        homePath: root
+      })
+
+      expect(resolved.get('codex')).toBe(goodCodex)
+    }
+  )
+
+  it('matches Windows executable names case-insensitively, including .com', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-cli-commands-'))
+    const pathDir = join(root, 'bin')
+    const commandPath = join(pathDir, 'CODEX.COM')
+    makeExecutable(commandPath)
+
+    const resolved = resolveCliCommands(['codex'], {
+      platform: 'win32',
+      pathEnv: pathDir,
+      homePath: root
+    })
+
+    expect(resolved.get('codex')).toBe(commandPath)
+  })
 })
 
 describe('getVersionManagerBinPaths', () => {

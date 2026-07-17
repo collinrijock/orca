@@ -32,6 +32,7 @@ import {
   getReleaseDownloadUrl
 } from './updater-prerelease-feed'
 import { fetchNudge, shouldApplyNudge } from './updater-nudge'
+import { logStartupMilestone } from './startup/startup-diagnostics'
 
 type CheckFailureSource = 'event' | 'promise' | 'fallback-promise'
 type MissingManifestPrereleaseFallbackResult = { userInitiated: boolean }
@@ -128,7 +129,12 @@ let autoUpdater: ElectronAutoUpdater | null = null
 
 function getAutoUpdater(): ElectronAutoUpdater {
   if (!autoUpdater) {
+    const startedAt = performance.now()
+    logStartupMilestone('updater-module-load-start')
     autoUpdater = loadElectronAutoUpdater()
+    logStartupMilestone('updater-module-load-done', {
+      durationMs: Math.round(performance.now() - startedAt)
+    })
   }
   return autoUpdater
 }

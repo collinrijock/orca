@@ -1,6 +1,11 @@
+import React from 'react'
 import { cn } from '@/lib/utils'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { translate } from '@/i18n/i18n'
+
+const CommentMarkdown = lazyWithRetry(() => import('@/components/sidebar/CommentMarkdown'), {
+  reloadKey: 'dashboard-agent-row-comment-markdown'
+})
 
 type DashboardAgentRowMessageProps = {
   expanded: boolean
@@ -21,6 +26,15 @@ export function DashboardAgentRowMessage({
     )
   }
 
+  const messageClassName = cn(
+    'min-w-0 flex-1 overflow-hidden text-[10px] leading-snug text-muted-foreground/80',
+    'transition-[height] duration-200 ease-out [interpolate-size:allow-keywords]',
+    expanded ? 'h-auto' : 'h-[1lh]',
+    !expanded &&
+      'truncate whitespace-nowrap [&_*]:inline [&_*]:!whitespace-nowrap [&_*]:!m-0 [&_*]:!p-0 [&_ul]:list-none [&_ol]:list-none [&_br]:hidden'
+  )
+  const messageTitle = !expanded ? lastAssistantMessage : undefined
+
   return (
     <div className="mt-0.5 flex min-w-0 items-start gap-1.5 pl-5">
       {isInterrupted ? (
@@ -38,19 +52,22 @@ export function DashboardAgentRowMessage({
         </span>
       ) : null}
       {lastAssistantMessage ? (
-        <CommentMarkdown
-          content={lastAssistantMessage}
-          // Why: animate between a clipped preview and natural height without
-          // measuring markdown content in JS.
-          className={cn(
-            'min-w-0 flex-1 overflow-hidden text-[10px] leading-snug text-muted-foreground/80',
-            'transition-[height] duration-200 ease-out [interpolate-size:allow-keywords]',
-            expanded ? 'h-auto' : 'h-[1lh]',
-            !expanded &&
-              'truncate whitespace-nowrap [&_*]:inline [&_*]:!whitespace-nowrap [&_*]:!m-0 [&_*]:!p-0 [&_ul]:list-none [&_ol]:list-none [&_br]:hidden'
-          )}
-          title={!expanded ? lastAssistantMessage : undefined}
-        />
+        <React.Suspense
+          // Why: keep the assistant reply visible while the Markdown engine loads off the startup path.
+          fallback={
+            <div className={messageClassName} title={messageTitle}>
+              {lastAssistantMessage}
+            </div>
+          }
+        >
+          <CommentMarkdown
+            content={lastAssistantMessage}
+            // Why: animate between a clipped preview and natural height without
+            // measuring markdown content in JS.
+            className={messageClassName}
+            title={messageTitle}
+          />
+        </React.Suspense>
       ) : null}
     </div>
   )

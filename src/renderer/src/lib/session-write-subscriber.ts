@@ -3,6 +3,7 @@ import { isDecorativeAgentTitleFrameChange } from '../../../shared/agent-decorat
 import type { WorkspaceSessionPatch } from '../../../shared/types'
 import { SESSION_RELEVANT_FIELDS, shouldPersistWorkspaceSession } from './workspace-session'
 import { buildWorkspaceSessionPatch } from './workspace-session-patch'
+import { logRendererStartupDiagnostic } from '../startup/startup-diagnostics'
 
 type SessionRelevantField = (typeof SESSION_RELEVANT_FIELDS)[number]
 type TabsByWorktree = AppState['tabsByWorktree']
@@ -230,7 +231,13 @@ export function createSessionWriteSubscriber({
       }
       const changed = new Set(pendingChangedFields)
       pendingChangedFields.clear()
+      const patchStartedAt = performance.now()
       const patch = buildWorkspaceSessionPatch(fresh, changed)
+      logRendererStartupDiagnostic('session-patch-build-done', {
+        durationMs: Math.round(performance.now() - patchStartedAt),
+        changedFields: changed.size,
+        patchFields: Object.keys(patch).length
+      })
       if (Object.keys(patch).length === 0) {
         return
       }

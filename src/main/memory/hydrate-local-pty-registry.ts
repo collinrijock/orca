@@ -27,6 +27,7 @@ import { listRepoWorktrees } from '../repo-worktrees'
 import { parsePtySessionId } from '../../shared/pty-session-id-format'
 import { splitWorktreeId } from '../../shared/worktree-id'
 import type { Store } from '../persistence'
+import { logStartupMilestone } from '../startup/startup-diagnostics'
 
 // Why: `attachMainWindowServices` runs on every macOS dock re-activation
 // (see `app.on('activate', ...)` in src/main/index.ts), so this module
@@ -55,14 +56,18 @@ let hasHydrated = false
  * here is a coverage degradation, not a correctness regression.
  */
 export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos'>): Promise<void> {
+  const startedAt = performance.now()
+  logStartupMilestone('local-pty-registry-hydration-start')
   try {
     if (hasHydrated) {
+      logStartupMilestone('local-pty-registry-hydration-skipped', { reason: 'already-hydrated' })
       return
     }
     const provider = getDaemonProvider()
     if (!provider) {
       // Why: leave hasHydrated false so a later activation (after the
       // daemon comes up) can retry.
+      logStartupMilestone('local-pty-registry-hydration-skipped', { reason: 'no-provider' })
       return
     }
     // Why: flip only once we have a provider — committed to either
@@ -163,6 +168,11 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos
       '[memory] Boot-time pty-registry hydration failed:',
       err instanceof Error ? err.message : String(err)
     )
+  } finally {
+    logStartupMilestone('local-pty-registry-hydration-done', {
+      durationMs: Math.round(performance.now() - startedAt),
+      registered: listRegisteredPtys().length
+    })
   }
 }
 

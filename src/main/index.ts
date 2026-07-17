@@ -749,6 +749,10 @@ function startTerminalRuntimeStartupServices(): Promise<void> {
 }
 
 function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget): string | null {
+  const startedAt = performance.now()
+  logStartupMilestone('codex-launch-preparation-start', {
+    runtime: target?.runtime ?? 'host'
+  })
   const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target)
   const hookTarget =
     target?.runtime === 'wsl'
@@ -784,6 +788,10 @@ function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget):
       error
     )
   }
+  logStartupMilestone('codex-launch-preparation-done', {
+    runtime: target?.runtime ?? 'host',
+    durationMs: Math.round(performance.now() - startedAt)
+  })
   return runtimeHomePath
 }
 
