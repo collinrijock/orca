@@ -82,7 +82,11 @@ function parseResetDescription(isoString: string | undefined): string | null {
 }
 
 function mapWeeklyCredits(config: GrokBillingConfig): RateLimitWindow | null {
-  const usedPercent = config.creditUsagePercent
+  // Why: Grok's protobuf JSON omits zero-valued percentages; a declared weekly
+  // period without this field is 0% usage, not an absent weekly allowance.
+  const usedPercent =
+    config.creditUsagePercent ??
+    (config.currentPeriod?.type === 'USAGE_PERIOD_TYPE_WEEKLY' ? 0 : null)
   if (typeof usedPercent !== 'number' || !Number.isFinite(usedPercent)) {
     return null
   }
