@@ -20,6 +20,7 @@ export function parseRuntimeNativeChatTurnLifecycle(
     typeof record.turnId !== 'string' ||
     record.turnId.trim().length === 0 ||
     (record.timestamp !== null &&
+      record.timestamp !== undefined &&
       (typeof record.timestamp !== 'number' ||
         !Number.isFinite(record.timestamp) ||
         record.timestamp <= 0))
@@ -29,7 +30,9 @@ export function parseRuntimeNativeChatTurnLifecycle(
   return {
     state: record.state,
     turnId: record.turnId.trim(),
-    timestamp: record.timestamp
+    // Why: an omitted timestamp is a valid payload; normalize it to null rather
+    // than dropping the whole lifecycle record.
+    timestamp: record.timestamp ?? null
   }
 }
 

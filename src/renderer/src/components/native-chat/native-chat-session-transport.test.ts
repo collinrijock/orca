@@ -125,6 +125,24 @@ describe('getNativeChatSessionTransport — selection', () => {
     })
   })
 
+  it('keeps lifecycle metadata whose timestamp is omitted, normalizing it to null', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    runtimeEnvironmentsCall.mockResolvedValueOnce(
+      okEnvelope({
+        messages: [message('no-ts')],
+        turnLifecycleCapable: true,
+        lifecycle: { state: 'completed', turnId: 'turn-3' }
+      })
+    )
+    const transport = getNativeChatSessionTransport(ENV)
+
+    await expect(transport.readSession('claude', 'sess-1')).resolves.toEqual({
+      messages: [message('no-ts')],
+      turnLifecycleCapable: true,
+      lifecycle: { state: 'completed', turnId: 'turn-3', timestamp: null }
+    })
+  })
+
   it('returns the local adapter on the web client even with an owner (R3 guard)', async () => {
     ;(window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     nativeChatReadSession.mockResolvedValue({ messages: [] })

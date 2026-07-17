@@ -200,6 +200,20 @@ describe('mergeNativeChatLiveSession', () => {
     expect(session.status).toBe('working')
   })
 
+  it('settles on an interruption even while the hook reports a live background child', () => {
+    const session = mergeNativeChatLiveSession({
+      sources: { transcript: [assistant('a-1', 'lead done')] },
+      sessionId: 'sess',
+      agent: 'claude',
+      hookState: 'working',
+      stateStartedAt: 1,
+      turnLifecycleCapable: true,
+      transcriptLifecycle: { state: 'interrupted', turnId: 'turn-1', timestamp: 2 },
+      hookHasWorkingSubagents: true
+    })
+    expect(session.status).toBe('ready')
+  })
+
   it('leaves completed states (done/waiting/blocked) on the derived status', () => {
     const session = mergeNativeChatLiveSession({
       sources: { transcript: [user('u-1', 'hi')] },

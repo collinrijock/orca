@@ -91,12 +91,18 @@ function liveStatusOverride(
   if (hookState !== 'working') {
     return undefined
   }
+  const terminatesCurrentTurn = lifecycleTerminatesCurrentTurn(transcriptLifecycle, stateStartedAt)
+  // Why: an explicit interruption ends the whole turn, children included, so it
+  // settles the session even while a stale child status still reads working.
+  if (terminatesCurrentTurn && transcriptLifecycle?.state === 'interrupted') {
+    return undefined
+  }
   // Why: a lead completion does not end Claude's aggregate turn while a
   // background child still runs; the hook roster owns that extra lifetime.
   if (hookHasWorkingSubagents) {
     return 'working'
   }
-  if (lifecycleTerminatesCurrentTurn(transcriptLifecycle, stateStartedAt)) {
+  if (terminatesCurrentTurn) {
     return undefined
   }
   // Why: Grok and older remote hosts have no explicit boundary decoder. Keep
