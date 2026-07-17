@@ -16,12 +16,18 @@ const focusEffectRuntime = vi.hoisted(() => ({
   callback: null as null | (() => undefined | (() => void))
 }))
 
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (reason?: unknown) => void
+} {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((resolvePromise) => {
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
+    reject = rejectPromise
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 
 vi.mock('expo-router', async () => {
@@ -47,8 +53,8 @@ describe('useMobileSessionViewMode', () => {
 
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
-    vi.mocked(loadDefaultSessionView).mockResolvedValue('terminal')
-    vi.mocked(loadSessionViewOverrides).mockResolvedValue(new Map())
+    vi.mocked(loadDefaultSessionView).mockReset().mockResolvedValue('terminal')
+    vi.mocked(loadSessionViewOverrides).mockReset().mockResolvedValue(new Map())
     vi.mocked(updateSessionViewOverride).mockReset().mockResolvedValue(undefined)
     focusEffectRuntime.callback = null
   })
@@ -118,6 +124,7 @@ describe('useMobileSessionViewMode', () => {
 
     expect(updateSessionViewOverride).toHaveBeenLastCalledWith('h', 'w', 't1', 'terminal')
     expect(controller?.isTabChatView('t1')).toBe(false)
+    expect(loadSessionViewOverrides).toHaveBeenCalledTimes(1)
   })
 
   it('toggles a terminal-default tab into chat', async () => {
@@ -197,6 +204,47 @@ describe('useMobileSessionViewMode', () => {
     expect(updateSessionViewOverride).toHaveBeenNthCalledWith(2, 'h', 'w', 't2', 'chat')
   })
 
+  it('reconciles the latest optimistic override when persistence fails', async () => {
+    vi.mocked(updateSessionViewOverride).mockRejectedValue(new Error('storage unavailable'))
+    await mount({
+      defaultView: 'terminal',
+      overrides: new Map<string, MobileSessionView>([['t1', 'terminal']])
+    })
+
+    await act(async () => {
+      controller?.toggleTabChatView('t1')
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(controller?.isTabChatView('t1')).toBe(false)
+    expect(loadSessionViewOverrides).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not let an older failed override roll back a newer choice', async () => {
+    const recoveryLoad = deferred<Map<string, MobileSessionView>>()
+    vi.mocked(updateSessionViewOverride)
+      .mockRejectedValueOnce(new Error('storage unavailable'))
+      .mockResolvedValueOnce(undefined)
+    await mount({ defaultView: 'terminal' })
+    vi.mocked(loadSessionViewOverrides).mockReturnValueOnce(recoveryLoad.promise)
+
+    await act(async () => {
+      controller?.toggleTabChatView('t1')
+      await Promise.resolve()
+    })
+    act(() => controller?.toggleTabChatView('t1'))
+
+    await act(async () => {
+      recoveryLoad.resolve(new Map([['t1', 'chat']]))
+      await recoveryLoad.promise
+      await Promise.resolve()
+    })
+
+    expect(controller?.isTabChatView('t1')).toBe(false)
+    expect(updateSessionViewOverride).toHaveBeenNthCalledWith(2, 'h', 'w', 't1', 'terminal')
+  })
+
   it('finishes an early toggle save after the route unmounts', async () => {
     const overridesLoad = deferred<Map<string, MobileSessionView>>()
     vi.mocked(loadSessionViewOverrides).mockReturnValue(overridesLoad.promise)
@@ -219,5 +267,22 @@ describe('useMobileSessionViewMode', () => {
     })
 
     expect(updateSessionViewOverride).toHaveBeenCalledWith('h', 'w', 'new-tab', 'chat')
+  })
+
+  it('does not reload a failed override after the route unmounts', async () => {
+    const failedWrite = deferred<void>()
+    vi.mocked(updateSessionViewOverride).mockReturnValue(failedWrite.promise)
+    await mount({ defaultView: 'terminal' })
+
+    act(() => controller?.toggleTabChatView('t1'))
+    act(() => renderer?.unmount())
+    renderer = null
+    await act(async () => {
+      failedWrite.reject(new Error('storage unavailable'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(loadSessionViewOverrides).toHaveBeenCalledTimes(1)
   })
 })

@@ -19,6 +19,7 @@ type ViewOverridesRuntime = {
   worktreeId: string
   loadPromise: Promise<Map<string, MobileSessionView>>
   currentOverrides: Map<string, MobileSessionView>
+  mutationRevisions: Map<string, number>
 }
 
 function isOverrideScope(state: ViewOverridesState, hostId: string, worktreeId: string): boolean {
@@ -59,6 +60,13 @@ export function useMobileSessionViewMode(args: {
   const viewOverridesStateRef = useRef(viewOverridesState)
   viewOverridesStateRef.current = viewOverridesState
   const viewOverridesRuntimeRef = useRef<ViewOverridesRuntime | null>(null)
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
   const ensureViewOverridesRuntime = useCallback((scopeHostId: string, scopeWorktreeId: string) => {
     const current = viewOverridesRuntimeRef.current
     if (current?.hostId === scopeHostId && current.worktreeId === scopeWorktreeId) {
@@ -68,7 +76,8 @@ export function useMobileSessionViewMode(args: {
       hostId: scopeHostId,
       worktreeId: scopeWorktreeId,
       loadPromise: loadSessionViewOverrides(scopeHostId, scopeWorktreeId),
-      currentOverrides: new Map()
+      currentOverrides: new Map(),
+      mutationRevisions: new Map()
     }
     viewOverridesRuntimeRef.current = next
     return next
@@ -150,9 +159,39 @@ export function useMobileSessionViewMode(args: {
 
       const runtime = ensureViewOverridesRuntime(hostId, worktreeId)
       runtime.currentOverrides = overrides
+      const revision = (runtime.mutationRevisions.get(tabId) ?? 0) + 1
+      runtime.mutationRevisions.set(tabId, revision)
       // Why: enqueue the individual mutation immediately so a remounted route
       // cannot reorder it or replace unrelated overrides with a stale snapshot.
-      void updateSessionViewOverride(hostId, worktreeId, tabId, nextView)
+      void updateSessionViewOverride(hostId, worktreeId, tabId, nextView).catch(async () => {
+        if (!mountedRef.current || viewOverridesRuntimeRef.current !== runtime) {
+          return
+        }
+        const persisted = await loadSessionViewOverrides(hostId, worktreeId)
+        // Why: a failed older write must not roll back a newer choice for this tab.
+        if (
+          !mountedRef.current ||
+          viewOverridesRuntimeRef.current !== runtime ||
+          runtime.mutationRevisions.get(tabId) !== revision
+        ) {
+          return
+        }
+        const reconciled = new Map(runtime.currentOverrides)
+        const persistedView = persisted.get(tabId)
+        if (persistedView) {
+          reconciled.set(tabId, persistedView)
+        } else {
+          reconciled.delete(tabId)
+        }
+        runtime.currentOverrides = reconciled
+        const latest = viewOverridesStateRef.current
+        if (!isOverrideScope(latest, hostId, worktreeId)) {
+          return
+        }
+        const reconciledState = { ...latest, overrides: reconciled }
+        viewOverridesStateRef.current = reconciledState
+        setViewOverridesState(reconciledState)
+      })
     },
     [ensureViewOverridesRuntime, hostId, worktreeId]
   )

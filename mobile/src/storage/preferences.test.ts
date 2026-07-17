@@ -202,7 +202,8 @@ describe('session view preference', () => {
 
     const failed = updateSessionViewOverride('host', 'worktree', 'first', 'chat')
     const latest = updateSessionViewOverride('host', 'worktree', 'second', 'terminal')
-    await Promise.all([failed, latest])
+    await expect(failed).rejects.toThrow('storage unavailable')
+    await latest
 
     await expect(loadSessionViewOverrides('host', 'worktree')).resolves.toEqual(
       new Map([['second', 'terminal']])
@@ -212,7 +213,9 @@ describe('session view preference', () => {
   it('does not replace saved overrides after a transient read failure', async () => {
     vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
 
-    await updateSessionViewOverride('host', 'worktree', 'tab', 'chat')
+    await expect(updateSessionViewOverride('host', 'worktree', 'tab', 'chat')).rejects.toThrow(
+      'Session view overrides could not be read'
+    )
 
     expect(AsyncStorage.setItem).not.toHaveBeenCalled()
   })

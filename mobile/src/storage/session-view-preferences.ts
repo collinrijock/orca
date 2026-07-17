@@ -114,15 +114,18 @@ export async function updateSessionViewOverride(
     // Why: a transient read failure must not replace valid saved siblings with
     // a partial map containing only the latest tab.
     if (!current.loaded) {
-      return
+      throw new Error('Session view overrides could not be read')
     }
     current.overrides.set(tabId, view)
     await AsyncStorage.setItem(key, JSON.stringify(Object.fromEntries(current.overrides)))
   })
   const barrier = update.catch(() => undefined)
   overrideUpdateBarriers.set(key, barrier)
-  await barrier
-  if (overrideUpdateBarriers.get(key) === barrier) {
-    overrideUpdateBarriers.delete(key)
+  try {
+    await update
+  } finally {
+    if (overrideUpdateBarriers.get(key) === barrier) {
+      overrideUpdateBarriers.delete(key)
+    }
   }
 }
