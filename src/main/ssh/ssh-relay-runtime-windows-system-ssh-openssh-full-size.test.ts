@@ -349,7 +349,7 @@ describe.skipIf(!hasLiveInput)(
             remoteRoot: cancelledStage,
             signal: new AbortController().signal,
             openChannel: (command, signal) =>
-              openSshRelayRuntimeSystemSshFileChannel(connection, command, signal)
+              openSshRelayRuntimeSystemSshFileChannel(connection, command, signal, 'powershell')
           })
           expect(connection.getState().status).toBe('connected')
 

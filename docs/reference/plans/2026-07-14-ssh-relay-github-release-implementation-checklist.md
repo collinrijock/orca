@@ -8,8 +8,8 @@ work; keep exact commands, runner identities, hashes, metrics, and residual gaps
 
 Date created: 2026-07-14<br>
 Last updated: 2026-07-17<br>
-Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — explicit pinned-host-trust correction exact-head native qualification, 2026-07-17, Codex implementation owner**. Exact head `167ec962dbb0269cfdf974ab8617a76a67545de7`, run `29557508199`, and x64/ARM64 jobs `87812780534`/`87812780579` select explicit pinned trust. `E-M6-WINDOWS-PINNED-HOST-TRUST-CORRECTION-LOCAL-001` records the correction locally green: constructor input reaches every command in the live purpose connection, launcher selection remains probe-only, the failing matrix is replaced by one bounded strict-trust control, and no environment or product caller is added. Commit/push only this package and require fresh native x64/ARM64 proof. Legacy remains the sole production path; real Apple/SignPath rehearsals remain deferred.<br>
-Session checkpoint: **PINNED TRUST CORRECTION LOCAL GREEN / NATIVE RERUN NEXT — 2026-07-17, Codex implementation owner** — 126 focused cases with ten declared skips, 285 release contracts with eight declared skips, typecheck, lint/reliability/max-lines, formatting, diff, protected-resolver isolation, and consumer isolation pass. Full-size transfer, cancellation, concurrency, reuse, and exact profile teardown remain unproven. No product caller, upload, default/fallback, Beta, tuple publication, or signing behavior changed.<br>
+Current phase: Milestone 6 / Work Package 5 bounded runtime transfer — **In progress — explicit remote-command dialect correction exact-head native qualification, 2026-07-17, Codex implementation owner**. Exact head `34b51eb12640795d1cdd99a17c6fbadda79c2f60`, run `29558649829`, and x64/ARM64 jobs `87816177268`/`87816177284` select a required `posix`/`powershell` file-channel dialect. `E-M6-WINDOWS-COMMAND-DIALECT-CORRECTION-LOCAL-001` records the correction locally green: POSIX retains `connection.exec(command)` exactly and PowerShell alone uses `{ wrapCommand: false }`. Commit/push only this package and require fresh native x64/ARM64 proof. Legacy remains the sole production path; real Apple/SignPath rehearsals remain deferred.<br>
+Session checkpoint: **COMMAND DIALECT CORRECTION LOCAL GREEN / NATIVE RERUN NEXT — 2026-07-17, Codex implementation owner** — 40 focused cases with two declared live skips, 285 release contracts with eight declared skips, typecheck, lint/reliability/max-lines, formatting, exact call-site audit, diff, and protected-resolver isolation pass. Full-size transfer, cancellation, concurrency, reuse, and exact profile teardown remain unproven. No product caller, upload, default/fallback, Beta, tuple publication, or signing behavior changed.<br>
 Primary design: [SSH relay GitHub Release plan](./2026-07-14-ssh-relay-github-release-plan.html)<br>
 Motivating issues: [#8450](https://github.com/stablyai/orca/issues/8450), [#1693](https://github.com/stablyai/orca/issues/1693)
 
@@ -20275,6 +20275,77 @@ lint` passes in 18.59 seconds real with the 26 existing warnings, all 41 reliabi
   full-size serial/concurrent/collision/cancellation metrics, connection reuse, and exact fixture
   profile/directory teardown before advancing.
 
+### E-M6-WINDOWS-PINNED-HOST-TRUST-CI-RED-001 — probe passes and exposes PowerShell wrapping defect
+
+- Date/owner/source/run: 2026-07-17, Codex implementation owner; exact head
+  `34b51eb12640795d1cdd99a17c6fbadda79c2f60`, artifact run
+  [29558649829](https://github.com/stablyai/orca/actions/runs/29558649829), Windows x64 job
+  [87816177268](https://github.com/stablyai/orca/actions/runs/29558649829/job/87816177268) on
+  `windows-2022`, and native ARM64 job
+  [87816177284](https://github.com/stablyai/orca/actions/runs/29558649829/job/87816177284) on
+  `windows-11-arm64`; both use Node 24.18.0.
+- Preserved gates: both Windows jobs pass 101 artifact files, 863 runnable cases, and 19 declared
+  skips, including launcher compilation and all launcher lifecycle/cancellation/overflow contracts,
+  exact clean builds, runtime smoke, and both full-size cache gates. Darwin x64/ARM64 jobs
+  `87816177263`/`87816177289`, Linux x64/ARM64 jobs `87816177277`/`87816177290`, and Linux
+  oldest-userland supplements `87817034753`/`87817034773` pass at the same exact head.
+- Launcher/probe proof: the strict pinned launcher control reports the complete sentinel/stdout/
+  process/channel success lifecycle in 734.8928 ms on x64 and 681.1723 ms on ARM64. Each following
+  full-size test advances through `connection.connect()` and reaches the first staging control
+  command, proving the constructor-injected launcher plus strict trust no longer blocks the probe.
+- Exact transfer RED: x64 fails after 1.520 seconds and ARM64 after 1.667 seconds with
+  `SSH relay runtime system SSH file command failed (exit 1): 'exec' is not recognized as an
+  internal or external command, operable program or batch file.` The Windows staging layer already
+  produced a complete encoded PowerShell command, but the generic system-SSH file channel called
+  `connection.exec(command)` with its default POSIX wrapper. No staging root, payload byte,
+  serial/concurrent/collision/cancellation measurement, or connection-reuse metric runs.
+- Teardown/residual: both bounded teardowns again detect unload exit 1 for the owned SID's
+  `_Classes` hive, locked `UsrClass.dat`, and the retained fixture profile directory. Add only an
+  explicit remote-command dialect to the file-channel boundary: POSIX must retain the exact existing
+  exec call and PowerShell must call `connection.exec(command, { wrapCommand: false })`. Require
+  focused POSIX/PowerShell routing contracts and fresh x64/ARM64 full-size/teardown evidence before
+  advancing. Do not connect product/default, fallback, Beta, tuple, publication, or signing paths.
+
+### E-M6-WINDOWS-COMMAND-DIALECT-CORRECTION-LOCAL-001 — explicit POSIX/PowerShell routing is locally green
+
+- Date/owner/base/runner: 2026-07-17, Codex implementation owner; uncommitted correction atop exact
+  native red head `34b51eb12640795d1cdd99a17c6fbadda79c2f60` on Apple arm64, macOS 26.2 build
+  25C56, Node 26.5.0, and pnpm 10.24.0. The repository requests Node 24; native jobs remain
+  authoritative.
+- Implementation boundary: `openSshRelayRuntimeSystemSshFileChannel` now requires the concrete
+  `RemoteCommandDialect`. POSIX tree/live callers pass `posix` and retain the exact prior
+  `connection.exec(command)` call. Windows tree/live callers pass `powershell` and call only
+  `connection.exec(command, { wrapCommand: false })` because the staging/file layers already emit
+  complete encoded PowerShell commands. Input validation rejects any other dialect. SSH auth,
+  connection reuse, channel adaptation, byte streaming, cancellation ownership, diagnostics,
+  launcher selection, strict trust, and every product/default caller remain unchanged.
+- Focused evidence: `/usr/bin/time -l pnpm exec vitest run --config config/vitest.config.ts
+  --maxWorkers=1 src/main/ssh/ssh-relay-runtime-system-ssh-file-channel.test.ts
+  src/main/ssh/ssh-relay-runtime-posix-tree-transfer.test.ts
+  src/main/ssh/ssh-relay-runtime-windows-tree-transfer.test.ts
+  src/main/ssh/ssh-relay-runtime-posix-system-ssh-openssh-full-size.test.ts
+  src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+  config/scripts/ssh-relay-runtime-workflow.test.mjs` exits 0 with four files passed, two live files
+  skipped, 40 runnable cases passed, and two declared skips in 4.35 seconds real; maximum RSS is
+  173,981,696 bytes and peak footprint is 97,801,928 bytes. The routing contract independently
+  asserts the exact POSIX one-argument call and PowerShell `{ wrapCommand: false }` call.
+- Release/static evidence: `/usr/bin/time -l pnpm exec vitest run --config
+  config/vitest.config.ts --maxWorkers=1 config/scripts/ssh-relay-runtime-*.test.mjs` exits 0 with 51
+  files, 285 runnable cases passed, and eight declared skips in 20.51 seconds real; maximum RSS is
+  195,592,192 bytes and peak footprint is 97,146,712 bytes. `/usr/bin/time -l pnpm typecheck` exits
+  0 in 7.16 seconds real with 1,229,029,376-byte maximum RSS and 97,998,656-byte peak footprint.
+  `/usr/bin/time -l pnpm lint` exits 0 in 50.55 seconds real with the existing 26 warnings, all 41
+  reliability gates, and the 355-entry max-lines ratchet; maximum RSS is 2,049,720,320 bytes and
+  peak footprint is 97,654,616 bytes.
+- Formatting/isolation: targeted `oxfmt --check`, `git diff --check`, exact protected-resolver
+  comparison, and an exact non-unit call-site audit pass. The only four callers are the POSIX and
+  Windows tree-transfer modules plus their native full-size reuse controls, and every caller names
+  its dialect. No manager, Electron/startup importer, upload, fallback, Beta, tuple, publication,
+  default, or signing path is connected.
+- Residual gate: local Darwin skips both live transfer files. Commit/push this exact correction and
+  require exact-head x64/ARM64 full-size serial/concurrent/collision/cancellation metrics,
+  connection reuse, and exact fixture profile/directory teardown before advancing.
+
 ## Accepted Gaps
 
 No product gap is accepted merely because it appears in this list. Each entry requires explicit
@@ -20333,11 +20404,10 @@ The project is not complete until every applicable item below is checked with ev
 
 ## Next Required Action
 
-Commit and push only the explicit pinned-host-trust qualification correction recorded by
-`E-M6-WINDOWS-PINNED-HOST-TRUST-CORRECTION-LOCAL-001`, then require exact-head Windows x64/ARM64
-launcher control, launcher-backed probe, full-size transfer, cancellation, concurrency, connection
-reuse, and exact profile/directory teardown evidence. Do not check the broad Milestone 6 Windows
-system-SSH item or add an
+Commit and push only the explicit command-dialect correction recorded by
+`E-M6-WINDOWS-COMMAND-DIALECT-CORRECTION-LOCAL-001`, then require exact-head Windows x64/ARM64
+full-size transfer, cancellation, concurrency, connection reuse, and exact profile/directory
+teardown evidence. Do not check the broad Milestone 6 Windows system-SSH item or add an
 Electron/startup/product importer, per-target mode wiring, fallback, tuple
 enablement, release publication, or default behavior.
 Keep Node upstream `.tar.xz` inputs, Windows ZIP, `ORCA_RELAY_PATH`, existing desktop required-assets

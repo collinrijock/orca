@@ -1,10 +1,12 @@
 import type { ClientChannel } from 'ssh2'
 import type { SshRelayRuntimeCommandFileChannel } from './ssh-relay-runtime-command-file-destination'
+import type { SshExecOptions } from './ssh-connection-utils'
+import type { RemoteCommandDialect } from './ssh-remote-platform'
 import type { SystemSshCommandChannel } from './system-ssh-command'
 
 export type SshRelayRuntimeSystemSshConnection = Readonly<{
   usesSystemSshTransport: () => boolean
-  exec: (command: string) => Promise<ClientChannel>
+  exec: (command: string, options?: Pick<SshExecOptions, 'wrapCommand'>) => Promise<ClientChannel>
 }>
 
 export const SSH_RELAY_RUNTIME_SYSTEM_SSH_FILE_CHANNEL_LIMITS = Object.freeze({
@@ -17,7 +19,8 @@ type ChannelCloseSignal = NodeJS.Signals | null | undefined
 function validateInput(
   connection: SshRelayRuntimeSystemSshConnection,
   command: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  commandDialect: RemoteCommandDialect
 ): void {
   if (
     !connection ||
@@ -25,7 +28,8 @@ function validateInput(
     typeof connection.exec !== 'function' ||
     typeof command !== 'string' ||
     command === '' ||
-    !signal
+    !signal ||
+    (commandDialect !== 'posix' && commandDialect !== 'powershell')
   ) {
     throw new Error('SSH relay runtime system SSH file channel input is invalid')
   }
@@ -183,10 +187,14 @@ function adaptChannel(channel: SystemSshCommandChannel): SshRelayRuntimeCommandF
 export async function openSshRelayRuntimeSystemSshFileChannel(
   connection: SshRelayRuntimeSystemSshConnection,
   command: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  commandDialect: RemoteCommandDialect
 ): Promise<SshRelayRuntimeCommandFileChannel> {
-  validateInput(connection, command, signal)
+  validateInput(connection, command, signal, commandDialect)
   // Why: the file destination owns this signal's bounded teardown; forwarding it would double-kill.
-  const channel = (await connection.exec(command)) as SystemSshCommandChannel
+  // Why: Windows staging already supplies a complete PowerShell command; POSIX still needs /bin/sh.
+  const channel = (await (commandDialect === 'powershell'
+    ? connection.exec(command, { wrapCommand: false })
+    : connection.exec(command))) as SystemSshCommandChannel
   return adaptChannel(channel)
 }

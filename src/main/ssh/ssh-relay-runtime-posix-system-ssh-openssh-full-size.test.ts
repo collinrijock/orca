@@ -331,7 +331,7 @@ describe.skipIf(!hasLiveInput)(
             command: 'true',
             signal: new AbortController().signal,
             openChannel: (command, signal) =>
-              openSshRelayRuntimeSystemSshFileChannel(connection, command, signal)
+              openSshRelayRuntimeSystemSshFileChannel(connection, command, signal, 'posix')
           })
           expect(connection.getState().status).toBe('connected')
 

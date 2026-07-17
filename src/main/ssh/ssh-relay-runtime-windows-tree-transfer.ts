@@ -131,7 +131,7 @@ export async function transferSshRelayRuntimeTreeViaWindowsSystemSsh(
   const { tree, connection, signal, onProgress } = options
   const remoteStagingRoot = normalizeStagingRoot(options.remoteStagingRoot)
   const openChannel: OpenChannel = (command, exactSignal) =>
-    openSshRelayRuntimeSystemSshFileChannel(connection, command, exactSignal)
+    openSshRelayRuntimeSystemSshFileChannel(connection, command, exactSignal, 'powershell')
   const runControl = (
     control: Omit<RunSshRelayRuntimeWindowsStagingControlOptions, 'signal' | 'openChannel'>
   ): Promise<void> => runSshRelayRuntimeWindowsStagingControl({ ...control, signal, openChannel })

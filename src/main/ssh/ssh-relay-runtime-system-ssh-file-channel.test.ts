@@ -7,7 +7,7 @@ import {
   SSH_RELAY_RUNTIME_POSIX_FILE_DESTINATION_LIMITS
 } from './ssh-relay-runtime-posix-file-destination'
 import {
-  openSshRelayRuntimeSystemSshFileChannel,
+  openSshRelayRuntimeSystemSshFileChannel as openSystemSshFileChannelWithDialect,
   SSH_RELAY_RUNTIME_SYSTEM_SSH_FILE_CHANNEL_LIMITS,
   type SshRelayRuntimeSystemSshConnection
 } from './ssh-relay-runtime-system-ssh-file-channel'
@@ -62,6 +62,14 @@ function createConnection(
   }
 }
 
+function openSshRelayRuntimeSystemSshFileChannel(
+  connection: SshRelayRuntimeSystemSshConnection,
+  command: string,
+  signal: AbortSignal
+) {
+  return openSystemSshFileChannelWithDialect(connection, command, signal, 'posix')
+}
+
 afterEach(() => {
   vi.useRealTimers()
 })
@@ -109,6 +117,36 @@ describe('SSH relay runtime system-SSH file channel', () => {
     expect(channel.listenerCount('close')).toBe(0)
     expect(channel.stderr.listenerCount('data')).toBe(0)
     expect(channel.stderr.listenerCount('error')).toBe(0)
+  })
+
+  it('preserves POSIX wrapping and disables it only for complete PowerShell commands', async () => {
+    const posix = createChannel()
+    const posixConnection = createConnection(posix.channel)
+    const posixAdapted = await openSystemSshFileChannelWithDialect(
+      posixConnection,
+      'cat command',
+      new AbortController().signal,
+      'posix'
+    )
+
+    expect(posixConnection.exec).toHaveBeenCalledWith('cat command')
+    posix.channel.emit('close', 0, null)
+    await expect(posixAdapted.settled).resolves.toBeUndefined()
+
+    const powershell = createChannel()
+    const powershellConnection = createConnection(powershell.channel)
+    const powershellAdapted = await openSystemSshFileChannelWithDialect(
+      powershellConnection,
+      'powershell.exe -EncodedCommand AAAA',
+      new AbortController().signal,
+      'powershell'
+    )
+
+    expect(powershellConnection.exec).toHaveBeenCalledWith('powershell.exe -EncodedCommand AAAA', {
+      wrapCommand: false
+    })
+    powershell.channel.emit('close', 0, null)
+    await expect(powershellAdapted.settled).resolves.toBeUndefined()
   })
 
   it('forwards the exact borrowed chunk callback and EOF to child stdin', async () => {

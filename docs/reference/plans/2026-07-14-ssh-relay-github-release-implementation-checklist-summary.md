@@ -9,20 +9,21 @@ keeps commands, hashes, runner identities, timings, and failure details.
 A checked box means the work has evidence in the detailed ledger. Design approval alone does not
 complete a box.
 
-Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — explicit pinned-host-trust
-qualification correction locally green, exact-head native rerun next, 2026-07-17, Codex implementation
+Active checkpoint: **Milestone 6 / Work Package 5 bounded runtime transfer — explicit remote-command
+dialect correction locally green, exact-head native rerun next, 2026-07-17, Codex implementation
 owner.** Exact head
-`167ec962dbb0269cfdf974ab8617a76a67545de7`, run `29557508199`, and Windows x64/ARM64 jobs
-`87812780534`/`87812780579` independently select the same boundary: launcher-backed production and
-verbose-only arguments fail after the 6-second internal deadline because Win32-OpenSSH resolves
-`runneradmin` host files, while strict pinned trust succeeds with complete lifecycle settlement in
-219.4604/447.5773 ms and strict-plus-verbose succeeds in 243.0841/469.5499 ms. All four primary
-non-Windows jobs and both Linux oldest-userland supplements pass.
-`E-M6-WINDOWS-PINNED-HOST-TRUST-CORRECTION-LOCAL-001` records the selected correction locally green:
-126 focused cases, 285 release contracts, typecheck, full lint/reliability/max-lines, formatting,
-diff, protected-resolver isolation, and no product caller pass. Commit/push this exact package and
-require x64/ARM64 full-size, cancellation, concurrency, reuse, and exact teardown proof. No upload,
-Beta, fallback, tuple, publication, default, or signing behavior is authorized.
+`34b51eb12640795d1cdd99a17c6fbadda79c2f60`, run `29558649829`, and Windows x64/ARM64 jobs
+`87816177268`/`87816177284` prove pinned launcher control in 734.8928/681.1723 ms and advance the
+injected connection beyond its probe. Both then fail the first Windows staging command because the
+generic system-SSH file channel applies the POSIX `exec /bin/sh -c` wrapper to an already complete
+PowerShell command; no payload byte or transfer metric runs. All four primary non-Windows jobs and
+both Linux oldest-userland supplements pass. Add only an explicit `posix`/`powershell` command
+dialect at the file-channel boundary, preserving the exact POSIX call and using `wrapCommand: false`
+only for PowerShell. `E-M6-WINDOWS-COMMAND-DIALECT-CORRECTION-LOCAL-001` records 40 focused cases,
+285 release contracts, typecheck, full lint/reliability/max-lines, formatting, exact call-site audit,
+diff, and resolver isolation green. Commit/push this exact package and require native full-size,
+cancellation, concurrency, reuse, and exact teardown proof. No product/default caller, Beta,
+fallback, tuple, publication, or signing behavior is authorized.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-PORTABLE-FIXTURE-LOCAL-001` records the portable-fixture
 correction locally green: the no-Orca-publication workflow oracle permits the one exact pinned
 Microsoft fixture release URL while Orca release URLs, `gh release`, and `contents: write` remain

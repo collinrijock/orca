@@ -137,7 +137,7 @@ export async function transferSshRelayRuntimeTreeViaPosixSystemSsh(
   const { tree, connection, signal, onProgress } = options
   const remoteStagingRoot = normalizeStagingRoot(options.remoteStagingRoot)
   const openChannel: OpenChannel = (command, exactSignal) =>
-    openSshRelayRuntimeSystemSshFileChannel(connection, command, exactSignal)
+    openSshRelayRuntimeSystemSshFileChannel(connection, command, exactSignal, 'posix')
   const runControl = (command: string): Promise<void> =>
     runSshRelayRuntimePosixControlCommand({ command, signal, openChannel })
   signal.throwIfAborted()
