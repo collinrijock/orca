@@ -104,8 +104,21 @@ and boundedly terminates only processes whose native owner SID exactly matches t
 by the fixture before attempting hive unload. Focused tests pass 115 cases with one native skip,
 all three PowerShell blocks parse, 283/283 artifact contracts pass, typecheck and full
 lint/reliability/max-lines pass, formatting/diff are clean, and protected resolvers are unchanged.
-Commit/push and require fresh x64/arm64 lifecycle evidence; do not treat this local oracle as native
-proof.
+Exact head `e4bcee3f3561e7cfd58aa90e7d35e6c597df8692` is pushed; artifact run `29544129779` is in
+progress with x64 job `87772490863` and ARM64 job `87772490900`. Do not treat the local oracle as
+native proof.
+X64 job `87772490863` is diagnostic RED after official OpenSSH authentication and remote command
+session close: `sentinel=false`, `stdoutEnded=false`, `processExit=not-observed`, and
+`channelClosed=false`. The client-side no-input process must receive an OS-level ignored stdin
+handle in addition to `-n`; preserve piped stdin for every payload-bearing command. ARM64 job
+`87772490900` independently returns the same four-field lifecycle tuple after a 31.16-second test,
+so the correction is shared across native Windows architectures.
+`E-M6-WINDOWS-SYSTEM-SSH-TREE-OS-NOINPUT-LOCAL-001` is locally green: only no-input commands
+spawn with stdin ignored at the OS boundary and retain `-n`; ordinary and payload commands remain
+piped, and the no-input channel facade settles safely without a child stdin stream. Focused tests
+pass 116 cases with one native skip, all three PowerShell blocks parse, 283/283 artifact contracts
+pass, typecheck and full lint/reliability/max-lines pass, formatting/diff are clean, and protected
+resolvers remain unchanged. Commit/push and require fresh x64/arm64 live proof.
 `E-M6-WINDOWS-SYSTEM-SSH-TREE-LIVE-AUDIT-001` fixes the loopback-only official Microsoft
 server, fixture-owned non-admin account/ACL, exact host-key trust, Windows PowerShell 5.1,
 serial/default and four-channel metrics, cancellation/collision/cleanup, and deterministic teardown

@@ -62,8 +62,11 @@ export function spawnSystemSshCommand(
 
   const remoteCommand =
     options?.wrapCommand === false ? command : wrapRemoteCommandForPosixShell(command)
+  const noInput = options?.noInput === true
   const proc = spawn(sshPath, [...buildSshArgs(target, options), remoteCommand], {
-    stdio: ['pipe', 'pipe', 'pipe'],
+    // Why: Windows OpenSSH can keep an inherited pipe alive despite `-n`;
+    // no-input commands must not receive a writable OS handle at all.
+    stdio: [noInput ? 'ignore' : 'pipe', 'pipe', 'pipe'],
     windowsHide: true
   })
   return wrapCommandProcess(proc)
@@ -94,7 +97,11 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
       proc.stdout?.resume()
     },
     write(chunk, encoding, cb) {
-      proc.stdin!.write(chunk, encoding, cb)
+      if (!proc.stdin) {
+        cb(new Error('System SSH command does not accept stdin'))
+        return
+      }
+      proc.stdin.write(chunk, encoding, cb)
     }
   })
   const channel = duplex as unknown as SystemSshCommandChannel
@@ -105,7 +112,7 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
     _process?: ChildProcess
     close: () => void
   }
-  mutableChannel.stdin = proc.stdin!
+  mutableChannel.stdin = proc.stdin ?? duplex
   mutableChannel.stderr = proc.stderr!
   mutableChannel._process = proc
   mutableChannel.close = () => {
@@ -122,7 +129,7 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
     proc.off('exit', onExit)
     proc.off('close', onClose)
     proc.off('error', onProcessError)
-    proc.stdin!.off('error', onStreamError)
+    proc.stdin?.off('error', onStreamError)
     proc.stdout!.off('error', onStreamError)
   }
   const fail = (err: Error): void => {
@@ -158,7 +165,7 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
   proc.on('exit', onExit)
   proc.on('close', onClose)
   proc.on('error', onProcessError)
-  proc.stdin!.on('error', onStreamError)
+  proc.stdin?.on('error', onStreamError)
   proc.stdout!.on('error', onStreamError)
 
   return channel

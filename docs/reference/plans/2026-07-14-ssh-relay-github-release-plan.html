@@ -1643,9 +1643,10 @@
                     Full-size runtime over SFTP and POSIX/Windows system SSH; tar/no-tar; no remote
                     hash tools; corrupted upload; bundled-Node corruption/failure; bounded memory
                     and concurrency; no-input system-SSH probe records bounded native process exit,
-                    stdout-end, sentinel, and channel-close settlement rather than treating OpenSSH
-                    <code>-n</code> alone as proof; fixture-owned Windows session processes settle
-                    before profile hives are boundedly unloaded and native profile deletion begins;
+                    stdout-end, sentinel, and channel-close settlement; the child receives an
+                    OS-level ignored stdin handle as well as OpenSSH <code>-n</code>, because the
+                    option alone is not proof; fixture-owned Windows session processes settle before
+                    profile hives are boundedly unloaded and native profile deletion begins;
                     <code>MaxSessions=1</code>; interrupted upload; stale lock
                   </td>
                   <td>

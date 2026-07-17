@@ -418,6 +418,18 @@ describe('spawnSystemSsh', () => {
     )
   })
 
+  it('spawns a no-input command without an inherited stdin pipe', () => {
+    spawnMock.mockReturnValueOnce({ ...mockProc, stdin: null })
+    const channel = spawnSystemSshCommand(createTarget(), 'echo ready', { noInput: true })
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      SYSTEM_SSH_PATH,
+      expect.arrayContaining(['-n', '--', 'deploy@example.com']),
+      expect.objectContaining({ stdio: ['ignore', 'pipe', 'pipe'] })
+    )
+    expect(() => channel.stdin.end()).not.toThrow()
+  })
+
   it('spawns port forwards before the ssh destination terminator', () => {
     spawnSystemSshPortForward(createTarget({ configHost: 'fdpass-host' }), 5173, '127.0.0.1', 3000)
 
