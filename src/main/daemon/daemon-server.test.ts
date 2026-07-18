@@ -219,6 +219,63 @@ describe('DaemonServer', () => {
       expect(spawnSubprocess).toHaveBeenCalledOnce()
     })
 
+    it.each(['cancelCreateOrAttach', 'kill'] as const)(
+      'prevents a pending subprocess after %s and permits later session reuse',
+      async (requestType) => {
+        let finishPreparation!: () => void
+        const preparation = new Promise<void>((resolve) => {
+          finishPreparation = resolve
+        })
+        const preparePtySpawn = vi.fn(() => preparation)
+        const spawnSubprocess = vi.fn(() => createMockSubprocess())
+        server = new DaemonServer({
+          socketPath,
+          tokenPath,
+          preparePtySpawn,
+          spawnSubprocess
+        })
+        await server.start()
+        const c = await connectClient()
+
+        const creates = [
+          c.request('createOrAttach', {
+            sessionId: 'canceled-preparation',
+            cols: 80,
+            rows: 24
+          }),
+          c.request('createOrAttach', {
+            sessionId: 'canceled-preparation',
+            cols: 80,
+            rows: 24
+          })
+        ]
+        const canceledCreates = Promise.all(
+          creates.map((create) =>
+            expect(create).rejects.toThrow('Attach canceled for session canceled-preparation')
+          )
+        )
+        await vi.waitFor(() => expect(preparePtySpawn).toHaveBeenCalledTimes(2))
+
+        const cancelRequest =
+          requestType === 'kill'
+            ? c.request('kill', { sessionId: 'canceled-preparation', immediate: true })
+            : c.request('cancelCreateOrAttach', { sessionId: 'canceled-preparation' })
+        await expect(cancelRequest).resolves.toEqual({})
+        finishPreparation()
+        await canceledCreates
+        expect(spawnSubprocess).not.toHaveBeenCalled()
+
+        await expect(
+          c.request('createOrAttach', {
+            sessionId: 'canceled-preparation',
+            cols: 80,
+            rows: 24
+          })
+        ).resolves.toMatchObject({ isNew: true })
+        expect(spawnSubprocess).toHaveBeenCalledOnce()
+      }
+    )
+
     it('persists only an allowlisted launch identity across reattach', async () => {
       await startServer()
       const c = await connectClient()

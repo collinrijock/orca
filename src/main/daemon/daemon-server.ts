@@ -27,6 +27,7 @@ import {
   PROTOCOL_VERSION,
   NOTIFY_PREFIX,
   SessionNotFoundError,
+  TerminalAttachCanceledError,
   type HelloMessage,
   type DaemonRequest
 } from './types'
@@ -52,6 +53,10 @@ type ConnectedClient = {
   clientId: string
   controlSocket: Socket
   streamSocket: Socket | null
+}
+
+type PendingPtySpawnPreparation = {
+  canceled: boolean
 }
 
 export class DaemonServer {
@@ -98,6 +103,7 @@ export class DaemonServer {
   })
   private streamClientIdBySessionId = new Map<string, string>()
   private lastInputAtBySessionId = new Map<string, number>()
+  private pendingPtySpawnPreparations = new Map<string, Set<PendingPtySpawnPreparation>>()
   private stopStreamBacklogProbe: () => void = () => {}
 
   // Why: main-process PTY IPC has the same recent-input bypass, but daemon
@@ -338,15 +344,44 @@ export class DaemonServer {
     }
   }
 
+  private async preparePtySpawnUnlessCanceled(sessionId: string): Promise<void> {
+    const preparation: PendingPtySpawnPreparation = { canceled: false }
+    const pending = this.pendingPtySpawnPreparations.get(sessionId) ?? new Set()
+    pending.add(preparation)
+    this.pendingPtySpawnPreparations.set(sessionId, pending)
+    try {
+      // Why: registration precedes the async capability probe so a concurrent
+      // close can cancel this exact creation before a subprocess exists.
+      await this.preparePtySpawn()
+      if (preparation.canceled) {
+        throw new TerminalAttachCanceledError(sessionId)
+      }
+    } finally {
+      pending.delete(preparation)
+      if (pending.size === 0) {
+        this.pendingPtySpawnPreparations.delete(sessionId)
+      }
+    }
+  }
+
+  private cancelPendingPtySpawnPreparations(sessionId: string): boolean {
+    const pending = this.pendingPtySpawnPreparations.get(sessionId)
+    if (!pending) {
+      return false
+    }
+    for (const preparation of pending) {
+      preparation.canceled = true
+    }
+    return true
+  }
+
   private async routeRequest(clientId: string, request: DaemonRequest): Promise<unknown> {
     const client = this.clients.get(clientId)
 
     switch (request.type) {
       case 'createOrAttach': {
         const p = request.payload
-        // Why: keep capability probes outside TerminalHost's synchronous create
-        // section so concurrent requests cannot create two subprocess generations.
-        await this.preparePtySpawn()
+        await this.preparePtySpawnUnlessCanceled(p.sessionId)
         const result = await this.host.createOrAttach({
           sessionId: p.sessionId,
           cols: p.cols,
@@ -430,6 +465,7 @@ export class DaemonServer {
       }
 
       case 'cancelCreateOrAttach':
+        this.cancelPendingPtySpawnPreparations(request.payload.sessionId)
         return {}
 
       case 'write':
@@ -507,12 +543,23 @@ export class DaemonServer {
       }
 
       case 'kill':
+        const canceledPendingSpawn = this.cancelPendingPtySpawnPreparations(
+          request.payload.sessionId
+        )
         this.lastInputAtBySessionId.delete(request.payload.sessionId)
         this.log.log('session-killed', {
           sessionId: request.payload.sessionId,
           immediate: request.payload.immediate === true
         })
-        await this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })
+        try {
+          await this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })
+        } catch (error) {
+          // Why: a kill that wins before session registration has already
+          // canceled the pending spawn and therefore completed its intent.
+          if (!(canceledPendingSpawn && error instanceof SessionNotFoundError)) {
+            throw error
+          }
+        }
         return {}
 
       case 'signal':
