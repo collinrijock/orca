@@ -174,10 +174,8 @@ async function tryResolveViaLoginShell(
   return null
 }
 
-// Returns true if `nodePath` runs, reports Node >= 18, and resolves a runnable
-// npm once its directory is prepended to PATH — the exact resolution deploy
-// uses. A stricter colocated-npm gate would recreate #8450, but a bare-npm gate
-// that ignored PATH would reject hosts deploy accepts (#9165).
+// Validates the same PATH-prepend + bare npm contract used during deployment.
+// This rejects missing npm (#8450) without requiring colocation (#9165).
 // Caches nothing — this runs at most a few times per resolution (one per
 // candidate), and the exec round-trip dominates.
 async function nodeToolchainMeetsRequirements(

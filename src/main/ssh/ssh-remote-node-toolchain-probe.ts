@@ -12,9 +12,8 @@ export function buildPosixNodeToolchainProbe(nodePath: string): string {
     `printf '%s\\n' '${NODE_VERSION_MARKER}'`,
     `${shellEscape(nodePath)} --version`,
     `printf '%s\\n' '${NPM_VERSION_MARKER}'`,
-    // Why: deploy runs bare `npm` with nodeBinDir merely prepended to PATH
-    // (see commandWithNodePath), so probe npm the same way. Requiring npm
-    // colocated at <nodeBinDir>/npm would reject hosts deploy accepts (#9165).
+    // Why: deploy prepends nodeBinDir before running bare npm; requiring a
+    // colocated executable rejects valid split layouts (#9165).
     `PATH=${shellEscape(nodeBinDir)}:$PATH npm --version`
   ].join(' && ')
 }
@@ -23,8 +22,8 @@ export function buildWindowsNodeToolchainProbe(nodePath: string): string {
   const nodeBinDir = posixPath.dirname(nodePath)
   const windowsNodeBinDir = nodeBinDir.replace(/\//g, '\\')
   return [
-    // Why: mirror deploy's PATH-prepend + bare `npm` resolution (#9165); a
-    // colocated npm.cmd requirement rejects hosts deploy would accept.
+    // Why: mirror deploy's PATH-prepend + bare npm resolution so split
+    // Node/npm layouts are not rejected solely for lacking npm.cmd (#9165).
     `$env:PATH = ${powerShellLiteral(windowsNodeBinDir)} + ';' + $env:PATH`,
     `Write-Output ${powerShellLiteral(NODE_VERSION_MARKER)}`,
     `& ${powerShellLiteral(nodePath)} --version`,
