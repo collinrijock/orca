@@ -208,6 +208,13 @@ async function applySetOption(
   // Why: flip-only never heals via agent report — track as applied best-known.
   const source = liveFlipOnly || ctx.mode !== 'live' ? 'applied' : 'dispatched'
 
+  // Why: baseline for detecting a model switch, typed command, or agent report
+  // that lands mid-dispatch, so the commit below never overwrites newer state.
+  const trackedBeforeDispatch =
+    ctx.mode === 'live' && id !== 'model'
+      ? getTrackedOption(ctx.getRecord(), previousModelId, id)
+      : undefined
+
   let dispatchResult: NativeChatSessionOptionDispatchResult | void = undefined
   if (ctx.mode === 'live') {
     dispatchResult = await dispatchLiveCommand(ctx, {
@@ -247,6 +254,19 @@ async function applySetOption(
     // Why: never persist unconfirmed flip-only state into durable defaults.
     ctx.setTrackedValue(id, value, source)
     return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
+  }
+
+  if (ctx.mode === 'live' && id !== 'model') {
+    // Why: a model switch, typed command, or agent report during dispatch supersedes
+    // the baseline this commit was computed from — committing now would overwrite
+    // newer state and could write/persist a model-scoped value under the new model.
+    const modelStill = typeof record.model?.value === 'string' ? record.model.value : null
+    if (
+      modelStill !== previousModelId ||
+      getTrackedOption(record, previousModelId, id) !== trackedBeforeDispatch
+    ) {
+      return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
+    }
   }
 
   const modelId = ctx.setTrackedValue(id, value, source)

@@ -477,6 +477,47 @@ describe('native chat PTY session options', () => {
     })
   })
 
+  it('does not commit a non-flip option onto a model that changed mid-dispatch', async () => {
+    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+      model: 'opus',
+      effort: 'high'
+    })
+    let resolveDispatch: (() => void) | undefined
+    const dispatch = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveDispatch = resolve
+        })
+    )
+    const persist = vi.fn()
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'claude',
+      scopeKey: 'pty-1',
+      mode: 'live',
+      dispatchCommand: dispatch,
+      persistSelection: persist
+    })!
+
+    const pending = surface.setOption('effort', 'xhigh')
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalled())
+    // Why: a model switch during await must win — do not write effort after.
+    surface.recordOutgoingCommand('/model sonnet')
+    resolveDispatch?.()
+    await pending
+
+    // Why: the aborted effort commit must not land under the destination model
+    // nor persist there, and must leave the source model untouched.
+    const cached = readNativeChatSessionOptionCache('pty-1')
+    expect(cached?.valuesByModel.sonnet?.effort).toBeUndefined()
+    expect(cached?.valuesByModel.opus?.effort).toMatchObject({
+      value: 'high',
+      source: 'applied'
+    })
+    expect(persist).not.toHaveBeenCalledWith(
+      expect.objectContaining({ optionId: 'effort', modelId: 'sonnet' })
+    )
+  })
+
   it('hands Codex model changes to the TUI picker and drops stale truth', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'codex', {
       model: 'gpt-5.5',
