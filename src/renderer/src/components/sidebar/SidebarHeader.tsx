@@ -24,7 +24,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
     <div className="mt-2 flex h-7 items-center justify-between gap-2 border-t border-worktree-sidebar-border/70 px-2 pt-1">
       <div className="flex min-w-0 items-center gap-1">
         <span
-          className="select-none pl-2 pr-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80"
+          className="select-none pl-2 pr-0.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground/80"
           data-sidebar-section-title={groupBy === 'repo' ? 'projects' : 'workspaces'}
         >
           {translate('auto.components.sidebar.SidebarNav.9c95e1ce91', 'Agents')}

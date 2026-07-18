@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '../lib/utils'
 import { useAppStore } from '../store'
-import { isGitRepoKind } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/types'
 import {
   dismissPreflightIssue,
@@ -20,6 +20,7 @@ import {
   type PreflightIssue
 } from './landing-preflight-issues'
 import { Button } from './ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 type ShortcutItem = {
   id: string
@@ -129,7 +130,7 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
       {state === 'starred' && menuOpen && (
         <div className="absolute right-0 top-[calc(100%+4px)] z-10 min-w-[100px] rounded-md border border-border bg-popover py-1 shadow-md">
           <button
-            className="w-full px-3 py-1.5 text-left text-[13px] text-foreground hover:bg-muted"
+            className="w-full px-3 py-1.5 text-left text-[13px] text-foreground hover:bg-muted focus-visible:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
             onClick={() => {
               setMenuOpen(false)
               setState('hidden')
@@ -225,11 +226,10 @@ function PreflightBanner({
 }
 
 export default function Landing(): React.JSX.Element {
+  useTranslation()
   const repos = useAppStore((s) => s.repos)
   const openModal = useAppStore((s) => s.openModal)
 
-  const createTargetLabel =
-    repos.length > 0 && repos.every((repo) => isGitRepoKind(repo)) ? 'workspace' : 'agent workspace'
   const canCreateWorktree = repos.length > 0
   const hasGitHubProject = useMemo(() => hasGitHubBackedProject(repos), [repos])
   const showGitHubSupportFooter = repos.length === 0 || hasGitHubProject
@@ -298,34 +298,42 @@ export default function Landing(): React.JSX.Element {
   const createWorktreeShortcut = useShortcutKeyDetails('workspace.create')
   const previousWorktreeShortcut = useShortcutKeyDetails('worktree.navigateUp')
   const nextWorktreeShortcut = useShortcutKeyDetails('worktree.navigateDown')
-  const shortcuts = useMemo<ShortcutItem[]>(() => {
-    return [
-      {
-        id: 'create',
-        shortcut: createWorktreeShortcut,
-        action: `New ${createTargetLabel}`
-      },
-      { id: 'up', shortcut: previousWorktreeShortcut, action: 'Previous workspace' },
-      { id: 'down', shortcut: nextWorktreeShortcut, action: 'Next workspace' }
-    ]
-  }, [createTargetLabel, createWorktreeShortcut, nextWorktreeShortcut, previousWorktreeShortcut])
+  const newAgentWorkspaceLabel = translate(
+    'auto.components.Landing.76a95f7f47',
+    'New agent workspace'
+  )
+  const projectRequiredHint = translate('auto.components.Landing.f05d237049', 'Add a project first')
+  const shortcuts: ShortcutItem[] = [
+    {
+      id: 'create',
+      shortcut: createWorktreeShortcut,
+      action: translate('auto.components.Landing.shortcutNewAgentWorkspace', 'New agent workspace')
+    },
+    {
+      id: 'up',
+      shortcut: previousWorktreeShortcut,
+      action: translate('auto.components.Landing.shortcutPreviousWorkspace', 'Previous workspace')
+    },
+    {
+      id: 'down',
+      shortcut: nextWorktreeShortcut,
+      action: translate('auto.components.Landing.shortcutNextWorkspace', 'Next workspace')
+    }
+  ]
 
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-background">
       <main className="w-full max-w-md px-6 py-10">
         <div className="flex flex-col items-start">
           <div className="mb-7 flex items-center gap-2.5">
-            <div
-              className="flex size-7 items-center justify-center rounded-sm border border-white/10"
-              style={{ backgroundColor: '#12181e' }}
-            >
+            <div className="flex size-7 items-center justify-center rounded-sm border border-border bg-foreground">
               <img
                 src={logo}
                 alt={translate('auto.components.Landing.520304a067', 'Orca logo')}
-                className="size-4"
+                className="size-4 dark:invert"
               />
             </div>
-            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
               {translate('auto.components.sidebar.SidebarNav.9c95e1ce91', 'Agents')}
             </span>
           </div>
@@ -361,7 +369,7 @@ export default function Landing(): React.JSX.Element {
                   }
                 >
                   <GitBranchPlus className="size-3.5" />
-                  {translate('auto.components.Landing.76a95f7f47', 'New agent workspace')}
+                  {newAgentWorkspaceLabel}
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => openModal('add-repo')}>
                   <FolderPlus className="size-3.5" />
@@ -374,15 +382,28 @@ export default function Landing(): React.JSX.Element {
                   <FolderPlus className="size-3.5" />
                   {translate('auto.components.Landing.f9eaa9e12d', 'Add project')}
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled
-                  title={translate('auto.components.Landing.f05d237049', 'Add a project first')}
-                >
-                  <GitBranchPlus className="size-3.5" />
-                  {translate('auto.components.Landing.76a95f7f47', 'New agent workspace')}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="sm" asChild>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        aria-disabled="true"
+                        aria-describedby="landing-new-agent-workspace-disabled-hint"
+                        className="cursor-not-allowed opacity-50"
+                      >
+                        <GitBranchPlus className="size-3.5" />
+                        {newAgentWorkspaceLabel}
+                      </span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    {projectRequiredHint}
+                  </TooltipContent>
+                </Tooltip>
+                <span id="landing-new-agent-workspace-disabled-hint" className="sr-only">
+                  {projectRequiredHint}
+                </span>
               </>
             )}
           </div>
