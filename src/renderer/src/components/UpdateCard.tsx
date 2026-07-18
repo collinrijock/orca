@@ -7,7 +7,17 @@ import { useAppStore } from '../store'
 import { Card } from './ui/card'
 import { Button } from './ui/button'
 import { Progress } from './ui/progress'
-import { AlertCircle, Check, Loader2, Minus, Network, RotateCw, ShieldAlert, X } from 'lucide-react'
+import {
+  AlertCircle,
+  Check,
+  ChevronRight,
+  Loader2,
+  Minus,
+  Network,
+  RotateCw,
+  ShieldAlert,
+  X
+} from 'lucide-react'
 import type { ChangelogData } from '../../../shared/types'
 import {
   isWindowsSignatureCheckUnavailableFailure,
@@ -1011,14 +1021,33 @@ function ErrorCardContent({
         </div>
       ) : null}
 
-      {detail && showDetails ? (
-        <div className="rounded-md bg-muted/40 px-3 py-2">
-          <p className="mb-1 text-[11px] font-medium uppercase text-muted-foreground">
-            {translate('auto.components.UpdateCard.3553a8672f', 'Last error')}
-          </p>
-          <p className="scrollbar-sleek max-h-20 overflow-auto break-words font-mono text-xs leading-relaxed text-muted-foreground">
-            {detail}
-          </p>
+      {/* Why: a caret disclosure sits directly above the raw error it reveals,
+          so the card leads with the plain summary and expands the last-error
+          block in place — the action buttons stay pinned below it. */}
+      {detail ? (
+        <div className="flex flex-col gap-2">
+          <button
+            className="flex items-center gap-1 self-start text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => setShowDetails((prev) => !prev)}
+            aria-expanded={showDetails}
+          >
+            <ChevronRight
+              className={`size-3.5 transition-transform ${showDetails ? 'rotate-90' : ''}`}
+            />
+            {showDetails
+              ? translate('auto.components.UpdateCard.5194358929', 'Hide details')
+              : translate('auto.components.UpdateCard.8bc9e17d8f', 'Show details')}
+          </button>
+          {showDetails ? (
+            <div className="rounded-md bg-muted/40 px-3 py-2">
+              <p className="mb-1 text-[11px] font-medium uppercase text-muted-foreground">
+                {translate('auto.components.UpdateCard.3553a8672f', 'Last error')}
+              </p>
+              <p className="scrollbar-sleek max-h-20 overflow-auto break-words font-mono text-xs leading-relaxed text-muted-foreground">
+                {detail}
+              </p>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -1050,18 +1079,6 @@ function ErrorCardContent({
           {manualLabel ?? translate('auto.components.UpdateCard.47126bcf57', 'Download Manually')}
         </Button>
       </div>
-      {/* Why: the raw-error toggle sits on its own row so it never crowds the
-          two action buttons out of the narrow card. */}
-      {detail ? (
-        <button
-          className="-mt-1 self-start text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-          onClick={() => setShowDetails((prev) => !prev)}
-        >
-          {showDetails
-            ? translate('auto.components.UpdateCard.5194358929', 'Hide details')
-            : translate('auto.components.UpdateCard.8bc9e17d8f', 'Show details')}
-        </button>
-      ) : null}
     </div>
   )
 }
