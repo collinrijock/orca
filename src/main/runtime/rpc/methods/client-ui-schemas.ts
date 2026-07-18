@@ -12,6 +12,7 @@ import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isTaskProvider } from '../../../../shared/task-providers'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import { normalizePRBotAuthorOverrides } from '../../../../shared/pr-bot-author-overrides'
+import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quick-commands'
 import { normalizeWorktreeCardProperties } from '../../../../shared/worktree-card-properties'
 import type { TaskProvider } from '../../../../shared/types'
 
@@ -163,6 +164,10 @@ export const SettingsUpdate = z
     prBotAuthorOverrides: z
       .unknown()
       .transform((value) => normalizePRBotAuthorOverrides(value))
+      .optional(),
+    terminalQuickCommands: z
+      .unknown()
+      .transform((value) => normalizeTerminalQuickCommands(value))
       .optional()
   })
   .strict()

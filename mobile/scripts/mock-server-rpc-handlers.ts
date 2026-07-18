@@ -15,6 +15,27 @@ const MOCK_RPC_DELAY_MS = readScenarioNumber('MOCK_RPC_DELAY_MS', 0)
 const FAKE_REPOS = createMockRepos(MOCK_REPO_COUNT)
 let fakeWorktrees = createMockWorktrees(FAKE_REPOS, MOCK_WORKTREE_COUNT)
 
+// Mutable quick-command list so the mobile Quick Commands sheet can add/edit/
+// delete against the mock the same way it does a paired desktop.
+let fakeQuickCommands: unknown[] = [
+  {
+    id: 'qc-codex-review',
+    label: 'codex review',
+    action: 'agent-prompt',
+    agent: 'codex',
+    prompt: 'please review this diff for correctness and edge cases.',
+    scope: { type: 'global' }
+  },
+  {
+    id: 'qc-dev-server',
+    label: 'dev server',
+    action: 'terminal-command',
+    command: 'pnpm dev',
+    appendEnter: true,
+    scope: { type: 'global' }
+  }
+]
+
 const FAKE_TERMINALS = [
   {
     handle: 'term-1',
@@ -139,11 +160,30 @@ export function handleRequest(
           settings: {
             defaultTuiAgent: 'codex',
             disabledTuiAgents: [],
-            agentCmdOverrides: {}
+            agentCmdOverrides: {},
+            terminalQuickCommands: fakeQuickCommands
           }
         })
       )
       break
+
+    case 'settings.update': {
+      const updates = (request.params ?? {}) as { terminalQuickCommands?: unknown }
+      if (Array.isArray(updates.terminalQuickCommands)) {
+        fakeQuickCommands = updates.terminalQuickCommands
+      }
+      respond(
+        success(request.id, {
+          settings: {
+            defaultTuiAgent: 'codex',
+            disabledTuiAgents: [],
+            agentCmdOverrides: {},
+            terminalQuickCommands: fakeQuickCommands
+          }
+        })
+      )
+      break
+    }
 
     case 'ui.get':
       respond(

@@ -892,6 +892,7 @@ type RuntimeStore = {
     minimaxGroupId?: GlobalSettings['minimaxGroupId']
     minimaxUsageModels?: GlobalSettings['minimaxUsageModels']
     prBotAuthorOverrides?: GlobalSettings['prBotAuthorOverrides']
+    terminalQuickCommands?: GlobalSettings['terminalQuickCommands']
     gitlabProjects?: GlobalSettings['gitlabProjects']
     mobileAutoRestoreFitMs?: number | null
     mobileEmulatorEnabled?: boolean
@@ -2769,6 +2770,7 @@ export class OrcaRuntimeService {
     | 'minimaxGroupId'
     | 'minimaxUsageModels'
     | 'prBotAuthorOverrides'
+    | 'terminalQuickCommands'
   > {
     if (!this.store?.getSettings) {
       throw new Error('runtime_unavailable')
@@ -2791,7 +2793,8 @@ export class OrcaRuntimeService {
       compactWorktreeCards: settings.compactWorktreeCards === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
-      prBotAuthorOverrides: settings.prBotAuthorOverrides ?? []
+      prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
+      terminalQuickCommands: settings.terminalQuickCommands ?? []
     }
   }
 
@@ -2814,6 +2817,7 @@ export class OrcaRuntimeService {
       | 'minimaxGroupId'
       | 'minimaxUsageModels'
       | 'prBotAuthorOverrides'
+      | 'terminalQuickCommands'
     >
   ): Pick<
     GlobalSettings,
@@ -2834,6 +2838,7 @@ export class OrcaRuntimeService {
     | 'minimaxGroupId'
     | 'minimaxUsageModels'
     | 'prBotAuthorOverrides'
+    | 'terminalQuickCommands'
   > {
     if (!this.store?.getSettings || !this.store.updateSettings) {
       throw new Error('runtime_unavailable')

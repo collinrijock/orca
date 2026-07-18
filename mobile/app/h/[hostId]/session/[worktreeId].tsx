@@ -41,6 +41,7 @@ import {
   RefreshCw,
   Send,
   Smartphone,
+  SquareChevronRight,
   SquareTerminal,
   X
 } from 'lucide-react-native'
@@ -75,6 +76,12 @@ import { useMobilePrBranchContext } from '../../../../src/session/use-mobile-pr-
 import { SessionDockColumn } from '../../../../src/session/SessionDockColumn'
 import { MobileSessionHeaderIconButton } from '../../../../src/session/MobileSessionHeaderIconButton'
 import { MobileSessionHeaderMoreActionsSheet } from '../../../../src/session/MobileSessionHeaderMoreActionsSheet'
+import { QuickCommandsSheet } from '../../../../src/session/QuickCommandsSheet'
+import {
+  flattenQuickCommandText,
+  isAgentQuickCommand
+} from '../../../../src/terminal/quick-commands'
+import { mobileTuiAgentSupportsPromptCommand } from '../../../../src/tasks/mobile-tui-agents'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../../../../src/agent-history/agent-history-capability'
 import type { ConnectionState, RpcFailure, RpcSuccess } from '../../../../src/transport/types'
 import { headlessActivationNeedsHostRenderer } from '../../../../src/worktree/worktree-activation-result'
@@ -233,7 +240,7 @@ import {
 } from '../../../../src/session/mobile-session-create-warning-state'
 import { colors, spacing } from '../../../../src/theme/mobile-theme'
 import { styles } from './mobile-session-styles'
-import type { DiffComment } from '../../../../../src/shared/types'
+import type { DiffComment, TerminalQuickCommand } from '../../../../../src/shared/types'
 import type {
   DiffCommentActions,
   DiffNotesDelivery,
@@ -924,6 +931,7 @@ export default function SessionScreen() {
     createMobileSessionCreateWarningState(initialCreateWarning)
   )
   const [showCreateTabDrawer, setShowCreateTabDrawer] = useState(false)
+  const [showQuickCommands, setShowQuickCommands] = useState(false)
   const [createTabAgentLoadState, setCreateTabAgentLoadState] =
     useState<MobileNewTabAgentLoadState>('idle')
   const [createTabAgentOptions, setCreateTabAgentOptions] = useState<MobileNewTabAgentOption[]>([])
@@ -3939,7 +3947,15 @@ export default function SessionScreen() {
 
   async function handleCreateTerminal(
     agent?: MobileNewTabAgentOption['agent'],
-    options?: { initialPrompt?: string; onPromptSent?: () => void }
+    options?: {
+      initialPrompt?: string
+      onPromptSent?: () => void
+      // Whether the delivered text is submitted (Enter) or only inserted.
+      // Defaults to true (diff-notes delivery + quick-command "run").
+      enter?: boolean
+      successToast?: string
+      errorToast?: string
+    }
   ) {
     if (!client || creatingTerminalRef.current) {
       return
@@ -4019,7 +4035,7 @@ export default function SessionScreen() {
               .sendRequest('terminal.send', {
                 terminal: createdHandle,
                 text: options.initialPrompt,
-                enter: true,
+                enter: options.enter !== false,
                 ...(deviceTokenRef.current
                   ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
                   : {})
@@ -4037,12 +4053,17 @@ export default function SessionScreen() {
                   throw new Error('Terminal input is locked by another client.')
                 }
                 triggerSuccess()
-                showToast('Notes sent')
+                showToast(options.successToast ?? 'Notes sent')
                 options.onPromptSent?.()
               })
               .catch((err) => {
                 triggerError()
-                showToast(err instanceof Error ? err.message : "Couldn't send notes", 1800)
+                showToast(
+                  err instanceof Error
+                    ? err.message
+                    : (options.errorToast ?? "Couldn't send notes"),
+                  1800
+                )
               })
           }
         } else {
@@ -4062,6 +4083,35 @@ export default function SessionScreen() {
       creatingTerminalRef.current = false
       setCreating(false)
     }
+  }
+
+  // Quick commands spawn a fresh terminal tab, mirroring desktop's
+  // run-quick-command-in-new-tab: agent prompts launch the agent then deliver
+  // the prompt; terminal commands run the (Enter-appended) command text.
+  function launchQuickCommand(command: TerminalQuickCommand) {
+    const label = command.label.trim() || 'Quick command'
+    if (isAgentQuickCommand(command)) {
+      if (!command.prompt.trim() || !mobileTuiAgentSupportsPromptCommand(command.agent)) {
+        return
+      }
+      void handleCreateTerminal(command.agent, {
+        initialPrompt: command.prompt,
+        enter: true,
+        successToast: `Ran ${label}`,
+        errorToast: `Couldn't run ${label}`
+      })
+      return
+    }
+    const body = flattenQuickCommandText(command.command)
+    if (!body.trim()) {
+      return
+    }
+    void handleCreateTerminal(undefined, {
+      initialPrompt: body,
+      enter: command.appendEnter !== false,
+      successToast: `Ran ${label}`,
+      errorToast: `Couldn't run ${label}`
+    })
   }
 
   async function handleCreateMarkdownNote() {
@@ -4715,6 +4765,22 @@ export default function SessionScreen() {
               >
                 <Plus size={16} color={colors.textSecondary} strokeWidth={2.2} />
               </Pressable>
+              {/* Quick Commands launcher: sits with the new-tab button because,
+                  like +, it spawns a new terminal tab (running a saved command
+                  or launching an agent with a prompt). */}
+              <View style={styles.tabActionDivider} />
+              <Pressable
+                style={({ pressed }) => [
+                  styles.newTerminalButton,
+                  pressed && styles.newTerminalButtonPressed,
+                  connState !== 'connected' && styles.newTerminalButtonDisabled
+                ]}
+                disabled={connState !== 'connected'}
+                onPress={() => setShowQuickCommands(true)}
+                accessibilityLabel="Quick commands"
+              >
+                <SquareChevronRight size={16} color={colors.textSecondary} strokeWidth={2.2} />
+              </Pressable>
             </View>
           )}
         </SafeAreaView>
@@ -5259,6 +5325,15 @@ export default function SessionScreen() {
         onOpenAgentSessionHistory={openAgentSessionHistory}
         onOpenChecks={() => handlePanelTap('pr')}
         onClose={() => setShowHeaderMoreActions(false)}
+      />
+
+      <QuickCommandsSheet
+        visible={showQuickCommands}
+        onClose={() => setShowQuickCommands(false)}
+        client={client}
+        repoId={getRepoIdFromMobileWorktreeId(worktreeId) || null}
+        repoName={worktreeName || null}
+        onLaunch={launchQuickCommand}
       />
 
       <ActionSheetModal
