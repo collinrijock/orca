@@ -70,7 +70,8 @@ import { FloatingTerminalToggleButton } from './components/floating-terminal/Flo
 import { OrcaProfileSwitcher } from './components/orca-profiles/OrcaProfileSwitcher'
 import {
   TOGGLE_FLOATING_TERMINAL_EVENT,
-  requestFloatingTerminalOpenMaximized
+  requestFloatingTerminalOpenMaximized,
+  shouldMountFloatingTerminalPanelForShell
 } from '@/lib/floating-terminal'
 import {
   isFloatingWorkspacePanelFocused,
@@ -548,9 +549,13 @@ function App(): React.JSX.Element {
     (floatingTerminalTriggerLocation === 'floating-button' || !statusBarVisible)
   // Why: a closed empty floating workspace is not startup-critical. Once it owns
   // tabs, keep it mounted while closed so hidden terminal/browser/editor panes
-  // retain their local state.
-  const shouldMountFloatingTerminalPanel =
-    floatingTerminalEnabled && (floatingTerminalOpen || floatingVisibleTabCount > 0)
+  // retain their local state, except on Landing where no overlay chrome belongs.
+  const shouldMountFloatingTerminalPanel = shouldMountFloatingTerminalPanelForShell({
+    enabled: floatingTerminalEnabled,
+    open: floatingTerminalOpen,
+    visibleTabCount: floatingVisibleTabCount,
+    landingActive
+  })
   // Why: the floating workspace is a transient overlay; hotkey minimize should
   // return keyboard focus to the surface the user was working in before it.
   const floatingTerminalReturnFocusRef = useRef<HTMLElement | null>(null)
@@ -2484,10 +2489,9 @@ function App(): React.JSX.Element {
                     </div>
                   </div>
                 </div>
-                {/* Why: keep the right-sidebar shell mounted for layout stability.
-              Its heavy panels disconnect while closed so workspace wake stays
-              responsive. Unmount on the tasks view since that surface is
-              intentionally distraction-free. */}
+                {/* Why: keep the right-sidebar shell mounted on workspace views
+              for layout stability. Its heavy panels disconnect while closed;
+              Landing and full-page surfaces unmount the rail to own the canvas. */}
                 {showRightSidebarControls ? (
                   <RecoverableRenderErrorBoundary
                     boundaryId="right-sidebar"
