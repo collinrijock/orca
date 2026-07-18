@@ -17,7 +17,10 @@ import { getLiveBrowserUrl } from '../browser-pane/browser-runtime'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
+  TAB_CLOSE_BUTTON_BASE_CLASSES,
+  TAB_ROOT_BASE_CLASSES,
   getDropIndicatorClasses,
+  getTabCloseButtonVisibilityClasses,
   getTabRootStateClasses,
   getTabStripBorderClasses,
   type DropIndicator
@@ -129,7 +132,7 @@ export default function BrowserTab({
   includeTopTabBorder?: boolean
 }): React.JSX.Element {
   // Why: no transform/transition/isDragging styling — the drag design is
-  // that tabs stay visually anchored; only the blue insertion bar moves.
+  // that tabs stay visually anchored; only the insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
     id: tab.id,
     data: dragData
@@ -181,7 +184,7 @@ export default function BrowserTab({
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`${TAB_ROOT_BASE_CLASSES} ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
         onTabPointerDown(
           e,
@@ -221,11 +224,13 @@ export default function BrowserTab({
       )}
       {!isPinned && (
         <button
-          className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
-            isActive
-              ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
-              : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
-          }`}
+          type="button"
+          data-tab-close-button="true"
+          aria-label={translate(
+            'auto.components.tab.bar.EditorFileTabCloseButton.4655cf570e',
+            'Close tab'
+          )}
+          className={`${TAB_CLOSE_BUTTON_BASE_CLASSES} ${getTabCloseButtonVisibilityClasses(isActive)}`}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation()

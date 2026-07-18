@@ -79,6 +79,10 @@ const terminalTabSchema = z.object({
   createdAt: z.number(),
   generation: z.number().optional(),
   startupCwd: z.string().min(1).optional(),
+  // Display and relaunch metadata already constrained by TerminalTab's
+  // optional-string contract. Preserve it through hydration without treating
+  // the parser as an executable allowlist.
+  shellOverride: z.string().optional(),
   // Why: persist the launched agent so a restored idle agent tab keeps its
   // provider icon before any hook fires. `.catch(undefined)` keeps a stale or
   // unknown agent id from failing the whole-session parse (which would reset

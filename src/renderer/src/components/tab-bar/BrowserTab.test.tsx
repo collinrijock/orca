@@ -236,6 +236,19 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
     vi.clearAllMocks()
   })
 
+  it('keeps the active close control visible with a keyboard focus ring', async () => {
+    const element = await renderExpandedBrowserTab(baseBrowserTab())
+    const closeButton = findElementsByType(element, 'button').find(
+      (button) => button.props['data-tab-close-button'] === 'true'
+    )
+
+    expect(closeButton).toBeTruthy()
+    expect(closeButton?.props['aria-label']).toBe('Close tab')
+    expect(closeButton?.props.className).toContain('opacity-100')
+    expect(closeButton?.props.className).toContain('focus-visible:ring-1')
+    expect(closeButton?.props.className).toContain('focus-visible:ring-ring')
+  })
+
   it('renders the favicon image when faviconUrl is present', async () => {
     const iconUrl = 'https://example.com/favicon.ico'
     const element = await renderExpandedBrowserTab(baseBrowserTab({ faviconUrl: iconUrl }))

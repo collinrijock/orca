@@ -20,6 +20,7 @@ import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
+  TAB_ROOT_BASE_CLASSES,
   getDropIndicatorClasses,
   getTabRootStateClasses,
   getTabStripBorderClasses,
@@ -223,7 +224,7 @@ export default function EditorFileTab({
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...dragListeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`${TAB_ROOT_BASE_CLASSES} ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
         onTabPointerDown(
           e,
@@ -350,12 +351,12 @@ export default function EditorFileTab({
           </span>
         )}
       </span>
-      {/* Dirty dot and close button share the same slot to prevent tab width shift during auto-save.
-         When dirty: dot is shown, close button appears on hover (replacing the dot).
-         When clean: close button is shown normally (visible on active tab, on hover for others). */}
+      {/* Dirty and close share one fixed slot to prevent width shift. On hover-capable
+          devices an inactive dirty tab shows the dot until its close button reveals;
+          active/touch close controls carry a small corner dot instead. */}
       <div className="relative flex items-center justify-center w-4 h-4 shrink-0">
-        {file.isDirty && (
-          <span className="absolute size-1.5 rounded-full bg-foreground/60 group-hover:hidden group-focus-within:hidden" />
+        {file.isDirty && !isActive && (
+          <span className="absolute hidden size-1.5 rounded-full bg-foreground/60 can-hover:block group-hover:hidden group-focus-within:hidden" />
         )}
         {!isPinned && (
           <EditorFileTabCloseButton

@@ -3,6 +3,7 @@ import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
+import { TAB_CLOSE_BUTTON_BASE_CLASSES, getTabCloseButtonVisibilityClasses } from './drop-indicator'
 
 export function EditorFileTabCloseButton({
   fileIsDirty,
@@ -19,12 +20,10 @@ export function EditorFileTabCloseButton({
     <Tooltip>
       <TooltipTrigger asChild>
         <button
-          className={`flex items-center justify-center w-4 h-4 rounded-sm ${
+          className={`${TAB_CLOSE_BUTTON_BASE_CLASSES} ${getTabCloseButtonVisibilityClasses(showsSelectionChrome)} ${
             fileIsDirty
-              ? 'hidden group-hover:flex text-muted-foreground hover:text-foreground hover:bg-muted'
-              : showsSelectionChrome
-                ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
+              ? "after:absolute after:right-0 after:top-0 after:size-1 after:rounded-full after:bg-foreground/60 after:content-['']"
+              : ''
           }`}
           type="button"
           // Why: simulator unified tabs reuse this tab chrome, so E2E needs
