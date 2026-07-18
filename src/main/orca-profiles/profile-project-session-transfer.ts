@@ -40,7 +40,8 @@ function hasTransferredSessionState(session: WorkspaceSessionState): boolean {
     Object.keys(session.openFilesByWorktree ?? {}).length > 0 ||
     Object.keys(session.browserTabsByWorktree ?? {}).length > 0 ||
     Object.keys(session.unifiedTabs ?? {}).length > 0 ||
-    Object.keys(session.tabGroups ?? {}).length > 0
+    Object.keys(session.tabGroups ?? {}).length > 0 ||
+    Object.keys(session.sleepingAgentSessionsByPaneKey ?? {}).length > 0
   )
 }
 
@@ -119,6 +120,17 @@ export function extractSessionForTransfer(
   transferred.defaultTerminalTabsAppliedByWorktreeId = mapOwnerRecord(
     source.defaultTerminalTabsAppliedByWorktreeId,
     (value) => structuredClone(value)
+  )
+  transferred.sleepingAgentSessionsByPaneKey = Object.fromEntries(
+    Object.entries(source.sleepingAgentSessionsByPaneKey ?? {})
+      .filter(([, record]) => isRepoWorktreeId(oldRepoId, record.worktreeId))
+      .map(([paneKey, record]) => [
+        paneKey,
+        {
+          ...structuredClone(record),
+          worktreeId: rekeyWorktreeId(oldRepoId, newRepoId, record.worktreeId)
+        }
+      ])
   )
   transferred.terminalLayoutsByTabId = {}
   for (const tabId of copiedTerminalTabIds) {

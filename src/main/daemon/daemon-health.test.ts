@@ -7,6 +7,7 @@ import { DaemonServer } from './daemon-server'
 import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
 import {
   checkDaemonHealth,
+  classifyExactDaemonProcessIdentity,
   getProcessStartedAtMs,
   healthCheckDaemon,
   killStaleDaemon,
@@ -187,13 +188,15 @@ describe('parseDaemonPidFile', () => {
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
       entryPath: '/repo/out/main/daemon-entry.js',
-      appVersion: '1.2.3'
+      appVersion: '1.2.3',
+      launchNonce: 'launch-a'
     })
     expect(parseDaemonPidFile(serialized)).toEqual({
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
       entryPath: '/repo/out/main/daemon-entry.js',
-      appVersion: '1.2.3'
+      appVersion: '1.2.3',
+      launchNonce: 'launch-a'
     })
   })
 
@@ -341,6 +344,44 @@ describe('startTimesWithinTolerance', () => {
   it('matches within tolerance and rejects outside it', () => {
     expect(startTimesWithinTolerance(1_700_000_001_000, 1_700_000_000_000, 1_500)).toBe(true)
     expect(startTimesWithinTolerance(1_700_000_005_000, 1_700_000_000_000, 1_500)).toBe(false)
+  })
+})
+
+describe('classifyExactDaemonProcessIdentity', () => {
+  const identity = {
+    commandLine:
+      'node daemon-entry.js --socket /run/orca.sock --token /run/orca.token --launch-nonce launch-a',
+    socketPath: '/run/orca.sock',
+    tokenPath: '/run/orca.token',
+    actualStartedAtMs: 1_000,
+    expectedStartedAtMs: 1_000,
+    launchNonce: 'launch-a',
+    startTimeToleranceMs: 10
+  }
+
+  it('requires complete start and launch identity before a destructive call', () => {
+    expect(classifyExactDaemonProcessIdentity({ ...identity, actualStartedAtMs: null })).toBe(
+      'unknown'
+    )
+    expect(classifyExactDaemonProcessIdentity({ ...identity, expectedStartedAtMs: null })).toBe(
+      'unknown'
+    )
+    expect(classifyExactDaemonProcessIdentity({ ...identity, launchNonce: null })).toBe('unknown')
+  })
+
+  it('rejects a replacement process with the same endpoint but another launch nonce', () => {
+    expect(
+      classifyExactDaemonProcessIdentity({
+        ...identity,
+        commandLine: identity.commandLine.replace('launch-a', 'launch-b')
+      })
+    ).toBe('absent')
+  })
+
+  it('rejects a reused pid whose process start falls outside tolerance', () => {
+    expect(classifyExactDaemonProcessIdentity({ ...identity, actualStartedAtMs: 2_000 })).toBe(
+      'absent'
+    )
   })
 })
 

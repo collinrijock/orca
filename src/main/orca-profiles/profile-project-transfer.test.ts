@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
@@ -9,6 +9,8 @@ import {
 } from '../../shared/orca-profiles'
 import type { PersistedState, Repo, WorktreeMeta } from '../../shared/types'
 import type { SshTarget } from '../../shared/ssh-types'
+import { withDaemonOwnershipCommit } from '../daemon/daemon-ownership-commit'
+import { loadRawDaemonOwnershipSnapshot } from '../daemon/daemon-ownership-raw-snapshot'
 
 const testState = { dir: '' }
 
@@ -51,7 +53,7 @@ function profileDataPath(profileId: string): string {
 function writeProfileState(profileId: string, state: PersistedState): void {
   const dataFile = profileDataPath(profileId)
   mkdirSync(join(dataFile, '..'), { recursive: true })
-  writeFileSync(dataFile, JSON.stringify(state, null, 2), 'utf-8')
+  writeFileSync(dataFile, JSON.stringify(withDaemonOwnershipCommit(state, 1), null, 2), 'utf-8')
 }
 
 function readProfileState(profileId: string): PersistedState {
@@ -144,6 +146,19 @@ describe('profile project transfer', () => {
                 createdAt: 1
               }
             ]
+          },
+          sleepingAgentSessionsByPaneKey: {
+            'tab-1:11111111-1111-4111-8111-111111111111': {
+              paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
+              tabId: 'tab-1',
+              worktreeId: sourceWorktreeId,
+              agent: 'codex',
+              providerSession: { key: 'session_id', id: 'copy-kept-at-source' },
+              prompt: 'keep working',
+              state: 'working',
+              capturedAt: 1,
+              updatedAt: 1
+            }
           }
         }
       })
@@ -178,7 +193,47 @@ describe('profile project transfer', () => {
       expect.objectContaining({ id: 'preset-1', repoId: targetRepoId })
     ])
     expect(target.workspaceSession.tabsByWorktree).toEqual({})
-    expect(readProfileState('personal').repos.map((repo) => repo.id)).toEqual(['repo-1'])
+    expect(target.workspaceSession.sleepingAgentSessionsByPaneKey ?? {}).toEqual({})
+    const source = readProfileState('personal')
+    expect(source.repos.map((repo) => repo.id)).toEqual(['repo-1'])
+    expect(Object.keys(source.workspaceSession.sleepingAgentSessionsByPaneKey ?? {})).toEqual([
+      'tab-1:11111111-1111-4111-8111-111111111111'
+    ])
+  })
+
+  it('marks a never-opened target initialized before its first transferred state write', async () => {
+    const index: OrcaProfileIndex = {
+      schemaVersion: ORCA_PROFILE_INDEX_SCHEMA_VERSION,
+      activeProfileId: 'personal',
+      profiles: [
+        { ...profile('personal', 'Personal'), initialized: true },
+        { ...profile('work', 'Work'), initialized: false }
+      ]
+    }
+    writeFileSync(join(testState.dir, 'orca-profile-index.json'), JSON.stringify(index), 'utf8')
+    writeProfileState('personal', makeState({ repos: [makeRepo()] }))
+
+    const { transferOrcaProfileProject } = await loadTransferModule()
+    transferOrcaProfileProject(
+      {
+        sourceProfileId: 'personal',
+        targetProfileId: 'work',
+        repoId: 'repo-1',
+        mode: 'copy'
+      },
+      testState.dir
+    )
+
+    const committedIndex = JSON.parse(
+      readFileSync(join(testState.dir, 'orca-profile-index.json'), 'utf8')
+    ) as OrcaProfileIndex
+    expect(committedIndex.profiles.find(({ id }) => id === 'work')?.initialized).toBe(true)
+
+    unlinkSync(profileDataPath('work'))
+    await expect(loadRawDaemonOwnershipSnapshot(testState.dir)).resolves.toMatchObject({
+      status: 'incomplete',
+      reasons: expect.arrayContaining(['profile-state-missing'])
+    })
   })
 
   it('moves a project, preserving SSH identity and restorable workspace session state', async () => {
@@ -224,11 +279,47 @@ describe('profile project transfer', () => {
                 createdAt: 1
               }
             ]
+          },
+          sleepingAgentSessionsByPaneKey: {
+            'tab-ssh:22222222-2222-4222-8222-222222222222': {
+              paneKey: 'tab-ssh:22222222-2222-4222-8222-222222222222',
+              tabId: 'tab-ssh',
+              worktreeId: sourceWorktreeId,
+              agent: 'claude',
+              providerSession: { key: 'session_id', id: 'move-me' },
+              prompt: 'continue remotely',
+              state: 'waiting',
+              capturedAt: 1,
+              updatedAt: 1,
+              connectionId: 'ssh-1'
+            }
+          }
+        },
+        workspaceSessionsByHostId: {
+          'ssh:ssh-1': {
+            ...getDefaultPersistedState('/Users/tester').workspaceSession,
+            sleepingAgentSessionsByPaneKey: {
+              'tab-host:33333333-3333-4333-8333-333333333333': {
+                paneKey: 'tab-host:33333333-3333-4333-8333-333333333333',
+                tabId: 'tab-host',
+                worktreeId: sourceWorktreeId,
+                agent: 'codex',
+                providerSession: { key: 'session_id', id: 'move-host-record' },
+                prompt: 'continue on host',
+                state: 'blocked',
+                capturedAt: 1,
+                updatedAt: 1,
+                connectionId: 'ssh-1'
+              }
+            }
           }
         }
       })
     )
-    writeProfileState('work', makeState())
+    writeProfileState(
+      'work',
+      makeState({ repos: [makeRepo({ id: 'repo-ssh', path: '/srv/unrelated' })] })
+    )
 
     const { transferOrcaProfileProject } = await loadTransferModule()
     const result = transferOrcaProfileProject(
@@ -243,25 +334,41 @@ describe('profile project transfer', () => {
 
     expect(result).toMatchObject({
       status: 'transferred',
-      sourceRepoId: 'repo-ssh',
-      targetRepoId: 'repo-ssh'
+      sourceRepoId: 'repo-ssh'
     })
+    const targetRepoId = result.status === 'transferred' ? result.targetRepoId : ''
+    expect(targetRepoId).not.toBe('repo-ssh')
+    const targetWorktreeId = `${targetRepoId}::/srv/orca-feature`
     const source = readProfileState('personal')
     const target = readProfileState('work')
     expect(source.repos).toEqual([])
     expect(source.worktreeMeta).toEqual({})
-    expect(target.repos[0]).toMatchObject({
-      id: 'repo-ssh',
+    expect(source.workspaceSession.sleepingAgentSessionsByPaneKey).toEqual({})
+    expect(source.workspaceSessionsByHostId?.['ssh:ssh-1']?.sleepingAgentSessionsByPaneKey).toEqual(
+      {}
+    )
+    expect(target.repos.find((repo) => repo.path === '/srv/orca')).toMatchObject({
+      id: targetRepoId,
       path: '/srv/orca',
       connectionId: 'ssh-1',
       executionHostId: 'ssh:ssh-1'
     })
     expect(target.sshTargets).toEqual([sshTarget])
-    expect(target.workspaceSession.browserTabsByWorktree?.[sourceWorktreeId]?.[0]).toMatchObject({
-      worktreeId: sourceWorktreeId,
+    expect(target.workspaceSession.browserTabsByWorktree?.[targetWorktreeId]?.[0]).toMatchObject({
+      worktreeId: targetWorktreeId,
       sessionProfileId: null,
       sessionPartition: null
     })
+    expect(
+      target.workspaceSession.sleepingAgentSessionsByPaneKey?.[
+        'tab-ssh:22222222-2222-4222-8222-222222222222'
+      ]
+    ).toMatchObject({ worktreeId: targetWorktreeId, connectionId: 'ssh-1' })
+    expect(
+      target.workspaceSessionsByHostId?.['ssh:ssh-1']?.sleepingAgentSessionsByPaneKey?.[
+        'tab-host:33333333-3333-4333-8333-333333333333'
+      ]
+    ).toMatchObject({ worktreeId: targetWorktreeId, connectionId: 'ssh-1' })
   })
 
   it('rejects a duplicate physical project inside the target profile', async () => {

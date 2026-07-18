@@ -461,6 +461,10 @@ export class LocalPtyProvider implements IPtyProvider {
     this.opts = opts
   }
 
+  getPtyBindingProvenance(): { kind: 'local-fallback' } {
+    return { kind: 'local-fallback' }
+  }
+
   /**
    * Spawns or reattaches a local PTY session for the renderer process.
    *

@@ -2428,7 +2428,8 @@ describe('registerPtyHandlers', () => {
           worktreeId: 'wt-1',
           tabId: 'tab-1',
           leafId,
-          ptyId: 'ssh-pty'
+          ptyId: 'ssh-pty',
+          provenance: { kind: 'remote', providerId: 'ssh-1' }
         })
 
         store.upsertSshRemotePtyLease.mockClear()
@@ -2963,6 +2964,79 @@ describe('registerPtyHandlers', () => {
           keepHistory: true
         })
         expect(runtime.onPtyExit).not.toHaveBeenCalled()
+      })
+
+      it('keeps a same-protocol replacement that commits at the final stop fence', async () => {
+        const provenance = { kind: 'local-daemon' as const, protocolVersion: 23 }
+        let replacementCommitted = false
+        const shutdown = vi.fn(async () => undefined)
+        const listProcessesForBinding = vi.fn(async () => {
+          // The exact absence result was already captured when this same-ID replacement commits.
+          replacementCommitted = true
+          return []
+        })
+        const forgetPtyRouteAfterVerifiedStop = vi.fn(() => true)
+        setLocalPtyProvider({
+          spawn: vi.fn(),
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown,
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          listProcessesForBinding,
+          getPtyBindingProvenance: vi.fn(() => provenance),
+          hasPty: vi.fn(() => replacementCommitted),
+          forgetPtyRouteAfterVerifiedStop,
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        const store = {
+          markExistingDaemonSessionRetirementPending: vi.fn(() => true),
+          removePtyBindingOwnershipAfterVerifiedStop: vi.fn(() => true)
+        }
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtyExit: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          runtime as never,
+          undefined,
+          undefined,
+          undefined,
+          store as never
+        )
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          stopAndWait: (ptyId: string) => Promise<boolean>
+        }
+
+        await expect(controller.stopAndWait('reused-pty')).resolves.toBe(false)
+
+        expect(shutdown).toHaveBeenCalledWith('reused-pty', {
+          immediate: true,
+          keepHistory: false
+        })
+        expect(listProcessesForBinding).toHaveBeenCalledWith(provenance)
+        expect(store.markExistingDaemonSessionRetirementPending).toHaveBeenCalledWith('reused-pty')
+        expect(store.removePtyBindingOwnershipAfterVerifiedStop).not.toHaveBeenCalled()
+        expect(forgetPtyRouteAfterVerifiedStop).not.toHaveBeenCalled()
+        expect(runtime.onPtyExit).not.toHaveBeenCalled()
+        expect(
+          mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
+        ).toEqual([])
       })
 
       it('runtime controller stopAndWait preserves ownership when proof fails after shutdown', async () => {
@@ -3518,6 +3592,237 @@ describe('registerPtyHandlers', () => {
     expect(mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')).toEqual(
       [['pty:exit', { id: 'local-pty', code: 0 }]]
     )
+  })
+
+  it('delivers a legacy daemon exit exactly once when it arrives during explicit kill', async () => {
+    const provenance = { kind: 'local-daemon' as const, protocolVersion: 9 }
+    const exitListeners = new Set<
+      (payload: { id: string; code: number; provenance: typeof provenance }) => void
+    >()
+    const inventoryListeners = new Set<(value: typeof provenance) => void>()
+    let routePresent = true
+    const listProcessesForBinding = vi.fn(async () => {
+      for (const listener of inventoryListeners) {
+        listener(provenance)
+      }
+      return []
+    })
+    const runtime = { setPtyController: vi.fn(), onPtyExit: vi.fn() }
+    const store = {
+      markExistingDaemonSessionRetirementPending: vi.fn(),
+      removePtyBindingOwnershipAfterVerifiedStop: vi.fn(() => true)
+    }
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(async (id: string) => {
+        for (const listener of exitListeners) {
+          listener({ id, code: 9, provenance })
+        }
+      }),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn((listener) => {
+        exitListeners.add(listener)
+        return () => exitListeners.delete(listener)
+      }),
+      onPtyBindingInventoryAvailable: vi.fn((listener) => {
+        inventoryListeners.add(listener)
+        return () => inventoryListeners.delete(listener)
+      }),
+      listProcesses: vi.fn(async () => []),
+      listProcessesForBinding,
+      getPtyBindingProvenance: vi.fn(() =>
+        routePresent ? provenance : { kind: 'local-daemon' as const, protocolVersion: 23 }
+      ),
+      hasPty: vi.fn(() => false),
+      forgetPtyRouteAfterVerifiedStop: vi.fn(() => {
+        routePresent = false
+        return true
+      }),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    handlers.clear()
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+
+    await handlers.get('pty:kill')!(null, { id: 'legacy-pty' })
+    await Promise.resolve()
+
+    expect(listProcessesForBinding).toHaveBeenCalledTimes(1)
+    expect(runtime.onPtyExit).toHaveBeenCalledTimes(1)
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('legacy-pty', 9)
+    expect(mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')).toEqual(
+      [['pty:exit', { id: 'legacy-pty', code: 9, provenance }]]
+    )
+  })
+
+  it('lets explicit kill claim an already-reconciling legacy exit exactly once', async () => {
+    const provenance = { kind: 'local-daemon' as const, protocolVersion: 9 }
+    const exitListeners = new Set<
+      (payload: { id: string; code: number; provenance: typeof provenance }) => void
+    >()
+    let resolveFirstInventory: ((value: { id: string }[]) => void) | undefined
+    const listProcessesForBinding = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ id: string }[]>((resolve) => {
+            resolveFirstInventory = resolve
+          })
+      )
+      .mockResolvedValueOnce([])
+    let routePresent = true
+    const runtime = { setPtyController: vi.fn(), onPtyExit: vi.fn() }
+    const store = {
+      markExistingDaemonSessionRetirementPending: vi.fn(),
+      removePtyBindingOwnershipAfterVerifiedStop: vi.fn(() => true)
+    }
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(async () => undefined),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn((listener) => {
+        exitListeners.add(listener)
+        return () => exitListeners.delete(listener)
+      }),
+      listProcesses: vi.fn(async () => []),
+      listProcessesForBinding,
+      getPtyBindingProvenance: vi.fn(() =>
+        routePresent ? provenance : { kind: 'local-daemon' as const, protocolVersion: 23 }
+      ),
+      hasPty: vi.fn(() => false),
+      forgetPtyRouteAfterVerifiedStop: vi.fn(() => {
+        routePresent = false
+        return true
+      }),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    handlers.clear()
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+    for (const listener of exitListeners) {
+      listener({ id: 'legacy-pty', code: 6, provenance })
+    }
+    await vi.waitFor(() => expect(listProcessesForBinding).toHaveBeenCalledOnce())
+
+    await handlers.get('pty:kill')!(null, { id: 'legacy-pty' })
+    resolveFirstInventory?.([])
+    await Promise.resolve()
+
+    expect(listProcessesForBinding).toHaveBeenCalledTimes(2)
+    expect(runtime.onPtyExit).toHaveBeenCalledTimes(1)
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('legacy-pty', 6)
+    expect(mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')).toEqual(
+      [['pty:exit', { id: 'legacy-pty', code: 6, provenance }]]
+    )
+  })
+
+  it('retries a transient daemon listing failure before delivering natural exit', async () => {
+    vi.useFakeTimers()
+    const provenance = { kind: 'local-daemon' as const, protocolVersion: 23 }
+    const exitListeners = new Set<
+      (payload: { id: string; code: number; provenance: typeof provenance }) => void
+    >()
+    const listProcessesForBinding = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('transient daemon reconnect'))
+      .mockResolvedValueOnce([])
+    const runtime = { setPtyController: vi.fn(), onPtyExit: vi.fn() }
+    const store = { removePtyBindingOwnershipAfterVerifiedStop: vi.fn(() => true) }
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn((listener) => {
+        exitListeners.add(listener)
+        return () => exitListeners.delete(listener)
+      }),
+      listProcesses: vi.fn(async () => []),
+      listProcessesForBinding,
+      getPtyBindingProvenance: vi.fn(() => provenance),
+      hasPty: vi.fn(() => false),
+      forgetPtyRouteAfterVerifiedStop: vi.fn(() => true),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    handlers.clear()
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+
+    for (const listener of exitListeners) {
+      listener({ id: 'daemon-pty', code: 7, provenance })
+    }
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(listProcessesForBinding).toHaveBeenCalledTimes(2)
+    expect(store.removePtyBindingOwnershipAfterVerifiedStop).toHaveBeenCalledWith({
+      sessionId: 'daemon-pty',
+      provenance
+    })
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('daemon-pty', 7)
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
+      id: 'daemon-pty',
+      code: 7,
+      provenance
+    })
   })
 
   it('ignores a late provider exit after synthesizing kill exit', async () => {
@@ -5084,7 +5389,8 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'wt-1',
       tabId: 'tab-headless',
       leafId,
-      ptyId: expect.any(String)
+      ptyId: expect.any(String),
+      provenance: { kind: 'local-fallback' }
     })
   })
 
@@ -5199,7 +5505,8 @@ describe('registerPtyHandlers', () => {
       tabId: 'tab-race',
       leafId,
       ptyId: 'pty-shared',
-      startupCwd: '/tmp'
+      startupCwd: '/tmp',
+      provenance: { kind: 'local-fallback' }
     })
   })
 
@@ -5313,7 +5620,8 @@ describe('registerPtyHandlers', () => {
       tabId: 'tab-race',
       leafId,
       ptyId: 'pty-renderer',
-      startupCwd: '/tmp'
+      startupCwd: '/tmp',
+      provenance: { kind: 'local-fallback' }
     })
   })
 
@@ -5544,7 +5852,8 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'wt-remote',
       tabId: 'tab-remote',
       leafId,
-      ptyId: 'ssh:ssh-1@@relay-pty'
+      ptyId: 'ssh:ssh-1@@relay-pty',
+      provenance: { kind: 'remote', providerId: 'ssh-1' }
     })
     expect(store.persistPtyBinding.mock.invocationCallOrder[0]!).toBeLessThan(
       store.upsertSshRemotePtyLease.mock.invocationCallOrder[0]!
@@ -5693,7 +6002,8 @@ describe('registerPtyHandlers', () => {
         worktreeId: 'wt-remote',
         tabId: 'tab-remote',
         leafId,
-        ptyId: 'ssh:ssh-reattach-ok@@relay-pty'
+        ptyId: 'ssh:ssh-reattach-ok@@relay-pty',
+        provenance: { kind: 'remote', providerId: 'ssh-reattach-ok' }
       })
       expect(store.upsertSshRemotePtyLease).toHaveBeenCalledWith(
         expect.objectContaining({

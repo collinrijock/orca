@@ -9,10 +9,16 @@ import {
   removeRepoFromWorkspaceSession
 } from './profile-project-session-state'
 import { isRepoWorktreeId, removeRepoWorktreeRecord } from './profile-project-worktree-identity'
+import { removeTransferredProjectOwnership } from './profile-project-daemon-ownership-transfer'
+import {
+  collectNonProjectTerminalBindingIds,
+  collectProjectTerminalBindingIds
+} from './profile-project-terminal-binding-ids'
 
 export function removeSourceRepo(
   state: TransferProfileState,
-  repoId: string
+  repoId: string,
+  transferOperationId?: string
 ): TransferProfileState {
   const next: TransferProfileState = {
     ...state,
@@ -26,6 +32,13 @@ export function removeSourceRepo(
       state.workspaceSessionsByHostId,
       repoId
     ),
+    daemonSessionOwnership: removeTransferredProjectOwnership({
+      state,
+      repoId,
+      transferOperationId,
+      removedBindingIds: collectProjectTerminalBindingIds(state, repoId),
+      retainedBindingIds: collectNonProjectTerminalBindingIds(state, repoId)
+    }),
     ui: {
       ...state.ui,
       lastActiveRepoId: state.ui.lastActiveRepoId === repoId ? null : state.ui.lastActiveRepoId,

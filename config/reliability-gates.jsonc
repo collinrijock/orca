@@ -2259,6 +2259,120 @@
       "demotionRule": "Keep experimental or demote if the gate flakes without a product or harness bug, if any local shutdown reaches fallback before startup settles, or if shutdown adds inventory scans or retry loops."
     },
     {
+      "id": "terminal-provider.daemon-generation-reaping-contract",
+      "title": "Daemon generation auditing preserves wanted sessions and cannot enforce",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-provider",
+      "layer": "provider-contract",
+      "surfaces": [
+        "daemon generation audit",
+        "cross-profile ownership",
+        "candidate journal",
+        "idle daemon shutdown"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["daemon", "local"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["daemon"],
+      "coverageNotes": "Audit-only macOS development evidence covers exact ownership extraction, v23 authenticated endpoint identity, process incarnation, candidate journaling, replacement-safe exits, v22-to-v23 reattach, and real v23 idle exit. Legacy endpoints without daemon-reported identity remain keep-only/incomplete. Windows candidate persistence is deliberately disabled until user-only DACL support is validated. Production aggregate counters required for promotion are not implemented, so this slice is not promotion-ready.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/9138",
+        "https://github.com/stablyai/orca/issues/9211"
+      ],
+      "invariant": "Only an unchanged mature incarnation absent from a complete shared-namespace ownership snapshot may ever become eligible; this audit release cannot signal candidates or retire legacy daemons, and wanted sessions must survive upgrades and identity-less exit races.",
+      "oracle": "Focused tests require malformed, changing, unsupported, uncommitted, or inaccessible ownership sources to keep all sessions; exact process and route identities prevent replacement cleanup; production authorization remains compile-time false; a real v23 child exits only after zero transports, clients, operations, and sessions.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-ownership-raw-extractor.test.ts src/main/daemon/daemon-ownership-raw-snapshot.test.ts src/main/daemon/daemon-session-process-incarnation.test.ts src/main/daemon/daemon-reap-candidate-journal.test.ts src/main/daemon/daemon-reap-candidate-journal-storage.test.ts src/main/daemon/daemon-generation-audit.test.ts src/main/daemon/daemon-reconciliation-coordinator.test.ts src/main/daemon/daemon-idle-shutdown.test.ts",
+        "pnpm exec playwright test tests/e2e/daemon-generation-reaping.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/main/daemon/daemon-ownership-raw-extractor.test.ts",
+        "src/main/daemon/daemon-ownership-raw-snapshot.test.ts",
+        "src/main/daemon/daemon-session-process-incarnation.test.ts",
+        "src/main/daemon/daemon-reap-candidate-journal.test.ts",
+        "src/main/daemon/daemon-reap-candidate-journal-storage.test.ts",
+        "src/main/daemon/daemon-generation-audit.test.ts",
+        "src/main/daemon/daemon-reconciliation-coordinator.test.ts",
+        "src/main/daemon/daemon-idle-shutdown.test.ts",
+        "tests/e2e/daemon-generation-reaping.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/daemon/daemon-generation-audit.test.ts",
+          "assertions": [
+            "only stable exact process incarnations from a complete ownership snapshot enter the audit journal"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-idle-shutdown.test.ts",
+          "assertions": [
+            "the v23 daemon exits only after the exact zero-client zero-session idle boundary and preserves replacement artifacts"
+          ]
+        },
+        {
+          "file": "tests/e2e/daemon-generation-reaping.spec.ts",
+          "assertions": [
+            "v22 sessions reattach through v23 and a real idle v23 child exits with owned artifacts removed"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-17",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-ownership-raw-extractor.test.ts src/main/daemon/daemon-ownership-raw-snapshot.test.ts src/main/daemon/daemon-session-process-incarnation.test.ts src/main/daemon/daemon-reap-candidate-journal.test.ts src/main/daemon/daemon-reap-candidate-journal-storage.test.ts src/main/daemon/daemon-generation-audit.test.ts src/main/daemon/daemon-reconciliation-coordinator.test.ts src/main/daemon/daemon-idle-shutdown.test.ts",
+          "result": "passed",
+          "durationSeconds": 14,
+          "summary": "Focused ownership, identity, journal, audit, coordinator, and idle lifecycle contracts passed."
+        },
+        {
+          "date": "2026-07-17",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec playwright test tests/e2e/daemon-generation-reaping.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 8,
+          "summary": "Three isolated generation cases passed; the optional signed v21 release fixture was not enabled."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "focused ownership, audit, lifecycle, and isolated process contracts"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Local focused runs are green; aggregated multi-platform history has not accrued."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The current audit-only corpus proves conservative ownership and active idle shutdown, but no destructive behavior is enabled or claimed."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Audit is released only after first-window load or the headless provider-ready boundary, raw ownership capture is sequential and capped at 64 MiB/512 profiles, process probes are batched/bounded, and the journal has compiled 4 MiB and 4,096-candidate limits; 400-session soak evidence remains required."
+      },
+      "promotionCriteria": [
+        "Implement privacy-safe bounded production counters for source/profile counts, exact/legacy protections, candidate categories, legacy outcomes, duration, retries, probe batches, and adapter RPC counts.",
+        "Accrue clean macOS, Linux, Windows, and WSL packaged runs with a signed immediate-prior protocol fixture.",
+        "Validate user-only Windows journal DACLs and native process-incarnation probes.",
+        "Bind every legacy adapter inventory to an authenticated daemon PID, start identity, and launch nonce.",
+        "Wire every client and ownership mutation through bounded reconciliation fences.",
+        "Independently review and enable a later compiled enforcement capability."
+      ],
+      "knownGaps": [
+        "Production remains structurally audit-only and has no candidate-kill or legacy-retirement consumer.",
+        "Production aggregate audit counters are not implemented; startup diagnostics alone are not promotion evidence.",
+        "Pre-v23 daemons do not report endpoint identity, so their inventories cannot mature candidate evidence.",
+        "Windows candidate persistence is incomplete until a user-only DACL is proven.",
+        "Cross-profile retirement-pending retry remains a promotion blocker.",
+        "Signed v22 packaged validation is not yet available on every target platform.",
+        "The 400-session multi-generation performance soak has not run."
+      ],
+      "demotionRule": "Any false candidate, unauthorized signal, incomplete-source authorization, identity mismatch, wanted-session loss, or budget regression keeps protection at none and enforcement compiled out."
+    },
+    {
       "id": "terminal-provider.ssh-remote-reattach-contract",
       "title": "SSH and remote terminal restore never turn unknown liveness into destructive cleanup",
       "maturity": "experimental",

@@ -74,6 +74,10 @@ export function mergeWorkspaceSessions(
       ...base.defaultTerminalTabsAppliedByWorktreeId,
       ...incoming.defaultTerminalTabsAppliedByWorktreeId
     },
+    sleepingAgentSessionsByPaneKey: mergeSleepingAgentSessions(
+      base.sleepingAgentSessionsByPaneKey,
+      incoming.sleepingAgentSessionsByPaneKey
+    ),
     activeWorktreeIdsOnShutdown: [
       ...(base.activeWorktreeIdsOnShutdown ?? []),
       ...(incoming.activeWorktreeIdsOnShutdown ?? [])
@@ -141,6 +145,11 @@ export function removeRepoFromWorkspaceSession(
     next.defaultTerminalTabsAppliedByWorktreeId,
     repoId
   )
+  next.sleepingAgentSessionsByPaneKey = Object.fromEntries(
+    Object.entries(next.sleepingAgentSessionsByPaneKey ?? {}).filter(
+      ([, record]) => !isRepoWorktreeId(repoId, record.worktreeId)
+    )
+  )
   if (next.activeWorktreeId && isRepoWorktreeId(repoId, next.activeWorktreeId)) {
     next.activeWorktreeId = null
   }
@@ -151,5 +160,21 @@ export function removeRepoFromWorkspaceSession(
   next.activeWorktreeIdsOnShutdown = next.activeWorktreeIdsOnShutdown?.filter(
     (worktreeId) => !isRepoWorktreeId(repoId, worktreeId)
   )
+  return next
+}
+
+function mergeSleepingAgentSessions(
+  existing: WorkspaceSessionState['sleepingAgentSessionsByPaneKey'],
+  incoming: WorkspaceSessionState['sleepingAgentSessionsByPaneKey']
+): NonNullable<WorkspaceSessionState['sleepingAgentSessionsByPaneKey']> {
+  const next = { ...existing }
+  for (const [paneKey, record] of Object.entries(incoming ?? {})) {
+    const current = next[paneKey]
+    if (current && JSON.stringify(current) !== JSON.stringify(record)) {
+      // Why: one pane key cannot safely resume two physical agent sessions.
+      throw new Error('target_sleeping_agent_session_conflict')
+    }
+    next[paneKey] = structuredClone(record)
+  }
   return next
 }

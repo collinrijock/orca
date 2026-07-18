@@ -7,6 +7,7 @@ files with no cleaner ownership seam: restart, replaceDaemonProvider, and the
 module-level spawner/adapter singletons must stay co-located so a future
 change cannot leave them drifting out of sync. */
 import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
 import { mkdirSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { fork } from 'node:child_process'
@@ -17,6 +18,8 @@ import {
   getDaemonSocketPath,
   getDaemonTokenPath,
   serializeDaemonPidFile,
+  unlinkOwnedDaemonPidFile,
+  unlinkOwnedDaemonTokenFile,
   type DaemonLauncher,
   type DaemonProcessHandle
 } from './daemon-spawner'
@@ -26,15 +29,16 @@ import { DaemonClient } from './client'
 import {
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
   PROTOCOL_VERSION,
+  type DaemonEndpointIdentity,
   type ListSessionsResult
 } from './types'
 import {
   getMacDaemonSystemResolverHealth,
   getDaemonLaunchIdentity,
+  getExactDaemonProcessState,
   getProcessStartedAtMs,
   checkDaemonHealth,
   isDaemonStaleForCurrentBundle,
-  killStaleDaemon,
   parseDaemonPidFile
 } from './daemon-health'
 import {
@@ -55,6 +59,8 @@ import {
   confirmSeededClaudeLivePtys,
   hasSeededUnconfirmedClaudePtys
 } from '../claude-accounts/live-pty-gate'
+import { runDaemonGenerationAudit } from './daemon-generation-audit'
+import type { DaemonGenerationDiscovery } from './daemon-generation-inventory'
 
 // Why: daemon init runs concurrently with window load, so harness-side stderr
 // arrival times are useless — in-process `t` lets the startup benchmark derive
@@ -92,6 +98,13 @@ let adapter: DaemonProvider | null = null
 // the second entry would read the already-disposed current adapter and
 // race cleanupDaemonForProtocol against a half-spawned replacement.
 let restartInFlight: Promise<RestartDaemonResult> | null = null
+const DAEMON_AUDIT_LAUNCH_ID = randomUUID()
+let daemonGenerationAuditReleased = false
+let pendingDaemonGenerationAudit: {
+  userDataPath: string
+  runtimeDir: string
+  discovery: DaemonGenerationDiscovery
+} | null = null
 
 function getRuntimeDir(): string {
   const dir = join(app.getPath('userData'), 'daemon')
@@ -223,8 +236,11 @@ async function shouldPreserveDaemonWithLiveSessions(
 }
 
 function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
-  return async (socketPath, tokenPath) => {
+  return async (socketPath, tokenPath, suppliedPidPath, suppliedLaunchNonce) => {
     const entryPath = getDaemonEntryPath()
+    const pidPath = suppliedPidPath ?? getDaemonPidPath(runtimeDir)
+    const launchNonce = suppliedLaunchNonce ?? randomUUID()
+    let cleanupResult: OrphanedDaemonCleanupResult | null = null
     const health = await checkDaemonHealth(socketPath, tokenPath)
     if (health === 'healthy') {
       const resolverHealth = await getMacDaemonSystemResolverHealth(socketPath, tokenPath)
@@ -239,7 +255,7 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
           return createPreservedDaemonHandle(runtimeDir)
         }
         console.warn('[daemon] Replacing daemon with unavailable macOS system resolver')
-        await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+        cleanupResult = await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
       } else {
         // Why: a protocol-healthy daemon can outlive the app bundle that
         // launched it. In dev this happens after deleting/rebuilding a
@@ -263,7 +279,7 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
               ? '[daemon] Replacing daemon launched before the current app bundle was installed'
               : '[daemon] Replacing daemon launched from a different app path'
           )
-          await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+          cleanupResult = await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
         } else {
           // Why: daemon is already running from a previous app session and
           // responded to a protocol-level ping. Safe to reuse.
@@ -315,9 +331,12 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
       }
     }
 
-    // Why: a raw socket can outlive a broken or wedged daemon. Kill by PID
-    // before respawn so the new daemon does not race the stale process.
-    await killStaleDaemon(runtimeDir, socketPath, tokenPath)
+    cleanupResult ??= await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+    if (cleanupResult.shutdownAttempted && !cleanupResult.cleaned) {
+      // Why: a sent signal or failed RPC is not exact process absence; forking
+      // here could overlap the old daemon or erase a replacement endpoint.
+      throw new Error('Unable to verify stale daemon shutdown')
+    }
 
     const userDataPath = app.getPath('userData')
     // Why: on win32 packaged, fork from a copy of the Electron runtime staged
@@ -330,7 +349,17 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
     const forkEntryPath = relocatedHost ? relocatedHost.entryPath : entryPath
     const child = fork(
       forkEntryPath,
-      ['--socket', socketPath, '--token', tokenPath, ...daemonLogArgs()],
+      [
+        '--socket',
+        socketPath,
+        '--token',
+        tokenPath,
+        '--pid-record',
+        pidPath,
+        '--launch-nonce',
+        launchNonce,
+        ...daemonLogArgs()
+      ],
       {
         // Why: detached daemons can outlive dev worktrees. Starting from
         // userData keeps process.cwd() valid after a repo/worktree is deleted.
@@ -432,25 +461,21 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
           // startup listeners attached retains this launch promise closure.
           cleanupStartupListeners()
           if (child.pid) {
-            // Why: JSON pid file carries pid + process start time so later
-            // killStaleDaemon() can verify the pid still belongs to the daemon
-            // we forked before SIGTERMing it. Prevents pid-recycling hazard
-            // where the OS hands the daemon's old pid to an unrelated process.
-            // Why the ready-message fallback: Windows has no cheap OS query
-            // for start time, so the daemon self-reports it — without this the
-            // recycling guard was permanently inert on win32.
+            // Why: the endpoint hello reports this same self timestamp, so the
+            // PID record must prefer it; OS probes round differently by platform.
+            // The process-recycling guard tolerates that value against OS time.
             const selfReported = (msg as { startedAtMs?: unknown }).startedAtMs
             writeFileSync(
-              getDaemonPidPath(runtimeDir),
+              pidPath,
               serializeDaemonPidFile({
                 pid: child.pid,
                 startedAtMs:
-                  getProcessStartedAtMs(child.pid) ??
-                  (typeof selfReported === 'number' && Number.isFinite(selfReported)
+                  typeof selfReported === 'number' && Number.isFinite(selfReported)
                     ? selfReported
-                    : null),
+                    : getProcessStartedAtMs(child.pid),
                 entryPath,
-                appVersion: app.getVersion()
+                appVersion: app.getVersion(),
+                launchNonce
               }),
               { mode: 0o600 }
             )
@@ -544,7 +569,8 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
     }
   })
 
-  const legacyAdapters = await createLegacyDaemonAdapters(runtimeDir)
+  const legacyDiscovery = await createLegacyDaemonAdapters(runtimeDir)
+  const legacyAdapters = legacyDiscovery.adapters
   const routedAdapter =
     launchMode === 'degraded-new-pty-fallback'
       ? new DegradedDaemonPtyProvider({
@@ -558,14 +584,29 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
             legacy: legacyAdapters
           })
         : newAdapter
+  let discovery: DaemonGenerationDiscovery = { generations: [], failedProtocols: [] }
   if (routedAdapter instanceof DegradedDaemonPtyProvider) {
     // Why: the preserved daemon cannot create fresh terminals, but its live
     // sessions may still be writable. Discover those ids so only known old
     // sessions route to the degraded daemon; fresh panes fall back locally.
-    await routedAdapter.discoverDaemonSessions()
+    discovery = await routedAdapter.discoverDaemonSessions()
+    // Why: a degraded current daemon stays usable for adoption, but its inventory is
+    // keep-only and must never mature audit evidence.
+    discovery.failedProtocols.push(newAdapter.protocolVersion)
   } else if (routedAdapter instanceof DaemonPtyRouter) {
-    await routedAdapter.discoverLegacySessions()
+    discovery = await routedAdapter.discoverDaemonSessions()
+  } else {
+    try {
+      discovery.generations.push({
+        adapter: newAdapter,
+        protocolVersion: newAdapter.protocolVersion,
+        sessions: await newAdapter.listSessions()
+      })
+    } catch {
+      discovery.failedProtocols.push(newAdapter.protocolVersion)
+    }
   }
+  discovery.failedProtocols.push(...legacyDiscovery.failedProtocols)
   if (signal?.aborted) {
     // Why: same late-swap guard after legacy discovery, which can also exceed
     // the first-window startup timeout on slow or stale daemon state.
@@ -580,7 +621,53 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
   // data/exit events through the renderer and runtime listeners.
   rebindLocalProviderListeners()
   logDaemonMilestone('daemon-init-done', { legacyAdapters: legacyAdapters.length })
-  await reconcileSeededClaudeLivePtys(routedAdapter)
+  reconcileSeededClaudeLivePtys(discovery)
+  pendingDaemonGenerationAudit =
+    discovery.generations.length > 0 || discovery.failedProtocols.length > 0
+      ? { userDataPath: app.getPath('userData'), runtimeDir, discovery }
+      : null
+  scheduleReleasedDaemonGenerationAudit()
+}
+
+export function releaseDaemonGenerationAudit(): void {
+  daemonGenerationAuditReleased = true
+  scheduleReleasedDaemonGenerationAudit()
+}
+
+function scheduleReleasedDaemonGenerationAudit(): void {
+  if (!daemonGenerationAuditReleased || !pendingDaemonGenerationAudit) {
+    return
+  }
+  const pending = pendingDaemonGenerationAudit
+  pendingDaemonGenerationAudit = null
+  // Why: disk and process inventory starts only after desktop first-window
+  // release, or the equivalent headless provider-ready boundary.
+  setImmediate(() => {
+    void runDaemonGenerationAudit({
+      ...pending,
+      launchId: DAEMON_AUDIT_LAUNCH_ID
+    })
+      .then((result) => {
+        const details = {
+          status: result.status,
+          reasons: result.reasons,
+          generations: result.generationCount,
+          initialSessions: result.initialSessionCount,
+          stableSessions: result.stableSessionCount,
+          unclaimedSessions: result.unclaimedCount,
+          emptyLegacyGenerations: result.emptyLegacyGenerationCount,
+          journalStatus: result.journal.status,
+          journalReason: result.journal.reason
+        }
+        console.info('[daemon] generation audit', details)
+        logDaemonMilestone('daemon-generation-audit', details)
+      })
+      .catch(() => {
+        const details = { status: 'incomplete', reasons: ['unexpected-audit-failure'] }
+        console.info('[daemon] generation audit', details)
+        logDaemonMilestone('daemon-generation-audit', details)
+      })
+  })
 }
 
 // Why: the Claude live-PTY gate is seeded pessimistically from persistence at
@@ -588,30 +675,17 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
 // survived — release dead ids so they cannot defer OAuth refresh forever.
 // Listing failures keep the seeds: over-holding the gate only delays a usage
 // refresh, while releasing it early can rotate a live CLI's refresh token.
-async function reconcileSeededClaudeLivePtys(provider: DaemonProvider): Promise<void> {
+function reconcileSeededClaudeLivePtys(discovery: DaemonGenerationDiscovery): void {
   if (!hasSeededUnconfirmedClaudePtys()) {
     return
   }
-  try {
-    const adapters =
-      provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider
-        ? provider.getAllAdapters()
-        : [provider]
-    const results = await Promise.allSettled(adapters.map((entry) => entry.listSessions()))
-    if (results.some((result) => result.status === 'rejected')) {
-      console.warn('[daemon] Keeping seeded Claude live-PTY gate — session listing failed')
-      return
-    }
-    confirmSeededClaudeLivePtys(
-      results.flatMap((result) =>
-        result.status === 'fulfilled' ? result.value.map((session) => session.sessionId) : []
-      )
-    )
-  } catch (error) {
-    // Why: gate bookkeeping must never fail daemon init; stale seeds only
-    // defer a usage refresh until the next restart.
-    console.warn('[daemon] Failed to reconcile seeded Claude live-PTY gate:', error)
+  if (discovery.failedProtocols.length > 0) {
+    console.warn('[daemon] Keeping seeded Claude live-PTY gate — session listing failed')
+    return
   }
+  confirmSeededClaudeLivePtys(
+    discovery.generations.flatMap(({ sessions }) => sessions.map((session) => session.sessionId))
+  )
 }
 
 // Why: the Manage Sessions IPC handlers need read access to the current
@@ -685,64 +759,95 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   const currentOnly = getCurrentDaemonAdapter(currentAdapter)
   const legacyAdapters = getLegacyDaemonAdapters(currentAdapter)
 
-  // Step 1: synthesize pty:exit for every active session on the current
-  // adapter BEFORE any teardown. The daemon's kill-all-and-shutdown path
-  // explicitly does not fan onExit to clients (session.ts:246-252), so
-  // without this the renderer would never see exits and would black-hole
-  // writes against the disposed adapter.
-  const fallbackKilledCount =
+  // Step 1: fence new create/attach work, drain admitted operations, then capture
+  // every current session while its exact routes still exist.
+  const capturedCurrentSessionIds =
+    currentAdapter instanceof DegradedDaemonPtyProvider
+      ? await currentAdapter.beginRestartFence()
+      : await currentOnly.beginRestartFence()
+  const fallbackShutdown =
     currentAdapter instanceof DegradedDaemonPtyProvider
       ? await currentAdapter.shutdownFallbackSessions()
-      : 0
+      : { stoppedIds: [], failedIds: [] }
+  if (fallbackShutdown.failedIds.length > 0) {
+    // Why: swapping providers after an unverified fallback stop would strand
+    // a live PTY without a route, so preserve the degraded provider for retry.
+    cancelRestartFence(currentAdapter, currentOnly)
+    throw new Error('Unable to verify fallback session shutdown')
+  }
   const currentDaemonSessionIds =
     currentAdapter instanceof DegradedDaemonPtyProvider
       ? currentAdapter.getCurrentDaemonSessionIds()
       : []
-  const killedCount =
-    new Set([...currentOnly.getActiveSessionIds(), ...currentDaemonSessionIds]).size +
-    fallbackKilledCount
-  currentOnly.fanoutSyntheticExits(-1)
+  const currentDaemonKilledCount = new Set([
+    ...capturedCurrentSessionIds,
+    ...currentDaemonSessionIds
+  ]).size
+  const killedCount = currentDaemonKilledCount + fallbackShutdown.stoppedIds.length
+  // Step 2: kill the current-protocol daemon process (shutdown RPC → fallback
+  // killStaleDaemon → socket/pid unlink). Legacy adapters untouched.
+  let cleanup: OrphanedDaemonCleanupResult
+  try {
+    cleanup = await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+  } catch (error) {
+    cancelRestartFence(currentAdapter, currentOnly)
+    throw error
+  }
+  if (!cleanup.cleaned && (cleanup.shutdownAttempted || currentDaemonKilledCount > 0)) {
+    // Why: an unreachable endpoint is not proof its sessions stopped. Keep routes
+    // and durable claims intact instead of emitting an authoritative restart exit.
+    cancelRestartFence(currentAdapter, currentOnly)
+    throw new Error('Unable to verify daemon session shutdown')
+  }
+
+  // Step 3: only now is the synthetic exit physically verified. Fan out while
+  // listeners and old routes are still attached, then detach before replacement.
+  currentOnly.fanoutSyntheticExits(-1, { verifiedAbsent: true })
   if (currentAdapter instanceof DegradedDaemonPtyProvider) {
     currentAdapter.fanoutCurrentDaemonSyntheticExits(-1)
   }
-
-  // Step 2: detach renderer listeners from the current adapter. Must happen
-  // AFTER step 1 so the synthesized exits actually reach the renderer, and
-  // BEFORE step 6 so the new provider isn't bound with stale listeners.
   unbindLocalProviderListeners()
-
-  // Step 3: kill the current-protocol daemon process (shutdown RPC → fallback
-  // killStaleDaemon → socket/pid unlink). Legacy adapters untouched.
-  await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
 
   // Step 4: reuse the existing spawner so the respawn closure baked into
   // long-lived adapters stays valid. Do NOT construct a new DaemonSpawner.
-  currentSpawner.resetHandle()
-  const info = await currentSpawner.ensureRunning()
+  let newCurrent: DaemonPtyAdapter | null = null
+  let newProvider: DaemonProvider | null = null
+  try {
+    currentSpawner.resetHandle()
+    const info = await currentSpawner.ensureRunning()
 
-  // Step 5: build a fresh current adapter against the respawned daemon. Its
-  // respawn callback closes over the same spawner instance (identical to the
-  // crash-respawn closure in initDaemonPtyProvider).
-  const newCurrent = new DaemonPtyAdapter({
-    socketPath: info.socketPath,
-    tokenPath: info.tokenPath,
-    historyPath: getHistoryDir(),
-    respawn: async () => {
-      console.warn('[daemon] Daemon process died — respawning')
-      currentSpawner.resetHandle()
-      await currentSpawner.ensureRunning()
+    // Step 5: build a fresh current adapter against the respawned daemon. Its
+    // respawn callback closes over the same spawner instance (identical to the
+    // crash-respawn closure in initDaemonPtyProvider).
+    newCurrent = new DaemonPtyAdapter({
+      socketPath: info.socketPath,
+      tokenPath: info.tokenPath,
+      historyPath: getHistoryDir(),
+      respawn: async () => {
+        console.warn('[daemon] Daemon process died — respawning')
+        currentSpawner.resetHandle()
+        await currentSpawner.ensureRunning()
+      }
+    })
+
+    // Re-wrap in router if there were legacy adapters at startup; otherwise
+    // point straight at the new adapter. Legacy instances are preserved by
+    // reference — they still route to the same pre-upgrade daemons.
+    newProvider =
+      legacyAdapters.length > 0
+        ? new DaemonPtyRouter({ current: newCurrent, legacy: legacyAdapters })
+        : newCurrent
+    if (newProvider instanceof DaemonPtyRouter) {
+      await newProvider.discoverLegacySessions()
     }
-  })
-
-  // Re-wrap in router if there were legacy adapters at startup; otherwise
-  // point straight at the new adapter. Legacy instances are preserved by
-  // reference — they still route to the same pre-upgrade daemons.
-  const newProvider =
-    legacyAdapters.length > 0
-      ? new DaemonPtyRouter({ current: newCurrent, legacy: legacyAdapters })
-      : newCurrent
-  if (newProvider instanceof DaemonPtyRouter) {
-    await newProvider.discoverLegacySessions()
+  } catch (error) {
+    if (newProvider instanceof DaemonPtyRouter) {
+      newProvider.disposeRouterOnly()
+    }
+    newCurrent?.dispose()
+    cancelRestartFence(currentAdapter, currentOnly)
+    rebindLocalProviderListeners()
+    throw error
   }
 
   // Why: drain the outgoing router's subscriptions from the shared legacy
@@ -752,6 +857,9 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   // atomic from the renderer's perspective. Plain dispose() would also tear
   // down the legacy adapters themselves — use the router-only variant.
   disposeProviderSubscriptionsOnly(currentAdapter)
+  // Why: only legacy adapters cross the swap. The outgoing current adapter's
+  // timers, client, and history manager otherwise survive every manual restart.
+  currentOnly.dispose()
 
   // Step 6: swap module state (adapter + localProvider) atomically.
   replaceDaemonProvider(newProvider)
@@ -760,6 +868,14 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   rebindLocalProviderListeners()
 
   return { killedCount }
+}
+
+function cancelRestartFence(provider: DaemonProvider, current: DaemonPtyAdapter): void {
+  if (provider instanceof DegradedDaemonPtyProvider) {
+    provider.cancelRestartFence()
+  } else {
+    current.cancelRestartFence()
+  }
 }
 
 // Why: disconnect from the daemon without killing it. The daemon runs as a
@@ -777,17 +893,14 @@ export async function shutdownDaemon(): Promise<void> {
   adapter = null
   await spawner?.shutdown()
   spawner = null
-  try {
-    unlinkSync(getDaemonPidPath(getRuntimeDir()))
-  } catch {
-    // Best-effort
-  }
 }
 
 export type OrphanedDaemonCleanupResult = {
-  /** True when we detected a live daemon socket and connected to tear it down.
-   *  False when no daemon was running (fresh install or clean previous quit). */
+  /** True when the captured daemon incarnation is verified absent. False on a
+   *  fresh/no-daemon path or whenever replacement safety remains unknown. */
   cleaned: boolean
+  /** Distinguishes a fresh/no-daemon path from daemon state that required exact verification. */
+  shutdownAttempted: boolean
   /** Number of live PTY sessions killed during cleanup. The caller surfaces this
    *  to the user so they know what background work was stopped. */
   killedCount: number
@@ -801,31 +914,68 @@ export async function cleanupDaemonForProtocol(
   const tokenPath = getDaemonTokenPath(runtimeDir, protocolVersion)
   const pidPath = getDaemonPidPath(runtimeDir, protocolVersion)
 
+  const pidRecordExists = existsSync(pidPath)
+  const shutdownPid = readDaemonPidRecord(pidPath)
   const alive = await probeSocket(socketPath)
   if (!alive) {
-    // Why: still best-effort remove a stale socket file so a future opt-in
-    // launch doesn't hit EADDRINUSE when the daemon tries to bind.
-    if (process.platform !== 'win32' && existsSync(socketPath)) {
-      try {
-        unlinkSync(socketPath)
-      } catch {
-        // Best-effort
+    if (!pidRecordExists) {
+      if (
+        process.platform !== 'win32' &&
+        existsSync(socketPath) &&
+        !(await probeSocket(socketPath)) &&
+        !existsSync(pidPath)
+      ) {
+        // Why: a crashed pre-ready daemon can leave only its Unix socket. The
+        // second probe narrows the bind race until namespace coordination ships.
+        if (!removeStaleUnixSocket(socketPath)) {
+          return { cleaned: false, shutdownAttempted: true, killedCount: 0 }
+        }
       }
+      return { cleaned: false, shutdownAttempted: false, killedCount: 0 }
     }
-    try {
-      unlinkSync(pidPath)
-    } catch {
-      // Best-effort
+    if (
+      !shutdownPid ||
+      (protocolVersion >= 23 &&
+        (shutdownPid.startedAtMs === null || typeof shutdownPid.launchNonce !== 'string'))
+    ) {
+      // Why: a dead endpoint beside unreadable or incomplete v23 identity is
+      // still an overlap risk; fail closed instead of forking over that process.
+      return { cleaned: false, shutdownAttempted: true, killedCount: 0 }
     }
-    return { cleaned: false, killedCount: 0 }
+    const didVerifyShutdown = await terminateExactDaemon(shutdownPid, socketPath, tokenPath)
+    if (!didVerifyShutdown || (await probeSocket(socketPath))) {
+      return { cleaned: false, shutdownAttempted: true, killedCount: 0 }
+    }
+    if (!removeStaleUnixSocket(socketPath)) {
+      // Why: exact process absence makes its leftover Unix endpoint stale;
+      // leaving it would make the verified-safe replacement fail EADDRINUSE.
+      return { cleaned: false, shutdownAttempted: true, killedCount: 0 }
+    }
+    if (shutdownPid.launchNonce) {
+      unlinkOwnedDaemonPidFile(pidPath, shutdownPid.pid, shutdownPid.launchNonce)
+    }
+    return { cleaned: true, shutdownAttempted: true, killedCount: 0 }
   }
 
+  // Why: only a token captured before authenticating this exact endpoint can
+  // later be claimed safely; a token read after exit may belong to a replacement.
+  const authenticatedTokenCandidate =
+    protocolVersion >= 23 ? readDaemonTokenForCleanup(tokenPath) : null
   const client = new DaemonClient({ socketPath, tokenPath, protocolVersion })
   let killedCount = 0
-  let didRequestShutdown = false
-  let didKillStaleDaemon = false
+  let didVerifyShutdown = false
+  let authenticatedToken: string | null = null
   try {
     await client.ensureConnected()
+    const endpointIdentity = client.getDaemonIdentity()
+    if (protocolVersion >= 23 && !daemonEndpointMatchesPidRecord(endpointIdentity, shutdownPid)) {
+      // Why: the socket and pid file can be replaced independently; shutdown
+      // authority requires both to identify the same daemon incarnation.
+      return { cleaned: false, shutdownAttempted: true, killedCount: 0 }
+    }
+    if (protocolVersion >= 23 && authenticatedTokenCandidate) {
+      authenticatedToken = authenticatedTokenCandidate
+    }
     const sessions = await client
       .request<ListSessionsResult>('listSessions', undefined)
       .catch(() => ({ sessions: [] }))
@@ -834,56 +984,192 @@ export async function cleanupDaemonForProtocol(
     // Why: the daemon exposes a single-shot `shutdown` RPC (daemon-server.ts)
     // that kills every session and then terminates its own process. Using it
     // avoids the race between per-session `kill` calls and the daemon exiting.
-    await client.request('shutdown', { killSessions: true }).catch(() => {
-      // Daemon exits immediately after handling the RPC — the socket may close
-      // before the reply round-trips. Treat that as success.
-    })
-    didRequestShutdown = true
+    await client.request('shutdown', { killSessions: true })
+    if (shutdownPid) {
+      didVerifyShutdown = await waitForExactDaemonExit(shutdownPid, socketPath, tokenPath)
+    }
+    if (!didVerifyShutdown) {
+      didVerifyShutdown = shutdownPid
+        ? await terminateExactDaemon(shutdownPid, socketPath, tokenPath)
+        : false
+    }
   } catch {
-    // Why: previous-protocol daemons may be wedged or too old to complete the
-    // RPC cleanup path. Fall back to PID cleanup, but daemon-health only
-    // unlinks a live socket after proving it killed the matching process.
-    didKillStaleDaemon = await killStaleDaemon(runtimeDir, socketPath, tokenPath, protocolVersion)
+    // Why: canonical pid/socket files may already belong to a replacement;
+    // fallback termination stays bound to the incarnation captured pre-RPC.
+    didVerifyShutdown = shutdownPid
+      ? await terminateExactDaemon(shutdownPid, socketPath, tokenPath)
+      : false
   } finally {
     client.disconnect()
   }
 
-  // Why: after `shutdown`, the daemon unlinks its socket itself — but on some
-  // crash paths the file lingers. Clean up defensively so a later opt-in
-  // relaunch can bind cleanly.
-  if (didRequestShutdown && process.platform !== 'win32' && existsSync(socketPath)) {
-    try {
-      unlinkSync(socketPath)
-    } catch {
-      // Best-effort
-    }
-  }
-  try {
-    unlinkSync(pidPath)
-  } catch {
-    // Best-effort
+  if (didVerifyShutdown && (await probeSocket(socketPath))) {
+    // Why: a replacement can bind the canonical endpoint after the captured
+    // daemon exits; its same-id sessions make old-generation exits non-authoritative.
+    didVerifyShutdown = false
   }
 
-  return { cleaned: didRequestShutdown || didKillStaleDaemon, killedCount }
+  if (didVerifyShutdown && !removeStaleUnixSocket(socketPath)) {
+    // Why: verified process exit is insufficient startup readiness while its
+    // Unix endpoint still blocks the canonical bind path.
+    didVerifyShutdown = false
+  }
+
+  if (didVerifyShutdown && shutdownPid?.launchNonce) {
+    // Why: claim-and-validate cleanup cannot unlink a replacement pid record.
+    unlinkOwnedDaemonPidFile(pidPath, shutdownPid.pid, shutdownPid.launchNonce)
+  }
+  if (didVerifyShutdown && authenticatedToken) {
+    unlinkOwnedDaemonTokenFile(tokenPath, authenticatedToken)
+  }
+
+  return { cleaned: didVerifyShutdown, shutdownAttempted: true, killedCount }
 }
 
-function legacyDaemonProcessMayBeAlive(runtimeDir: string, protocolVersion: number): boolean {
+function readDaemonTokenForCleanup(tokenPath: string): string | null {
+  try {
+    return readFileSync(tokenPath, 'utf8').trim() || null
+  } catch {
+    return null
+  }
+}
+
+function removeStaleUnixSocket(socketPath: string): boolean {
+  if (process.platform === 'win32' || !existsSync(socketPath)) {
+    return true
+  }
+  try {
+    unlinkSync(socketPath)
+    return true
+  } catch {
+    return !existsSync(socketPath)
+  }
+}
+
+function readDaemonPidRecord(pidPath: string): ReturnType<typeof parseDaemonPidFile> {
+  try {
+    return parseDaemonPidFile(readFileSync(pidPath, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+function daemonEndpointMatchesPidRecord(
+  endpoint: DaemonEndpointIdentity | null,
+  pidRecord: ReturnType<typeof parseDaemonPidFile>
+): boolean {
+  return (
+    endpoint !== null &&
+    pidRecord !== null &&
+    typeof pidRecord.launchNonce === 'string' &&
+    endpoint.pid === pidRecord.pid &&
+    endpoint.startedAtMs === pidRecord.startedAtMs &&
+    endpoint.launchNonce === pidRecord.launchNonce
+  )
+}
+
+async function waitForExactDaemonExit(
+  identity: NonNullable<ReturnType<typeof parseDaemonPidFile>>,
+  socketPath: string,
+  tokenPath: string
+): Promise<boolean> {
+  const deadline = Date.now() + 3_000
+  do {
+    const state = await getExactDaemonProcessState(
+      identity.pid,
+      socketPath,
+      tokenPath,
+      identity.startedAtMs,
+      identity.launchNonce ?? null
+    )
+    if (state === 'absent') {
+      return true
+    }
+    if (state === 'unknown') {
+      return false
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  } while (Date.now() < deadline)
+  return false
+}
+
+async function terminateExactDaemon(
+  identity: NonNullable<ReturnType<typeof parseDaemonPidFile>>,
+  socketPath: string,
+  tokenPath: string
+): Promise<boolean> {
+  const initial = await getExactDaemonProcessState(
+    identity.pid,
+    socketPath,
+    tokenPath,
+    identity.startedAtMs,
+    identity.launchNonce ?? null
+  )
+  if (initial === 'absent') {
+    return true
+  }
+  if (initial !== 'alive') {
+    return false
+  }
+  try {
+    process.kill(identity.pid, 'SIGTERM')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
+      return true
+    }
+    return false
+  }
+  if (await waitForExactDaemonExit(identity, socketPath, tokenPath)) {
+    return true
+  }
+  if (
+    (await getExactDaemonProcessState(
+      identity.pid,
+      socketPath,
+      tokenPath,
+      identity.startedAtMs,
+      identity.launchNonce ?? null
+    )) !== 'alive'
+  ) {
+    return false
+  }
+  try {
+    process.kill(identity.pid, 'SIGKILL')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
+      return true
+    }
+    return false
+  }
+  // Why: signal delivery is not process absence; verified exits wait for the
+  // captured incarnation to disappear before claims or routes are removed.
+  return waitForExactDaemonExit(identity, socketPath, tokenPath)
+}
+
+function legacyDaemonProcessState(
+  runtimeDir: string,
+  protocolVersion: number
+): 'alive' | 'absent' | 'unknown' {
   try {
     const parsed = parseDaemonPidFile(
       readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
     )
     if (!parsed) {
-      return false
+      return 'unknown'
     }
     process.kill(parsed.pid, 0)
-    return true
-  } catch {
-    return false
+    return 'alive'
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ESRCH' ? 'absent' : 'unknown'
   }
 }
 
-async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPtyAdapter[]> {
+async function createLegacyDaemonAdapters(runtimeDir: string): Promise<{
+  adapters: DaemonPtyAdapter[]
+  failedProtocols: number[]
+}> {
   const adapters: DaemonPtyAdapter[] = []
+  const failedProtocols: number[] = []
   for (const protocolVersion of PREVIOUS_DAEMON_PROTOCOL_VERSIONS) {
     const socketPath = getDaemonSocketPath(runtimeDir, protocolVersion)
     const tokenPath = getDaemonTokenPath(runtimeDir, protocolVersion)
@@ -895,7 +1181,8 @@ async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPty
       // legacy daemon can transiently fail the 1s probe right after an update
       // (wedged event loop, exhausted pipe backlog), and deleting its token
       // file would make its sessions permanently unadoptable.
-      if (!legacyDaemonProcessMayBeAlive(runtimeDir, protocolVersion)) {
+      const processState = legacyDaemonProcessState(runtimeDir, protocolVersion)
+      if (processState === 'absent') {
         for (const stalePath of [
           getDaemonPidPath(runtimeDir, protocolVersion),
           getDaemonTokenPath(runtimeDir, protocolVersion)
@@ -913,6 +1200,10 @@ async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPty
             // Best-effort
           }
         }
+      } else {
+        // Why: a live PID beside an unreachable endpoint is an unknown generation,
+        // not evidence that the shared namespace was completely enumerated.
+        failedProtocols.push(protocolVersion)
       }
       continue
     }
@@ -936,5 +1227,5 @@ async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPty
       })
     )
   }
-  return adapters
+  return { adapters, failedProtocols }
 }

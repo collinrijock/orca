@@ -16,6 +16,8 @@ import { PROTOCOL_VERSION } from './types'
 export type ParsedDaemonArgs = {
   socketPath: string
   tokenPath: string
+  pidPath?: string
+  launchNonce?: string
   /** Optional — absent for adopted old daemons and tests, which log nothing. */
   logFilePath?: string
 }
@@ -24,6 +26,8 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
   let socketPath = ''
   let tokenPath = ''
   let logFilePath = ''
+  let pidPath = ''
+  let launchNonce = ''
 
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--socket' && argv[i + 1]) {
@@ -35,6 +39,12 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
     } else if (argv[i] === '--log-file' && argv[i + 1]) {
       logFilePath = argv[i + 1]
       i++
+    } else if (argv[i] === '--pid-record' && argv[i + 1]) {
+      pidPath = argv[i + 1]
+      i++
+    } else if (argv[i] === '--launch-nonce' && argv[i + 1]) {
+      launchNonce = argv[i + 1]
+      i++
     }
   }
 
@@ -42,7 +52,16 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
     throw new Error('Usage: daemon-entry --socket <path> --token <path> [--log-file <path>]')
   }
 
-  return logFilePath ? { socketPath, tokenPath, logFilePath } : { socketPath, tokenPath }
+  if ((pidPath && !launchNonce) || (!pidPath && launchNonce)) {
+    throw new Error('Daemon PID record path and launch nonce must be provided together')
+  }
+
+  return {
+    socketPath,
+    tokenPath,
+    ...(pidPath ? { pidPath, launchNonce } : {}),
+    ...(logFilePath ? { logFilePath } : {})
+  }
 }
 
 async function main(): Promise<void> {
@@ -53,7 +72,10 @@ async function main(): Promise<void> {
   // an otherwise healthy detached daemon. Swallow it: stderr is diagnostic only.
   process.stderr.on('error', () => {})
 
-  const { socketPath, tokenPath, logFilePath } = parseArgs(process.argv.slice(2))
+  const { socketPath, tokenPath, pidPath, launchNonce, logFilePath } = parseArgs(
+    process.argv.slice(2)
+  )
+  const startedAtMs = Date.now() - process.uptime() * 1000
   // Fail-open: a broken log path must never block daemon startup.
   const daemonLog = logFilePath ? createDaemonFileLog(logFilePath) : createNoopDaemonFileLog()
   daemonLog.log('startup', { protocolVersion: PROTOCOL_VERSION, socketPath })
@@ -125,15 +147,24 @@ async function main(): Promise<void> {
   daemon = await startDaemon({
     socketPath,
     tokenPath,
+    ...(pidPath ? { pidPath } : {}),
+    ...(launchNonce ? { launchNonce } : {}),
+    ...(pidPath ? { startedAtMs } : {}),
     log: daemonLog,
-    spawnSubprocess: (opts) => createPtySubprocess(opts)
+    spawnSubprocess: (opts) => createPtySubprocess(opts),
+    onIdleShutdown: () => {
+      shuttingDown = true
+      daemonLog.log('shutdown', { reason: 'idle' })
+      daemonLog.close()
+      process.exit(0)
+    }
   })
 
   // Signal readiness to parent via IPC (if available)
   if (process.send) {
     // Why: Windows has no cheap OS query for a child's start time, so the
     // daemon self-reports it here for the pid file's pid-recycling guard.
-    process.send({ type: 'ready', startedAtMs: Date.now() - process.uptime() * 1000 })
+    process.send({ type: 'ready', startedAtMs })
   }
   daemonLog.log('ready')
 

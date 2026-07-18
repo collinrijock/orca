@@ -23,8 +23,15 @@ import { StatsCollector, initStatsPath } from './stats/collector'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
 import { OpenCodeUsageStore, initOpenCodeUsagePath } from './opencode-usage/store'
-import { killAllPty } from './ipc/pty'
-import { initDaemonPtyProvider, disconnectDaemon, shutdownDaemon } from './daemon/daemon-init'
+import {
+  initDaemonPtyProvider,
+  disconnectDaemon,
+  shutdownDaemon,
+  releaseDaemonGenerationAudit
+} from './daemon/daemon-init'
+import { backfillDaemonOwnershipCommit } from './daemon/daemon-ownership-commit-migration'
+import { recoverCompletedProjectTransfers } from './orca-profiles/profile-project-transfer-recovery'
+import { reconcileRetirementPendingDaemonClaims } from './daemon/retirement-pending-claim-reconciliation'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
@@ -157,6 +164,7 @@ import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsu
 import {
   clearProviderPtyState,
   getPtyIdForPaneKey,
+  killAllPty,
   registerPaneKeyTeardownListener,
   getLocalPtyProvider,
   getSshPtyProvider,
@@ -259,6 +267,42 @@ let managedWslCliStartupBarrierReady: Promise<void> = Promise.resolve()
 // reconciliation state at ready time to know a WSL PTY launch may still race an
 // un-migrated registration. 'settled' covers the off-Windows no-op fast path.
 let managedWslCliReconciliationStatus: 'pending' | 'settled' | 'failed' = 'settled'
+let daemonOwnershipMaintenanceReleased = false
+
+function releaseDaemonOwnershipMaintenance(): void {
+  if (daemonOwnershipMaintenanceReleased) {
+    return
+  }
+  daemonOwnershipMaintenanceReleased = true
+  // Why: the legacy root remains a snapshot source after profile migration;
+  // sign it after first paint before audit, then recover inactive receipts later.
+  setImmediate(() => {
+    const userDataPath = getCanonicalUserDataPath()
+    try {
+      backfillDaemonOwnershipCommit(join(userDataPath, 'orca-data.json'))
+    } catch (error) {
+      // Why: an unverifiable legacy root makes audit incomplete; it must not
+      // crash an otherwise healthy desktop after the window becomes usable.
+      console.warn(
+        '[daemon] Deferred legacy ownership migration:',
+        error instanceof Error ? error.message : String(error)
+      )
+    } finally {
+      releaseDaemonGenerationAudit()
+      setImmediate(() => {
+        const maintenance = async (): Promise<void> => {
+          if (store) {
+            await reconcileRetirementPendingDaemonClaims(store, getLocalPtyProvider())
+          }
+          await recoverCompletedProjectTransfers(userDataPath)
+        }
+        void maintenance().catch((error) => {
+          console.warn('[daemon] Deferred ownership maintenance failed:', error)
+        })
+      })
+    }
+  })
+}
 // Why: GPU child crashes clustered right after launch indicate a broken driver;
 // track them so Orca can move this build onto software rendering.
 const gpuLaunchTimeMs = Date.now()
@@ -1023,6 +1067,7 @@ function openMainWindow(): BrowserWindow {
     clearExpectedRendererReload(rendererWebContentsId)
     recordCrashBreadcrumb('main_window_loaded')
     logStartupMilestone('did-finish-load')
+    releaseDaemonOwnershipMaintenance()
     if (!store) {
       return
     }
@@ -1792,6 +1837,18 @@ app.whenReady().then(async () => {
   )
 
   const activeOrcaProfile = ensureActiveOrcaProfile()
+  // Why: commit legacy raw ownership before Store normalization can discard an
+  // unknown owner and later sign that normalized absence.
+  try {
+    backfillDaemonOwnershipCommit(activeOrcaProfile.dataFile)
+  } catch (error) {
+    // Why: Store retains an invalid-authority marker when migration cannot
+    // commit, keeping audit fail-closed without making the app unavailable.
+    console.warn(
+      '[daemon] Deferred active ownership migration:',
+      error instanceof Error ? error.message : String(error)
+    )
+  }
   store = new Store({ dataFile: activeOrcaProfile.dataFile })
   logStartupMilestone('store-loaded')
   store.onSettingsChanged((updates, settings) => {
@@ -2266,6 +2323,9 @@ app.whenReady().then(async () => {
     // Why: headless PTYs must never start on the fallback provider and then be
     // swept when an activated renderer registers desktop lifecycle handlers.
     await localPtyStartupReady
+    // Why: headless serve has no first renderer; provider readiness is its
+    // equivalent release point for non-critical ownership/process auditing.
+    releaseDaemonOwnershipMaintenance()
     registerHeadlessPtyRuntime(
       runtime,
       prepareCodexRuntimeHomeForLaunch,

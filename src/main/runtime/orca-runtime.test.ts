@@ -10858,7 +10858,7 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  it('keeps ordinary desktop background terminal persistence opt-in', async () => {
+  it('persists ordinary desktop runtime terminals before renderer reveal', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const runtime = new OrcaRuntimeService(store)
     const webContents = { send: vi.fn() }
@@ -10880,7 +10880,7 @@ describe('OrcaRuntimeService', () => {
     const spawnOptions = spawn.mock.calls[0]?.[0] as
       | { persistHostSessionBinding?: boolean }
       | undefined
-    expect(spawnOptions?.persistHostSessionBinding).toBeUndefined()
+    expect(spawnOptions?.persistHostSessionBinding).toBe(true)
   })
 
   it('falls back to background terminal creation for renderer-backed requests without a renderer window', async () => {
@@ -11028,6 +11028,12 @@ describe('OrcaRuntimeService', () => {
     const splitEnv =
       (spawn.mock.calls[1]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
     const splitLeafId = splitEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
+    expect(spawn.mock.calls[1]?.[0]).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      tabId: sourceEnv.ORCA_TAB_ID,
+      leafId: splitLeafId,
+      persistHostSessionBinding: true
+    })
     expect(splitTerminal).not.toHaveBeenCalled()
     expect(splitEnv.ORCA_TAB_ID).toBe(sourceEnv.ORCA_TAB_ID)
     expect(splitEnv.ORCA_WORKTREE_ID).toBe(TEST_WORKTREE_ID)

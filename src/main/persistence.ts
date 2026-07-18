@@ -78,6 +78,19 @@ import {
   buildWorkspaceRunContext
 } from '../shared/task-source-context'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
+import {
+  createEmptyDaemonSessionOwnershipState,
+  type DaemonSessionClaim,
+  type DaemonSessionOwnershipState,
+  type TerminalBindingProvenance
+} from '../shared/daemon-session-ownership'
+import { parseAppSshPtyId } from '../shared/ssh-pty-id'
+import { parseDaemonSessionOwnershipState } from './daemon/daemon-session-claims'
+import { extractRawDaemonOwnership } from './daemon/daemon-ownership-raw-extractor'
+import {
+  parseValidDaemonOwnershipCommit,
+  withDaemonOwnershipCommit
+} from './daemon/daemon-ownership-commit'
 import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
 import { hardenExistingSecureFile } from '../shared/secure-file'
 import {
@@ -2443,6 +2456,45 @@ function cloneWorkspaceSessionState(session: WorkspaceSessionState): WorkspaceSe
   return structuredClone(session)
 }
 
+function collectWorkspaceSessionPtyIds(session: WorkspaceSessionState | undefined): Set<string> {
+  const ids = new Set<string>()
+  if (!session) {
+    return ids
+  }
+  for (const tabs of Object.values(session.tabsByWorktree ?? {})) {
+    for (const tab of tabs) {
+      if (typeof tab.ptyId === 'string' && tab.ptyId && !parseAppSshPtyId(tab.ptyId)) {
+        ids.add(tab.ptyId)
+      }
+    }
+  }
+  for (const layout of Object.values(session.terminalLayoutsByTabId ?? {})) {
+    for (const ptyId of Object.values(layout.ptyIdsByLeafId ?? {})) {
+      if (typeof ptyId === 'string' && ptyId && !parseAppSshPtyId(ptyId)) {
+        ids.add(ptyId)
+      }
+    }
+  }
+  return ids
+}
+
+function createOwnershipStateForLegacyProfile(state: PersistedState): DaemonSessionOwnershipState {
+  const ownership = createEmptyDaemonSessionOwnershipState()
+  const protectedIds = collectWorkspaceSessionPtyIds(state.workspaceSession)
+  for (const sessionId of state.claudeLivePtySessionIds ?? []) {
+    if (sessionId && !parseAppSshPtyId(sessionId)) {
+      protectedIds.add(sessionId)
+    }
+  }
+  for (const entry of state.migrationUnsupportedPtyEntries ?? []) {
+    if (entry.source === 'local' && entry.ptyId) {
+      protectedIds.add(entry.ptyId)
+    }
+  }
+  ownership.legacyProtectedSessionIds = [...protectedIds]
+  return ownership
+}
+
 function removeWorkspaceSessionOwner(
   session: WorkspaceSessionState | undefined,
   ownerKey: string
@@ -2883,6 +2935,14 @@ export class Store {
         })
         logPersistenceStartupMilestone('persistence-json-parse-start')
         const parsed = JSON.parse(raw) as PersistedState
+        // Why: secret decryption mutates parsed fields that are covered by the
+        // disk checksum, so ownership authority must be verified first.
+        const parsedOwnershipCommit = parseValidDaemonOwnershipCommit(parsed)
+        const parsedOwnershipProjection = extractRawDaemonOwnership(parsed)
+        const parsedOwnershipAuthoritative =
+          Boolean(parsedOwnershipCommit) &&
+          parsedOwnershipProjection.status === 'complete' &&
+          !Object.prototype.hasOwnProperty.call(parsed, 'daemonOwnershipCommitInvalid')
         logPersistenceStartupMilestone('persistence-json-parse-done')
 
         // Why: secret settings are stored encrypted on disk via safeStorage.
@@ -3447,6 +3507,25 @@ export class Store {
             .map(normalizeSshRemotePtyLease)
             .filter((lease): lease is SshRemotePtyLease => lease !== null),
           claudeLivePtySessionIds: normalizeClaudeLivePtySessionIds(parsed.claudeLivePtySessionIds),
+          daemonSessionOwnership: (() => {
+            const ownership = parseDaemonSessionOwnershipState(parsed.daemonSessionOwnership)
+            if (ownership.ok) {
+              return ownership.value
+            }
+            // Why: destructive ownership reads raw profile files independently. Do not normalize a
+            // malformed/future state to empty and accidentally turn corruption into absence.
+            return undefined
+          })(),
+          daemonOwnershipCommit: (() => {
+            return parsedOwnershipCommit ?? undefined
+          })(),
+          ...(!parsedOwnershipAuthoritative
+            ? {
+                // Why: checksum integrity is insufficient when raw ownership cannot
+                // be understood; normalization must never authorize the resulting absence.
+                daemonOwnershipCommitInvalid: true as const
+              }
+            : {}),
           migrationUnsupportedPtyEntries: normalizeMigrationUnsupportedPtyEntries(
             parsed.migrationUnsupportedPtyEntries
           ),
@@ -3706,8 +3785,12 @@ export class Store {
   // Why githubCache is omitted: it is memory-only during the session (see
   // getGithubCacheFile) — excluding it from both the payload and the hash
   // keeps cache refreshes from ever touching the durable file.
-  private getDurableState(): Omit<PersistedState, 'githubCache'> {
-    const { githubCache: _memoryOnly, ...durable } = this.state
+  private getDurableState(): Omit<PersistedState, 'githubCache' | 'daemonOwnershipCommit'> {
+    const {
+      githubCache: _memoryOnly,
+      daemonOwnershipCommit: _derivedOwnershipCommit,
+      ...durable
+    } = this.state
     return durable
   }
 
@@ -3733,7 +3816,13 @@ export class Store {
         browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
       }
     }
-    return JSON.stringify(stateToSave, null, 2)
+    const priorGeneration = this.state.daemonOwnershipCommit?.generation ?? 0
+    const committedState = withDaemonOwnershipCommit(
+      stateToSave,
+      Math.max(priorGeneration + 1, Date.now())
+    )
+    this.state.daemonOwnershipCommit = committedState.daemonOwnershipCommit
+    return JSON.stringify(committedState, null, 2)
   }
 
   // Why: async writes avoid blocking the main Electron thread on every
@@ -3767,12 +3856,10 @@ export class Store {
       if (this.writeGeneration !== gen) {
         return
       }
-      await rename(tmpFile, dataFile)
+      // Why: the generation check and rename must be one event-loop turn; an
+      // awaited rename lets a synchronous flush commit first and then be overwritten.
+      renameSync(tmpFile, dataFile)
       renamed = true
-      // Why the gen re-check: a sync flush can interleave during the rename
-      // await, write fresher state, and record its own hash. Recording this
-      // stale hash over it would make later saves skip against content that
-      // is not what the file holds.
       if (this.writeGeneration === gen) {
         this.lastWrittenStateHash = stateHash
       }
@@ -6044,6 +6131,57 @@ export class Store {
     return this.state.repos.find((repo) => repo.id === repoId)?.connectionId ?? null
   }
 
+  private ensureDaemonSessionOwnership(): DaemonSessionOwnershipState {
+    this.state.daemonSessionOwnership ??= createOwnershipStateForLegacyProfile(this.state)
+    return this.state.daemonSessionOwnership
+  }
+
+  getDaemonSessionOwnership(): DaemonSessionOwnershipState | undefined {
+    return this.state.daemonSessionOwnership
+      ? structuredClone(this.state.daemonSessionOwnership)
+      : undefined
+  }
+
+  private persistBindingOwnership(args: {
+    worktreeId: string
+    leafId: string
+    ptyId: string
+    provenance: TerminalBindingProvenance
+  }): void {
+    const ownership = this.ensureDaemonSessionOwnership()
+    ownership.bindingProvenanceByPtyId[args.ptyId] = args.provenance
+    if (args.provenance.kind !== 'local-daemon') {
+      ownership.claims = ownership.claims.filter(
+        (claim) => !(claim.ownerKind === 'pane' && claim.sessionId === args.ptyId)
+      )
+      return
+    }
+    const protocolVersion = args.provenance.protocolVersion
+    const claim: DaemonSessionClaim = {
+      sessionId: args.ptyId,
+      ownerKind: 'pane',
+      workspaceKey: args.worktreeId,
+      ownerId: args.leafId,
+      provider: 'local-daemon',
+      protocolVersion
+    }
+    ownership.claims = [
+      ...ownership.claims.filter(
+        (existing) =>
+          !(
+            existing.sessionId === args.ptyId ||
+            (existing.ownerKind === 'pane' &&
+              existing.workspaceKey === args.worktreeId &&
+              existing.ownerId === args.leafId)
+          )
+      ),
+      claim
+    ]
+    ownership.legacyProtectedSessionIds = ownership.legacyProtectedSessionIds.filter(
+      (sessionId) => sessionId !== args.ptyId
+    )
+  }
+
   // Why: closes the SIGKILL-between-spawn-and-persist race (Issue #217). The
   // renderer's debounced session writer (~450 ms total) is normally the only
   // path that writes tab.ptyId / ptyIdsByLeafId; a force-quit inside that
@@ -6056,12 +6194,16 @@ export class Store {
     leafId: string
     ptyId: string
     startupCwd?: string
+    provenance: TerminalBindingProvenance
   }): void {
     const session = this.state.workspaceSession
     if (!session) {
       return
     }
     const sessionBeforeBinding = cloneWorkspaceSessionState(session)
+    const ownershipBeforeBinding = this.state.daemonSessionOwnership
+      ? structuredClone(this.state.daemonSessionOwnership)
+      : undefined
     const tabs = session.tabsByWorktree?.[args.worktreeId]
     const tab = tabs?.find((t) => t.id === args.tabId)
     if (tab) {
@@ -6092,9 +6234,11 @@ export class Store {
       // Why: legacy renderer-local pane ids may arrive from older callers; keep
       // them out of durable leaf-keyed layout state after the UUID migration.
       try {
+        this.persistBindingOwnership(args)
         this.flushOrThrow()
       } catch (err) {
         this.state.workspaceSession = sessionBeforeBinding
+        this.state.daemonSessionOwnership = ownershipBeforeBinding
         throw err
       }
       return
@@ -6144,10 +6288,208 @@ export class Store {
       }
     }
     try {
+      this.persistBindingOwnership(args)
       this.flushOrThrow()
     } catch (err) {
       this.state.workspaceSession = sessionBeforeBinding
+      this.state.daemonSessionOwnership = ownershipBeforeBinding
       throw err
+    }
+  }
+
+  persistRuntimeDaemonSessionClaim(args: {
+    sessionId: string
+    protocolVersion: number
+    workspaceKey: string
+    ownerId: string
+  }): void {
+    const before = this.state.daemonSessionOwnership
+      ? structuredClone(this.state.daemonSessionOwnership)
+      : undefined
+    const ownership = this.ensureDaemonSessionOwnership()
+    ownership.claims = [
+      ...ownership.claims.filter(
+        (claim) =>
+          !(
+            claim.ownerKind === 'runtime' &&
+            claim.workspaceKey === args.workspaceKey &&
+            claim.ownerId === args.ownerId
+          )
+      ),
+      {
+        sessionId: args.sessionId,
+        protocolVersion: args.protocolVersion,
+        ownerKind: 'runtime',
+        workspaceKey: args.workspaceKey,
+        ownerId: args.ownerId,
+        provider: 'local-daemon'
+      }
+    ]
+    try {
+      this.flushOrThrow()
+    } catch (error) {
+      this.state.daemonSessionOwnership = before
+      throw error
+    }
+  }
+
+  markDaemonSessionRetirementPending(args: {
+    sessionId: string
+    protocolVersion: number
+    workspaceKey: string
+    ownerId: string
+  }): void {
+    const before = this.state.daemonSessionOwnership
+      ? structuredClone(this.state.daemonSessionOwnership)
+      : undefined
+    const ownership = this.ensureDaemonSessionOwnership()
+    const matching = ownership.claims.find(
+      (claim) =>
+        claim.sessionId === args.sessionId && claim.protocolVersion === args.protocolVersion
+    )
+    ownership.claims = ownership.claims.filter(
+      (claim) =>
+        !(claim.sessionId === args.sessionId && claim.protocolVersion === args.protocolVersion)
+    )
+    ownership.claims.push({
+      sessionId: args.sessionId,
+      protocolVersion: args.protocolVersion,
+      ownerKind: 'retirement-pending',
+      workspaceKey: matching?.workspaceKey ?? args.workspaceKey,
+      ownerId: matching?.ownerId ?? args.ownerId,
+      provider: 'local-daemon'
+    })
+    try {
+      this.flushOrThrow()
+    } catch (error) {
+      this.state.daemonSessionOwnership = before
+      throw error
+    }
+  }
+
+  markExistingDaemonSessionRetirementPending(sessionId: string): boolean {
+    return this.transitionExistingDaemonSessionClaim(sessionId, 'retirement-pending')
+  }
+
+  clearVerifiedRetirementPendingDaemonClaim(args: {
+    sessionId: string
+    protocolVersion: number
+  }): boolean {
+    const ownership = this.state.daemonSessionOwnership
+    if (
+      !ownership?.claims.some(
+        (claim) =>
+          claim.sessionId === args.sessionId &&
+          claim.protocolVersion === args.protocolVersion &&
+          claim.ownerKind === 'retirement-pending'
+      )
+    ) {
+      return false
+    }
+    const before = structuredClone(ownership)
+    ownership.claims = ownership.claims.filter(
+      (claim) =>
+        claim.sessionId !== args.sessionId ||
+        claim.protocolVersion !== args.protocolVersion ||
+        claim.ownerKind !== 'retirement-pending'
+    )
+    if (!ownership.claims.some((claim) => claim.sessionId === args.sessionId)) {
+      delete ownership.bindingProvenanceByPtyId[args.sessionId]
+      ownership.legacyProtectedSessionIds = ownership.legacyProtectedSessionIds.filter(
+        (sessionId) => sessionId !== args.sessionId
+      )
+    }
+    try {
+      this.flushOrThrow()
+      return true
+    } catch (error) {
+      this.state.daemonSessionOwnership = before
+      throw error
+    }
+  }
+
+  markExistingDaemonSessionSleepRoute(sessionId: string): boolean {
+    return this.transitionExistingDaemonSessionClaim(sessionId, 'sleep-route')
+  }
+
+  private transitionExistingDaemonSessionClaim(
+    sessionId: string,
+    ownerKind: 'retirement-pending' | 'sleep-route'
+  ): boolean {
+    const ownership = this.state.daemonSessionOwnership
+    const claims = ownership?.claims.filter(
+      (claim) => claim.sessionId === sessionId && claim.provider === 'local-daemon'
+    )
+    if (!ownership || !claims || claims.length === 0) {
+      return false
+    }
+    const before = structuredClone(ownership)
+    ownership.claims = ownership.claims.map((claim) => {
+      if (claim.sessionId !== sessionId || claim.provider !== 'local-daemon') {
+        return claim
+      }
+      if (ownerKind !== 'sleep-route') {
+        return { ...claim, ownerKind }
+      }
+      const layouts = this.state.workspaceSession?.terminalLayoutsByTabId ?? {}
+      const tabId = Object.entries(layouts).find(
+        ([, layout]) => layout.ptyIdsByLeafId?.[claim.ownerId] === sessionId
+      )?.[0]
+      return {
+        ...claim,
+        ownerKind,
+        // Why: sleeping records are keyed by pane identity, not the leaf-only pane claim owner.
+        ownerId: tabId ? makePaneKey(tabId, claim.ownerId) : claim.ownerId
+      }
+    })
+    try {
+      this.flushOrThrow()
+      return true
+    } catch (error) {
+      this.state.daemonSessionOwnership = before
+      throw error
+    }
+  }
+
+  removePtyBindingOwnershipAfterVerifiedStop(args: {
+    sessionId: string
+    provenance: TerminalBindingProvenance
+  }): boolean {
+    const ownership = this.state.daemonSessionOwnership
+    const provenance = args.provenance
+    if (!ownership) {
+      return true
+    }
+    if (
+      provenance.kind === 'local-daemon' &&
+      ownership.claims.some(
+        (claim) =>
+          claim.sessionId === args.sessionId &&
+          claim.protocolVersion === provenance.protocolVersion &&
+          claim.ownerKind === 'sleep-route'
+      )
+    ) {
+      return false
+    }
+    const before = structuredClone(ownership)
+    if (provenance.kind === 'local-daemon') {
+      ownership.claims = ownership.claims.filter(
+        (claim) =>
+          claim.sessionId !== args.sessionId || claim.protocolVersion !== provenance.protocolVersion
+      )
+    }
+    delete ownership.bindingProvenanceByPtyId[args.sessionId]
+    if (provenance.kind === 'local-daemon') {
+      ownership.legacyProtectedSessionIds = ownership.legacyProtectedSessionIds.filter(
+        (sessionId) => sessionId !== args.sessionId
+      )
+    }
+    try {
+      this.flushOrThrow()
+      return true
+    } catch (error) {
+      this.state.daemonSessionOwnership = before
+      throw error
     }
   }
 

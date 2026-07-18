@@ -149,6 +149,7 @@ describe('Orca cloud profile service', () => {
     expect(result.profiles[0]).toMatchObject({
       id: 'local-default',
       kind: 'cloud-linked',
+      initialized: true,
       cloud: cloudSummary
     })
     expect(exchangeOrcaCloudAuthCodeMock).toHaveBeenCalledWith(
@@ -206,6 +207,7 @@ describe('Orca cloud profile service', () => {
     expect(result.status).toBe('signed-out')
     expect(result.activeProfileId).toBe('local-default')
     expect(result.profiles[0]).toMatchObject({ id: 'local-default', kind: 'local' })
+    expect(result.profiles[0]?.initialized).toBe(true)
     expect(result.profiles[0]?.cloud).toBeUndefined()
     expect(getCurrentOrcaProfileAuthStatus(userDataPath)).toMatchObject({
       state: 'local',
@@ -244,6 +246,7 @@ describe('Orca cloud profile service', () => {
       id: expect.stringMatching(/^cloud-/),
       name: 'Acme',
       kind: 'cloud-linked',
+      initialized: false,
       cloud: expect.objectContaining({ cloudProfileId: 'cloud-profile-2' })
     })
     expect(createOrcaCloudProfileMock).toHaveBeenCalledWith(

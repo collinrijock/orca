@@ -36,11 +36,12 @@ const WIN32_START_TIME_TOLERANCE_MS = 10_000
 // also covers a live-but-wedged daemon that simply missed the RPC budget.
 export type DaemonHealth = 'healthy' | 'unreachable' | 'rejected' | 'pty-spawn-unhealthy'
 
-type ParsedDaemonPid = {
+export type ParsedDaemonPid = {
   pid: number
   startedAtMs: number | null
   entryPath: string | null
   appVersion: string | null
+  launchNonce?: string
 }
 
 function canConnectSocket(socketPath: string): Promise<boolean> {
@@ -295,12 +296,14 @@ export function getMacDaemonSystemResolverHealth(
 function commandLineMatchesDaemon(
   commandLine: string,
   socketPath: string,
-  tokenPath: string
+  tokenPath: string,
+  launchNonce?: string
 ): boolean {
   return (
     commandLine.includes('daemon-entry') &&
     commandLine.includes(socketPath) &&
-    commandLine.includes(tokenPath)
+    commandLine.includes(tokenPath) &&
+    (launchNonce === undefined || commandLine.includes(launchNonce))
   )
 }
 
@@ -312,6 +315,7 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
       startedAtMs?: unknown
       entryPath?: unknown
       appVersion?: unknown
+      launchNonce?: unknown
     }
     if (typeof parsed.pid === 'number' && Number.isFinite(parsed.pid)) {
       return {
@@ -321,7 +325,8 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
             ? parsed.startedAtMs
             : null,
         entryPath: typeof parsed.entryPath === 'string' ? parsed.entryPath : null,
-        appVersion: typeof parsed.appVersion === 'string' ? parsed.appVersion : null
+        appVersion: typeof parsed.appVersion === 'string' ? parsed.appVersion : null,
+        ...(typeof parsed.launchNonce === 'string' ? { launchNonce: parsed.launchNonce } : {})
       }
     }
   } catch {
@@ -487,6 +492,103 @@ async function queryWindowsProcessIdentity(pid: number): Promise<WindowsProcessI
   }
 }
 
+export type ExactDaemonProcessState = 'alive' | 'absent' | 'unknown'
+
+export function classifyExactDaemonProcessIdentity(args: {
+  commandLine: string
+  socketPath: string
+  tokenPath: string
+  actualStartedAtMs: number | null
+  expectedStartedAtMs: number | null
+  launchNonce: string | null
+  startTimeToleranceMs: number
+}): ExactDaemonProcessState {
+  if (args.expectedStartedAtMs === null || !args.launchNonce) {
+    return 'unknown'
+  }
+  if (
+    !commandLineMatchesDaemon(args.commandLine, args.socketPath, args.tokenPath, args.launchNonce)
+  ) {
+    return 'absent'
+  }
+  if (args.actualStartedAtMs === null) {
+    return 'unknown'
+  }
+  return startTimesWithinTolerance(
+    args.actualStartedAtMs,
+    args.expectedStartedAtMs,
+    args.startTimeToleranceMs
+  )
+    ? 'alive'
+    : 'absent'
+}
+
+export async function getExactDaemonProcessState(
+  pid: number,
+  socketPath: string,
+  tokenPath: string,
+  startedAtMs: number | null,
+  launchNonce: string | null
+): Promise<ExactDaemonProcessState> {
+  try {
+    process.kill(pid, 0)
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ESRCH' ? 'absent' : 'unknown'
+  }
+
+  if (process.platform === 'win32') {
+    const identity = await queryWindowsProcessIdentity(pid)
+    if (identity === null) {
+      return 'unknown'
+    }
+    // Why: image names are too broad after PID reuse. Match the daemon entry
+    // plus the exact socket/token args so we only kill the daemon for this
+    // userData protocol endpoint.
+    // Why: signaling needs positive start and launch-nonce evidence; legacy
+    // adoption's fail-open identity rule is not destructive authority.
+    return classifyExactDaemonProcessIdentity({
+      commandLine: identity.commandLine,
+      socketPath,
+      tokenPath,
+      actualStartedAtMs: identity.startedAtMs,
+      expectedStartedAtMs: startedAtMs,
+      launchNonce,
+      startTimeToleranceMs: WIN32_START_TIME_TOLERANCE_MS
+    })
+  }
+
+  try {
+    const cmdline = readFileSync(`/proc/${pid}/cmdline`, 'utf8')
+    return classifyExactDaemonProcessIdentity({
+      commandLine: cmdline,
+      socketPath,
+      tokenPath,
+      actualStartedAtMs: getProcessStartedAtMs(pid),
+      expectedStartedAtMs: startedAtMs,
+      launchNonce,
+      startTimeToleranceMs: START_TIME_TOLERANCE_MS
+    })
+  } catch {
+    try {
+      const output = execFileSync('ps', ['-p', String(pid), '-o', 'command='], {
+        encoding: 'utf8',
+        timeout: 2_000
+      })
+      return classifyExactDaemonProcessIdentity({
+        commandLine: output,
+        socketPath,
+        tokenPath,
+        actualStartedAtMs: getProcessStartedAtMs(pid),
+        expectedStartedAtMs: startedAtMs,
+        launchNonce,
+        startTimeToleranceMs: START_TIME_TOLERANCE_MS
+      })
+    } catch {
+      return 'unknown'
+    }
+  }
+}
+
 async function isDaemonProcess(
   pid: number,
   socketPath: string,
@@ -498,40 +600,12 @@ async function isDaemonProcess(
   } catch {
     return false
   }
-
-  if (process.platform === 'win32') {
-    const identity = await queryWindowsProcessIdentity(pid)
-    if (identity === null) {
-      return false
-    }
-    // Why: image names are too broad after PID reuse. Match the daemon entry
-    // plus the exact socket/token args so we only kill the daemon for this
-    // userData protocol endpoint.
-    return (
-      commandLineMatchesDaemon(identity.commandLine, socketPath, tokenPath) &&
-      startTimesWithinTolerance(identity.startedAtMs, startedAtMs, WIN32_START_TIME_TOLERANCE_MS)
-    )
-  }
-
-  try {
-    const cmdline = readFileSync(`/proc/${pid}/cmdline`, 'utf8')
-    return (
-      commandLineMatchesDaemon(cmdline, socketPath, tokenPath) && startTimeMatches(pid, startedAtMs)
-    )
-  } catch {
-    try {
-      const output = execFileSync('ps', ['-p', String(pid), '-o', 'command='], {
-        encoding: 'utf8',
-        timeout: 2_000
-      })
-      return (
-        commandLineMatchesDaemon(output, socketPath, tokenPath) &&
-        startTimeMatches(pid, startedAtMs)
-      )
-    } catch {
-      return false
-    }
-  }
+  const commandLine = await getDaemonCommandLine(pid)
+  return (
+    commandLine !== null &&
+    commandLineMatchesDaemon(commandLine, socketPath, tokenPath) &&
+    startTimeMatches(pid, startedAtMs)
+  )
 }
 
 async function getDaemonCommandLine(pid: number): Promise<string | null> {

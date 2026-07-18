@@ -1,5 +1,10 @@
 import { fork, type ChildProcess } from 'node:child_process'
-import type { DaemonLauncher, DaemonProcessHandle } from './daemon-spawner'
+import { writeFileSync } from 'node:fs'
+import {
+  serializeDaemonPidFile,
+  type DaemonLauncher,
+  type DaemonProcessHandle
+} from './daemon-spawner'
 
 const READY_TIMEOUT_MS = 10_000
 
@@ -8,17 +13,39 @@ export type ProductionLauncherOptions = {
 }
 
 export function createProductionLauncher(opts: ProductionLauncherOptions): DaemonLauncher {
-  return async (socketPath: string, tokenPath: string): Promise<DaemonProcessHandle> => {
+  return async (
+    socketPath: string,
+    tokenPath: string,
+    pidPath?: string,
+    launchNonce?: string
+  ): Promise<DaemonProcessHandle> => {
     const entryPath = opts.getDaemonEntryPath()
 
-    const child = fork(entryPath, ['--socket', socketPath, '--token', tokenPath], {
-      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-      detached: true,
-      env: { ...process.env },
-      ...(process.platform === 'win32' ? { windowsHide: true } : {})
-    })
+    const child = fork(
+      entryPath,
+      [
+        '--socket',
+        socketPath,
+        '--token',
+        tokenPath,
+        ...(pidPath && launchNonce ? ['--pid-record', pidPath, '--launch-nonce', launchNonce] : [])
+      ],
+      {
+        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+        detached: true,
+        env: { ...process.env },
+        ...(process.platform === 'win32' ? { windowsHide: true } : {})
+      }
+    )
 
-    await waitForReady(child)
+    const startedAtMs = await waitForReady(child)
+    if (pidPath && launchNonce && child.pid) {
+      writeFileSync(
+        pidPath,
+        serializeDaemonPidFile({ pid: child.pid, startedAtMs, entryPath, launchNonce }),
+        { mode: 0o600 }
+      )
+    }
 
     // Unref so the Electron process can exit without waiting for the daemon
     child.unref()
@@ -30,7 +57,7 @@ export function createProductionLauncher(opts: ProductionLauncherOptions): Daemo
   }
 }
 
-function waitForReady(child: ChildProcess): Promise<void> {
+function waitForReady(child: ChildProcess): Promise<number | null> {
   return new Promise((resolve, reject) => {
     let timeout: ReturnType<typeof setTimeout> | undefined
     let settled = false
@@ -62,7 +89,10 @@ function waitForReady(child: ChildProcess): Promise<void> {
         // Why: the daemon is detached after readiness, so startup listeners
         // must not keep the child process closure alive for the daemon lifetime.
         cleanupStartupListeners()
-        resolve()
+        const startedAtMs = (msg as { startedAtMs?: unknown }).startedAtMs
+        resolve(
+          typeof startedAtMs === 'number' && Number.isFinite(startedAtMs) ? startedAtMs : null
+        )
       }
     }
     function onError(err: Error): void {

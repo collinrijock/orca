@@ -18906,14 +18906,9 @@ export class OrcaRuntimeService {
         tabId,
         leafId,
         ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
-        // Why: a headless-created pane has no renderer session writer. Persist
-        // its tab/leaf binding at spawn so a later promoted window reattaches
-        // the live daemon or SSH PTY instead of replacing it with a fresh one.
-        // Re-check freshly: the entry-time snapshot can go stale across the
-        // awaits above if the authoritative window is destroyed mid-spawn.
-        ...(launchOpts.persistHostSessionBinding || this.getAvailableAuthoritativeWindow() === null
-          ? { persistHostSessionBinding: true }
-          : {})
+        // Why: runtime owns the physical spawn before renderer reveal. Commit its exact tab/leaf
+        // binding first so a crash or failed reveal cannot leave a live unclaimed daemon session.
+        persistHostSessionBinding: true
       })
       this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
       this.registerPty(result.id, workspace.id, workspace.connectionId)
@@ -20086,7 +20081,12 @@ export class OrcaRuntimeService {
       envToDelete: opts.envToDelete,
       connectionId: workspace.connectionId,
       worktreeId: workspace.id,
-      preAllocatedHandle
+      preAllocatedHandle,
+      tabId: parentTabId,
+      leafId,
+      // Why: a runtime split exists physically before renderer reveal. Commit its exact binding
+      // first so a reveal failure can only leave a retirement-pending claim, never an orphan.
+      persistHostSessionBinding: true
     })
     this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
     this.registerPty(result.id, workspace.id, workspace.connectionId)

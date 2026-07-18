@@ -97,13 +97,28 @@ function createDaemonAdapter(
   return {
     ...createProvider(label, sessions),
     protocolVersion: 13,
-    listSessions: vi.fn(async () => []),
+    getPtyBindingProvenance: vi.fn(() => ({ kind: 'local-daemon', protocolVersion: 13 })),
+    listSessions: vi.fn(async () =>
+      sessions.map((sessionId) => ({
+        sessionId,
+        state: 'running',
+        shellState: 'ready',
+        isAlive: true,
+        pid: 123,
+        cwd: '',
+        cols: 80,
+        rows: 24,
+        createdAt: 1
+      }))
+    ),
     ackColdRestore: vi.fn(),
     clearTombstone: vi.fn(),
     reconcileOnStartup: vi.fn(async () => ({ alive: sessions, killed: [] })),
     dispose: vi.fn(),
     disconnectOnly: vi.fn(async () => {}),
     getActiveSessionIds: vi.fn(() => []),
+    beginRestartFence: vi.fn(async () => []),
+    cancelRestartFence: vi.fn(),
     fanoutSyntheticExits: vi.fn()
   } as unknown as DaemonPtyAdapter & ProviderMock
 }
@@ -140,13 +155,21 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(fallback.write).toHaveBeenCalledWith(fresh.id, 'new\n')
   })
 
-  it('routes a previously daemon-backed id to fallback after daemon exit removes the mapping', async () => {
+  it('routes a previously daemon-backed id to fallback only after verified reconciliation', async () => {
     const current = createDaemonAdapter('daemon', ['daemon-session'])
     const fallback = createProvider('fallback')
     const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
 
     await provider.discoverDaemonSessions()
     current.emitExit('daemon-session', 0)
+    await provider.spawn({ sessionId: 'daemon-session', cols: 80, rows: 24 })
+    expect(current.spawn).toHaveBeenCalledWith({
+      sessionId: 'daemon-session',
+      cols: 80,
+      rows: 24
+    })
+
+    provider.forgetPtyRouteAfterVerifiedStop('daemon-session')
     await provider.spawn({ sessionId: 'daemon-session', cols: 80, rows: 24 })
 
     expect(fallback.spawn).toHaveBeenCalledWith({
@@ -255,36 +278,58 @@ describe('DegradedDaemonPtyProvider', () => {
     const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
 
     const fresh = await provider.spawn({ cols: 80, rows: 24 })
-    const killedCount = await provider.shutdownFallbackSessions()
+    const result = await provider.shutdownFallbackSessions()
 
-    expect(killedCount).toBe(1)
+    expect(result).toEqual({ stoppedIds: [fresh.id], failedIds: [] })
     expect(fallback.shutdown).toHaveBeenCalledWith(fresh.id, { immediate: true })
     expect(provider.hasPty(fresh.id)).toBe(false)
   })
 
-  it('is best-effort: counts only successful shutdowns and never throws (keeps restart alive)', async () => {
+  it('reports unverified fallback shutdowns so restart can preserve the provider', async () => {
     const current = createDaemonAdapter('daemon')
     const fallback = createProvider('fallback')
     const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
     const stuck = await provider.spawn({ sessionId: 'stuck', cols: 80, rows: 24 })
     await provider.spawn({ sessionId: 'ok', cols: 80, rows: 24 })
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.mocked(fallback.shutdown).mockImplementation(async (id: string) => {
       if (id === stuck.id) {
         throw new Error('still alive')
       }
     })
 
-    // Why: a single un-killable local PTY must not abort the daemon restart.
-    const killedCount = await provider.shutdownFallbackSessions()
+    const result = await provider.shutdownFallbackSessions()
 
-    // Best-effort: the one that shut down is counted, the stuck one is not, and
-    // crucially it does not throw — so the daemon restart sequence proceeds.
-    expect(killedCount).toBe(1)
-    expect(warn).toHaveBeenCalled()
+    expect(result).toEqual({ stoppedIds: ['ok'], failedIds: ['stuck'] })
     expect(fallback.shutdown).toHaveBeenCalledWith('stuck', { immediate: true })
     expect(fallback.shutdown).toHaveBeenCalledWith('ok', { immediate: true })
-    warn.mockRestore()
+  })
+
+  it('drains an admitted fallback spawn before restart captures fallback sessions', async () => {
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback')
+    let finishSpawn: ((result: PtySpawnResult) => void) | undefined
+    vi.mocked(fallback.spawn).mockImplementationOnce(
+      () =>
+        new Promise<PtySpawnResult>((resolve) => {
+          finishSpawn = resolve
+        })
+    )
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+
+    const spawn = provider.spawn({ sessionId: 'racing-fallback', cols: 80, rows: 24 })
+    const fence = provider.beginRestartFence()
+    await expect(provider.spawn({ cols: 80, rows: 24 })).rejects.toThrow(
+      'Daemon restart in progress'
+    )
+    expect(current.beginRestartFence).not.toHaveBeenCalled()
+
+    finishSpawn?.({ id: 'racing-fallback' })
+    await expect(spawn).resolves.toEqual({ id: 'racing-fallback' })
+    await expect(fence).resolves.toEqual([])
+    await expect(provider.shutdownFallbackSessions()).resolves.toEqual({
+      stoppedIds: ['racing-fallback'],
+      failedIds: []
+    })
   })
 
   it('fans synthetic exits for discovered current-daemon sessions only', async () => {
@@ -294,12 +339,23 @@ describe('DegradedDaemonPtyProvider', () => {
     const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
     const exitSpy = vi.fn()
     provider.onExit(exitSpy)
+    let provenanceDuringExit: unknown
+    provider.onExit((payload) => {
+      provenanceDuringExit = provider.getPtyBindingProvenance(payload.id)
+      provider.forgetPtyRouteAfterVerifiedStop(payload.id, payload.provenance)
+    })
 
     await provider.discoverDaemonSessions()
     provider.fanoutCurrentDaemonSyntheticExits(-1)
 
     expect(exitSpy).toHaveBeenCalledOnce()
-    expect(exitSpy).toHaveBeenCalledWith({ id: 'current-session', code: -1 })
+    expect(exitSpy).toHaveBeenCalledWith({
+      id: 'current-session',
+      code: -1,
+      provenance: { kind: 'local-daemon', protocolVersion: 13 },
+      verifiedAbsent: true
+    })
+    expect(provenanceDuringExit).toEqual({ kind: 'local-daemon', protocolVersion: 13 })
     expect(provider.getCurrentDaemonSessionIds()).toEqual([])
     expect(provider.hasPty('legacy-session')).toBe(true)
   })

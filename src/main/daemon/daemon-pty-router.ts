@@ -1,24 +1,25 @@
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
+import type { DaemonGenerationDiscovery } from './daemon-generation-inventory'
 import type {
   IPtyProvider,
   PtyBackgroundStreamEvent,
+  PtyDataPayload,
   PtyProviderBufferSnapshot,
   PtyProcessInfo,
   PtySpawnOptions,
   PtySpawnResult
 } from '../providers/types'
+import type { PtyExitPayload } from '../providers/pty-exit-payload'
+import type { TerminalBindingProvenance } from '../../shared/daemon-session-ownership'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
   private sessionAdapters = new Map<string, DaemonPtyAdapter>()
   private unsubscribers: (() => void)[] = []
-  private dataListeners: ((payload: {
-    id: string
-    data: string
-    sequenceChars?: number
-  }) => void)[] = []
-  private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
+  private dataListeners: ((payload: PtyDataPayload) => void)[] = []
+  private exitListeners: ((payload: PtyExitPayload) => void)[] = []
+  private bindingInventoryListeners: ((provenance: TerminalBindingProvenance) => void)[] = []
 
   constructor(opts: { current: DaemonPtyAdapter; legacy: DaemonPtyAdapter[] }) {
     this.current = opts.current
@@ -32,39 +33,85 @@ export class DaemonPtyRouter implements IPtyProvider {
           }
         }),
         adapter.onExit((payload) => {
-          this.sessionAdapters.delete(payload.id)
+          // Why: legacy exits carry no incarnation. Keep the exact adapter route until a
+          // healthy identity-matched re-list proves this session was not replaced.
           for (const listener of this.exitListeners) {
-            listener(payload)
+            listener({ ...payload, provenance: adapter.getPtyBindingProvenance() })
           }
-        })
+        }),
+        adapter.onPtyBindingInventoryAvailable?.((provenance) => {
+          for (const listener of this.bindingInventoryListeners.slice()) {
+            listener(provenance)
+          }
+        }) ?? (() => {})
       )
     }
   }
 
-  async discoverLegacySessions(): Promise<void> {
-    for (const adapter of this.legacy) {
+  async discoverLegacySessions(): Promise<DaemonGenerationDiscovery> {
+    return await this.discoverAdapters(this.legacy)
+  }
+
+  async discoverDaemonSessions(): Promise<DaemonGenerationDiscovery> {
+    return await this.discoverAdapters(this.allAdapters())
+  }
+
+  private async discoverAdapters(
+    adapters: readonly DaemonPtyAdapter[]
+  ): Promise<DaemonGenerationDiscovery> {
+    const generations: DaemonGenerationDiscovery['generations'] = []
+    const failedProtocols: number[] = []
+    for (const adapter of adapters) {
       try {
-        const sessions = await adapter.listProcesses()
+        const sessions = await adapter.listSessions()
         for (const session of sessions) {
-          this.sessionAdapters.set(session.id, adapter)
+          this.sessionAdapters.set(session.sessionId, adapter)
         }
+        generations.push({ adapter, protocolVersion: adapter.protocolVersion, sessions })
       } catch (error) {
+        failedProtocols.push(adapter.protocolVersion)
         console.warn('[daemon] Failed to discover legacy daemon sessions', error)
       }
     }
+    return { generations, failedProtocols }
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
-    const adapter = opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined
-    const target = adapter ?? this.current
+    const target =
+      (opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined) ?? this.current
     const result = await target.spawn(opts)
     this.sessionAdapters.set(result.id, target)
     return result
   }
 
   supportsGitCredentialGuardHost(sessionId?: string): boolean {
-    const adapter = sessionId ? this.adapterFor(sessionId) : this.current
-    return adapter.supportsGitCredentialGuardHost()
+    return (sessionId ? this.adapterFor(sessionId) : this.current).supportsGitCredentialGuardHost()
+  }
+
+  getPtyBindingProvenance(id: string): TerminalBindingProvenance {
+    return this.adapterFor(id).getPtyBindingProvenance()
+  }
+
+  forgetPtyRouteAfterVerifiedStop(id: string, expected?: TerminalBindingProvenance): boolean {
+    const routed = this.sessionAdapters.get(id)
+    if (
+      routed &&
+      expected &&
+      JSON.stringify(routed.getPtyBindingProvenance()) !== JSON.stringify(expected)
+    ) {
+      return false
+    }
+    this.sessionAdapters.delete(id)
+    return true
+  }
+
+  async listProcessesForBinding(provenance: TerminalBindingProvenance): Promise<PtyProcessInfo[]> {
+    const adapter = this.adapterForBinding(provenance)
+    const processes = await adapter.listProcesses()
+    for (const process of processes) {
+      this.sessionAdapters.set(process.id, adapter)
+    }
+    return processes
   }
 
   async attach(id: string): Promise<void> {
@@ -101,15 +148,8 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
     await this.adapterFor(id).shutdown(id, opts)
-    // Why: sleep passes keepHistory=true and re-spawns against the same
-    // sessionId on wake. If we delete the routing entry here, adapterFor()
-    // falls back to `this.current` on wake — for a session that originally
-    // lived on a legacy adapter (different protocolVersion), the wake-side
-    // createOrAttach lands on the wrong adapter and creates a fresh session,
-    // losing the cold-restore from the legacy adapter's history dir.
-    if (!opts.keepHistory) {
-      this.sessionAdapters.delete(id)
-    }
+    // Why: neither an exit event nor a successful shutdown RPC carries incarnation proof.
+    // The caller drops this route only after a healthy re-list confirms absence.
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {
@@ -182,9 +222,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.current.getProfiles()
   }
 
-  onData(
-    callback: (payload: { id: string; data: string; sequenceChars?: number }) => void
-  ): () => void {
+  onData(callback: (payload: PtyDataPayload) => void): () => void {
     this.dataListeners.push(callback)
     return () => {
       const idx = this.dataListeners.indexOf(callback)
@@ -209,12 +247,24 @@ export class DaemonPtyRouter implements IPtyProvider {
     return () => {}
   }
 
-  onExit(callback: (payload: { id: string; code: number }) => void): () => void {
+  onExit(callback: (payload: PtyExitPayload) => void): () => void {
     this.exitListeners.push(callback)
     return () => {
       const idx = this.exitListeners.indexOf(callback)
       if (idx !== -1) {
         this.exitListeners.splice(idx, 1)
+      }
+    }
+  }
+
+  onPtyBindingInventoryAvailable(
+    callback: (provenance: TerminalBindingProvenance) => void
+  ): () => void {
+    this.bindingInventoryListeners.push(callback)
+    return () => {
+      const index = this.bindingInventoryListeners.indexOf(callback)
+      if (index !== -1) {
+        this.bindingInventoryListeners.splice(index, 1)
       }
     }
   }
@@ -262,13 +312,8 @@ export class DaemonPtyRouter implements IPtyProvider {
     }
   }
 
-  // Why: restart swaps to a fresh router carrying the *same* legacy adapter
-  // instances. If we called dispose() on the outgoing router it would tear
-  // down those legacy adapters along with it. disposeRouterOnly() detaches
-  // only this router's subscriptions from the adapters — the adapters and
-  // their daemon connections keep running, and the new router re-subscribes.
-  // Without this, each restart leaked a router instance pinned by the legacy
-  // adapters' listener arrays (one pair per adapter per restart).
+  // Why: restart reuses legacy adapters, so detach only this router's listeners;
+  // disposing adapters would kill sessions, while retaining listeners leaks routers.
   disposeRouterOnly(): void {
     for (const unsubscribe of this.unsubscribers.splice(0)) {
       unsubscribe()
@@ -288,9 +333,7 @@ export class DaemonPtyRouter implements IPtyProvider {
   // (pre-#1323) the legacy list is set once at construction and never mutated,
   // so returning the internal array by reference is safe for the intended
   // read-only use.
-  getCurrentAdapter(): DaemonPtyAdapter {
-    return this.current
-  }
+  readonly getCurrentAdapter = (): DaemonPtyAdapter => this.current
 
   getLegacyAdapters(): readonly DaemonPtyAdapter[] {
     return this.legacy
@@ -302,6 +345,19 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   private adapterFor(sessionId: string): DaemonPtyAdapter {
     return this.sessionAdapters.get(sessionId) ?? this.current
+  }
+
+  private adapterForBinding(provenance: TerminalBindingProvenance): DaemonPtyAdapter {
+    if (provenance.kind !== 'local-daemon') {
+      throw new Error('Binding is not owned by a daemon adapter')
+    }
+    const adapter = this.allAdapters().find(
+      (candidate) => candidate.protocolVersion === provenance.protocolVersion
+    )
+    if (!adapter) {
+      throw new Error(`Daemon protocol ${provenance.protocolVersion} is not routed`)
+    }
+    return adapter
   }
 
   private allAdapters(): DaemonPtyAdapter[] {

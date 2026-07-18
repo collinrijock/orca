@@ -24,6 +24,8 @@ import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
 import type { GitProviderStatusOptions } from './git-provider-status-options'
+import type { PtyExitPayload } from './pty-exit-payload'
+import type { PtyBindingProvider } from './pty-binding-provider'
 
 // ─── PTY Provider ───────────────────────────────────────────────────
 
@@ -164,7 +166,9 @@ export type PtyProcessInfo = {
   terminalHandle?: string
 }
 
-export type IPtyProvider = {
+export type PtyDataPayload = { id: string; data: string; sequenceChars?: number }
+
+export type IPtyProvider = PtyBindingProvider<PtyProcessInfo> & {
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
   /** Whether this spawn target can append the Git guard after its final env merge. */
   supportsGitCredentialGuardHost?: (sessionId?: string) => boolean
@@ -232,11 +236,9 @@ export type IPtyProvider = {
   listProcesses(): Promise<PtyProcessInfo[]>
   getDefaultShell(): Promise<string>
   getProfiles(): Promise<{ name: string; path: string }[]>
-  onData(
-    callback: (payload: { id: string; data: string; sequenceChars?: number }) => void
-  ): () => void
+  onData(callback: (payload: PtyDataPayload) => void): () => void
   onReplay(callback: (payload: { id: string; data: string }) => void): () => void
-  onExit(callback: (payload: { id: string; code: number }) => void): () => void
+  onExit(callback: (payload: PtyExitPayload) => void): () => void
 }
 
 // ─── Filesystem Provider ────────────────────────────────────────────

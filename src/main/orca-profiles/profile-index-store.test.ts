@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
@@ -8,6 +16,7 @@ import {
   ORCA_PROFILE_INDEX_SCHEMA_VERSION,
   type OrcaProfileIndex
 } from '../../shared/orca-profiles'
+import { parseValidDaemonOwnershipCommit } from '../daemon/daemon-ownership-commit'
 
 const testState = { dir: '' }
 
@@ -78,6 +87,17 @@ describe('profile index store', () => {
     })
   })
 
+  it('commits ownership authority before initializing a fresh active profile', async () => {
+    const { ensureActiveOrcaProfile, getOrcaProfileIndexPath } = await loadProfileIndexStore()
+
+    const activeProfile = ensureActiveOrcaProfile()
+    const state = readJson(activeProfile.dataFile)
+    const index = readJson(getOrcaProfileIndexPath()) as OrcaProfileIndex
+
+    expect(parseValidDaemonOwnershipCommit(state)).not.toBeNull()
+    expect(index.profiles.find(({ id }) => id === activeProfile.profile.id)?.initialized).toBe(true)
+  })
+
   it('uses an existing active profile data file without overwriting it from legacy state', async () => {
     const profileId = 'work-profile'
     const profileDirectory = join(testState.dir, 'profiles', profileId)
@@ -126,6 +146,7 @@ describe('profile index store', () => {
     const created = createLocalOrcaProfile({ name: ' Work ' })
 
     expect(created.profile.name).toBe('Work')
+    expect(created.profile.initialized).toBe(false)
     expect(created.profile.id).toMatch(/^local-/)
     expect(created.activeProfileId).toBe(DEFAULT_LOCAL_ORCA_PROFILE_ID)
     expect(created.profiles.map((profile) => profile.id)).toContain(created.profile.id)
@@ -133,6 +154,35 @@ describe('profile index store', () => {
     expect(getOrcaProfileListState().profiles.map((profile) => profile.id)).toContain(
       created.profile.id
     )
+  })
+
+  it('does not leave an unindexed profile directory when the index write fails', async () => {
+    const store = await loadProfileIndexStore()
+    store.ensureActiveOrcaProfile()
+    const profileRoot = join(testState.dir, 'profiles')
+    const before = readdirSync(profileRoot).sort()
+    mkdirSync(`${store.getOrcaProfileIndexPath()}.tmp`)
+
+    expect(() => store.createLocalOrcaProfile({ name: 'Work' })).toThrow()
+
+    expect(readdirSync(profileRoot).sort()).toEqual(before)
+  })
+
+  it('writes a committed telemetry seed for a new inactive profile', async () => {
+    const store = await loadProfileIndexStore()
+    const created = store.createLocalOrcaProfile({ name: 'Work' })
+
+    store.seedNewOrcaProfileTelemetryConsent(created.profile.id, {
+      optedIn: false,
+      installId: '00000000-0000-4000-8000-000000000001',
+      existedBeforeTelemetryRelease: false
+    })
+
+    const state = readJson(store.getOrcaProfileDataFile(created.profile.id)) as {
+      settings?: { telemetry?: { optedIn: boolean | null } }
+    }
+    expect(state.settings?.telemetry?.optedIn).toBe(false)
+    expect(parseValidDaemonOwnershipCommit(state)).not.toBeNull()
   })
 
   it('switches the active profile and updates last-opened metadata', async () => {

@@ -43,6 +43,12 @@ import { SshConnectionStore } from './ssh/ssh-connection-store'
 import { setSourceControlActionDefault } from '../shared/source-control-ai-actions'
 import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { closeTerminalTabInWorkspaceSession } from '../shared/workspace-session-terminal-tab-close'
+import { PROTOCOL_VERSION } from './daemon/types'
+import {
+  parseValidDaemonOwnershipCommit,
+  withDaemonOwnershipCommit
+} from './daemon/daemon-ownership-commit'
+import { backfillDaemonOwnershipCommit } from './daemon/daemon-ownership-commit-migration'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
@@ -5320,7 +5326,8 @@ describe('Store', () => {
       worktreeId: 'wt1',
       tabId: 'tab1',
       leafId: TEST_LEAF_1,
-      ptyId: 'daemon-pty'
+      ptyId: 'daemon-pty',
+      provenance: { kind: 'local-fallback' as const }
     }
     store.persistPtyBinding(binding)
     const inoBefore = statSync(dataFile()).ino
@@ -6037,7 +6044,40 @@ describe('Store', () => {
 
     const reloaded = await createStore()
     expect(reloaded.getUI().browserKagiSessionLink).toBe(sessionLink)
+    reloaded.updateUI({ browserDefaultZoomLevel: 1.25 })
+    reloaded.flush()
+    const resaved = readDataFile() as PersistedState
+    expect(resaved.daemonOwnershipCommitInvalid).toBeUndefined()
+    expect(parseValidDaemonOwnershipCommit(resaved)).not.toBeNull()
   })
+
+  it.each(['committed', 'backfilled'] as const)(
+    'keeps semantically unverifiable %s ownership authority fail-closed after normalization',
+    async (authority) => {
+      const state = {
+        ...getDefaultPersistedState('/Users/tester'),
+        daemonSessionOwnership: {
+          schemaVersion: 2,
+          claims: [],
+          legacyProtectedSessionIds: [],
+          bindingProvenanceByPtyId: {},
+          projectTransferLineage: []
+        }
+      }
+      writeDataFile(authority === 'committed' ? withDaemonOwnershipCommit(state, 1) : state)
+      if (authority === 'backfilled') {
+        backfillDaemonOwnershipCommit(dataFile())
+      }
+
+      const store = await createStore()
+      store.flushOrThrow()
+
+      const resaved = readDataFile() as PersistedState
+      expect(resaved.daemonSessionOwnership).toBeUndefined()
+      expect(resaved.daemonOwnershipCommitInvalid).toBe(true)
+      expect(parseValidDaemonOwnershipCommit(resaved)).not.toBeNull()
+    }
+  )
 
   it('keeps plaintext Kagi session links readable for migration from older builds', async () => {
     const sessionLink = 'https://kagi.com/search?token=secret'
@@ -7980,7 +8020,8 @@ describe('Store', () => {
       worktreeId: 'wt1',
       tabId: 'tab1',
       leafId: TEST_LEAF_1,
-      ptyId: 'daemon-pty'
+      ptyId: 'daemon-pty',
+      provenance: { kind: 'local-fallback' }
     })
 
     const session = store.getWorkspaceSession()
@@ -7991,6 +8032,60 @@ describe('Store', () => {
       expandedLeafId: null,
       ptyIdsByLeafId: { [TEST_LEAF_1]: 'daemon-pty' }
     })
+  })
+
+  it('retains an exact sleep route after verified stop and converts it back on wake', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      }
+    })
+    const binding = {
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_1,
+      ptyId: 'sleeping-daemon-pty',
+      provenance: { kind: 'local-daemon' as const, protocolVersion: PROTOCOL_VERSION }
+    }
+    store.persistPtyBinding(binding)
+
+    expect(store.markExistingDaemonSessionSleepRoute(binding.ptyId)).toBe(true)
+    expect(
+      store.removePtyBindingOwnershipAfterVerifiedStop({
+        sessionId: binding.ptyId,
+        provenance: binding.provenance
+      })
+    ).toBe(false)
+    expect(store.getDaemonSessionOwnership()?.claims).toEqual([
+      expect.objectContaining({
+        sessionId: binding.ptyId,
+        ownerKind: 'sleep-route',
+        ownerId: makePaneKey('tab1', TEST_LEAF_1),
+        protocolVersion: PROTOCOL_VERSION
+      })
+    ])
+
+    store.persistPtyBinding(binding)
+    expect(store.getDaemonSessionOwnership()?.claims).toEqual([
+      expect.objectContaining({
+        sessionId: binding.ptyId,
+        ownerKind: 'pane',
+        protocolVersion: PROTOCOL_VERSION
+      })
+    ])
   })
 
   it('adds a missing split leaf to the durable root when a new pane spawns before layout debounce', async () => {
@@ -8027,7 +8122,8 @@ describe('Store', () => {
       worktreeId: 'wt1',
       tabId: 'tab1',
       leafId: TEST_LEAF_2,
-      ptyId: 'pty-2'
+      ptyId: 'pty-2',
+      provenance: { kind: 'local-fallback' }
     })
 
     const layout = store.getWorkspaceSession().terminalLayoutsByTabId.tab1
@@ -8083,7 +8179,8 @@ describe('Store', () => {
       worktreeId: 'wt1',
       tabId: 'tab1',
       leafId: TEST_LEAF_1,
-      ptyId: 'daemon-pty'
+      ptyId: 'daemon-pty',
+      provenance: { kind: 'local-fallback' }
     })
 
     store.setWorkspaceSession({

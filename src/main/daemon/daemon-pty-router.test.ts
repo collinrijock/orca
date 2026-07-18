@@ -8,6 +8,7 @@ type AdapterMock = DaemonPtyAdapter & {
   emitData: (id: string, data: string, sequenceChars?: number) => void
   emitBackground: (event: PtyBackgroundStreamEvent) => void
   emitExit: (id: string, code: number) => void
+  emitInventory: () => void
 }
 
 const LARGE_RECONCILE_SESSION_COUNT = 150_000
@@ -31,8 +32,13 @@ function createAdapter(
     []
   const backgroundListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
   const exitListeners: ((payload: { id: string; code: number }) => void)[] = []
+  const inventoryListeners: ((payload: {
+    kind: 'local-daemon'
+    protocolVersion: number
+  }) => void)[] = []
   return {
     protocolVersion,
+    getPtyBindingProvenance: vi.fn(() => ({ kind: 'local-daemon', protocolVersion })),
     supportsGitCredentialGuardHost: () =>
       protocolVersion >= GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
     canProvideAuthoritativeBufferSnapshot: () => protocolVersion >= 20,
@@ -103,11 +109,33 @@ function createAdapter(
         }
       }
     }),
+    onPtyBindingInventoryAvailable: vi.fn((callback) => {
+      inventoryListeners.push(callback)
+      return () => {
+        const idx = inventoryListeners.indexOf(callback)
+        if (idx !== -1) {
+          inventoryListeners.splice(idx, 1)
+        }
+      }
+    }),
     ackColdRestore: vi.fn(),
     clearTombstone: vi.fn(),
     reconcileOnStartup: vi.fn(async () => reconcileResult ?? { alive: sessions, killed: [] }),
     dispose: vi.fn(),
     disconnectOnly: vi.fn(async () => {}),
+    listSessions: vi.fn(async () =>
+      sessions.map((sessionId) => ({
+        sessionId,
+        state: 'running',
+        shellState: 'ready',
+        isAlive: true,
+        pid: 123,
+        cwd: '',
+        cols: 80,
+        rows: 24,
+        createdAt: 1
+      }))
+    ),
     emitData: (id: string, data: string, sequenceChars?: number) => {
       for (const listener of dataListeners) {
         listener({ id, data, ...(sequenceChars === undefined ? {} : { sequenceChars }) })
@@ -123,11 +151,36 @@ function createAdapter(
         listener({ id, code })
       }
     },
+    emitInventory: () => {
+      for (const listener of inventoryListeners) {
+        listener({ kind: 'local-daemon', protocolVersion })
+      }
+    },
     _writes: writes
   } as unknown as AdapterMock
 }
 
 describe('DaemonPtyRouter', () => {
+  it('forwards successful physical inventory events until router disposal', () => {
+    const current = createAdapter('current', [], undefined, 23)
+    const legacy = createAdapter('legacy', [], undefined, 22)
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    const listener = vi.fn()
+    router.onPtyBindingInventoryAvailable(listener)
+
+    current.emitInventory()
+    legacy.emitInventory()
+
+    expect(listener.mock.calls).toEqual([
+      [{ kind: 'local-daemon', protocolVersion: 23 }],
+      [{ kind: 'local-daemon', protocolVersion: 22 }]
+    ])
+
+    router.disposeRouterOnly()
+    current.emitInventory()
+    expect(listener).toHaveBeenCalledTimes(2)
+  })
+
   it('reports snapshot capability for the adapter that owns each session', async () => {
     const current = createAdapter('current', ['current-session'], undefined, 22)
     const legacy = createAdapter('legacy', ['legacy-session'], undefined, 19)
@@ -238,7 +291,7 @@ describe('DaemonPtyRouter', () => {
     })
   })
 
-  it('drops a legacy mapping after the routed session exits', async () => {
+  it('drops a legacy mapping only after verified reconciliation', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy', ['legacy-session'])
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
@@ -246,6 +299,10 @@ describe('DaemonPtyRouter', () => {
     await router.discoverLegacySessions()
 
     legacy.emitExit('legacy-session', 0)
+    await router.spawn({ sessionId: 'legacy-session', cols: 80, rows: 24 })
+    expect(legacy.spawn).toHaveBeenCalledWith({ sessionId: 'legacy-session', cols: 80, rows: 24 })
+
+    router.forgetPtyRouteAfterVerifiedStop('legacy-session')
     await router.spawn({ sessionId: 'legacy-session', cols: 80, rows: 24 })
 
     expect(current.spawn).toHaveBeenCalledWith({ sessionId: 'legacy-session', cols: 80, rows: 24 })

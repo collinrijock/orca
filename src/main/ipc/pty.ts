@@ -57,7 +57,12 @@ import { detectPiAgentKindFromCommand, type PiAgentKind } from '../../shared/pi-
 import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import {
+  PtyNaturalExitReconciliation,
+  type PendingNaturalPtyExit
+} from '../providers/pty-natural-exit-reconciliation'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { TerminalBindingProvenance } from '../../shared/daemon-session-ownership'
 import {
   SSH_SESSION_EXPIRED_ERROR,
   isSshPtyIdentityMismatchError,
@@ -167,6 +172,7 @@ import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtim
 // SSH providers will be registered here in Phase 1.
 
 let localProvider: IPtyProvider = new LocalPtyProvider()
+const naturalPtyExitReconciliation = new PtyNaturalExitReconciliation()
 type FreshLocalFallbackProvider = IPtyProvider & {
   routesFreshSpawnsToLocalProvider?: true
 }
@@ -411,6 +417,17 @@ function getProviderForPty(ptyId: string): IPtyProvider {
   return getProvider(connectionId)
 }
 
+function getPtyBindingProvenance(
+  provider: IPtyProvider,
+  ptyId: string,
+  connectionId: string | null | undefined
+): TerminalBindingProvenance {
+  if (connectionId) {
+    return { kind: 'remote', providerId: connectionId }
+  }
+  return provider.getPtyBindingProvenance?.(ptyId) ?? { kind: 'local-fallback' }
+}
+
 function hasPtyProviderForInspection(ptyId: string): boolean {
   // Why: process inspection is background polling; disconnected SSH hosts should
   // read as idle instead of surfacing repeated IPC errors.
@@ -503,16 +520,25 @@ function delay(ms: number): Promise<void> {
   })
 }
 
-async function isProviderPtyLive(provider: IPtyProvider, ptyId: string): Promise<boolean> {
-  return (await provider.listProcesses()).some((session) => session.id === ptyId)
+async function isProviderPtyLive(
+  provider: IPtyProvider,
+  ptyId: string,
+  provenance?: TerminalBindingProvenance
+): Promise<boolean> {
+  const processes =
+    provenance && provider.listProcessesForBinding
+      ? await provider.listProcessesForBinding(provenance)
+      : await provider.listProcesses()
+  return processes.some((session) => session.id === ptyId)
 }
 
 async function verifyPtyStopped(
   provider: IPtyProvider,
   ptyId: string,
-  opts: { keepHistory?: boolean } | undefined
+  opts: { keepHistory?: boolean } | undefined,
+  provenance?: TerminalBindingProvenance
 ): Promise<boolean> {
-  if (await isProviderPtyLive(provider, ptyId)) {
+  if (await isProviderPtyLive(provider, ptyId, provenance)) {
     return false
   }
   if (!opts?.keepHistory) {
@@ -521,7 +547,7 @@ async function verifyPtyStopped(
   const deadline = Date.now() + KEEP_HISTORY_STOP_SETTLE_MS
   while (Date.now() < deadline) {
     await delay(KEEP_HISTORY_STOP_POLL_MS)
-    if (await isProviderPtyLive(provider, ptyId)) {
+    if (await isProviderPtyLive(provider, ptyId, provenance)) {
       return false
     }
   }
@@ -539,6 +565,56 @@ function finishPtyShutdown(
   }
   ptyOwnership.delete(id)
   markClaudePtyExited(id)
+}
+
+function markLocalDaemonStopIntent(
+  provider: IPtyProvider,
+  id: string,
+  store: Store | undefined,
+  keepHistory: boolean
+): void {
+  if (provider.getPtyBindingProvenance?.(id).kind === 'local-daemon') {
+    if (keepHistory) {
+      // Why: sleep stops the process but intentionally keeps the exact route for cold wake.
+      store?.markExistingDaemonSessionSleepRoute(id)
+    } else {
+      // Why: UI topology can disappear before an async provider stop settles. The durable pending
+      // claim is the only ownership evidence left if shutdown or its verification fails.
+      store?.markExistingDaemonSessionRetirementPending(id)
+    }
+  }
+}
+
+function finishVerifiedPtyBindingStop(
+  provider: IPtyProvider,
+  id: string,
+  store: Store | undefined,
+  expectedProvenance: TerminalBindingProvenance | undefined
+): boolean {
+  if (!expectedProvenance) {
+    return false
+  }
+  const currentProvenance = provider.getPtyBindingProvenance?.(id)
+  if (
+    provider.hasPty?.(id) === true ||
+    !currentProvenance ||
+    JSON.stringify(currentProvenance) !== JSON.stringify(expectedProvenance)
+  ) {
+    // Why: a replacement can commit between the asynchronous absence listing and cleanup.
+    // Its live route/provenance is the final single-threaded fence against erasing that claim.
+    return false
+  }
+  const mayForgetRoute =
+    store?.removePtyBindingOwnershipAfterVerifiedStop({
+      sessionId: id,
+      provenance: expectedProvenance
+    }) ?? true
+  if (mayForgetRoute) {
+    if (provider.forgetPtyRouteAfterVerifiedStop?.(id, expectedProvenance) === false) {
+      return false
+    }
+  }
+  return true
 }
 
 // ─── Host PTY env assembly ──────────────────────────────────────────
@@ -1261,6 +1337,7 @@ export function setPtyOwnership(id: string, connectionId: string | null): void {
 let localDataUnsub: (() => void) | null = null
 let localExitUnsub: (() => void) | null = null
 let localBackgroundStreamUnsub: (() => void) | null = null
+let localBindingInventoryUnsub: (() => void) | null = null
 let didFinishLoadHandler: (() => void) | null = null
 let didFinishLoadWebContents: WebContents | null = null
 let rendererLifecycleResetWebContents: WebContents | null = null
@@ -1295,6 +1372,7 @@ let rebindProviderListeners: (() => void) | null = null
 
 export function rebindLocalProviderListeners(): void {
   rebindProviderListeners?.()
+  naturalPtyExitReconciliation.wakeAll()
 }
 
 export type PtyRendererDeliveryDebugSnapshot = {
@@ -1497,9 +1575,11 @@ export function unbindLocalProviderListeners(): void {
   localDataUnsub?.()
   localExitUnsub?.()
   localBackgroundStreamUnsub?.()
+  localBindingInventoryUnsub?.()
   localDataUnsub = null
   localExitUnsub = null
   localBackgroundStreamUnsub = null
+  localBindingInventoryUnsub = null
 }
 
 // ─── IPC Registration ───────────────────────────────────────────────
@@ -2621,6 +2701,79 @@ export function registerPtyHandlers(
     return providerExitObserved
   }
 
+  const deliverConfirmedNaturalExit = (exit: PendingNaturalPtyExit): void => {
+    clearProviderPtyState(exit.id)
+    ptyOwnership.delete(exit.id)
+    markClaudePtyExited(exit.id)
+    runtime?.onPtyExit(exit.id, exit.code)
+    sendPtyExitToRenderer(exit)
+  }
+
+  const beginExplicitPtyStopFence = (
+    id: string,
+    provenance: TerminalBindingProvenance | undefined
+  ): void => {
+    if (provenance?.kind === 'local-daemon') {
+      naturalPtyExitReconciliation.beginExplicitStop(id, provenance)
+    }
+  }
+
+  const releaseExplicitPtyStopFence = (
+    id: string,
+    provenance: TerminalBindingProvenance | undefined
+  ): void => {
+    if (provenance?.kind === 'local-daemon') {
+      naturalPtyExitReconciliation.releaseExplicitStop(id, provenance)
+    }
+  }
+
+  const finishExplicitPtyStop = (
+    provider: IPtyProvider,
+    id: string,
+    connectionId: string | null | undefined,
+    provenance: TerminalBindingProvenance | undefined,
+    providerExitObserved: boolean
+  ): boolean => {
+    if (provenance?.kind === 'local-daemon') {
+      let didFinish: boolean
+      try {
+        didFinish = finishVerifiedPtyBindingStop(provider, id, store, provenance)
+      } catch (error) {
+        releaseExplicitPtyStopFence(id, provenance)
+        throw error
+      }
+      if (!didFinish) {
+        releaseExplicitPtyStopFence(id, provenance)
+        return false
+      }
+      const naturalExit = naturalPtyExitReconciliation.completeExplicitStop(id, provenance)
+      finishPtyShutdown(id, connectionId, store)
+      if (naturalExit) {
+        deliverConfirmedNaturalExit(naturalExit)
+      } else {
+        runtime?.onPtyExit(id, -1)
+        rememberSyntheticKillExit(id)
+        sendPtyExitToRenderer({ id, code: -1 })
+      }
+      return true
+    }
+
+    finishPtyShutdown(id, connectionId, store)
+    if (!providerExitObserved) {
+      runtime?.onPtyExit(id, -1)
+      rememberSyntheticKillExit(id)
+      sendPtyExitToRenderer({ id, code: -1 })
+    }
+    return true
+  }
+
+  naturalPtyExitReconciliation.setSink({
+    getProvider: getLocalPtyProvider,
+    finishVerifiedStop: (provider, exit) =>
+      finishVerifiedPtyBindingStop(provider, exit.id, store, exit.provenance),
+    deliverConfirmedExit: deliverConfirmedNaturalExit
+  })
+
   // Why: extracted so the "Restart daemon" flow can rebind against the fresh
   // adapter after replaceDaemonProvider runs. Both the startup registration
   // and the post-restart rebind go through the same code path — no risk of
@@ -2629,6 +2782,12 @@ export function registerPtyHandlers(
     localDataUnsub?.()
     localExitUnsub?.()
     localBackgroundStreamUnsub?.()
+    localBindingInventoryUnsub?.()
+
+    localBindingInventoryUnsub =
+      localProvider.onPtyBindingInventoryAvailable?.((provenance) => {
+        naturalPtyExitReconciliation.notifyInventoryAvailable(provenance)
+      }) ?? null
 
     // Keep-tail thinning facts from the daemon, in byte order with onData.
     // The marker flips scan authority for the four transient-fact scanners;
@@ -2785,10 +2944,30 @@ export function registerPtyHandlers(
         return
       }
       if (!isLocalProvider) {
-        clearProviderPtyState(payload.id)
-        ptyOwnership.delete(payload.id)
-        markClaudePtyExited(payload.id)
-        runtime?.onPtyExit(payload.id, payload.code)
+        if (!payload.provenance) {
+          // Providers without physical provenance predate daemon generation routing;
+          // retain their synchronous exit contract instead of treating them as local-daemon evidence.
+          clearProviderPtyState(payload.id)
+          ptyOwnership.delete(payload.id)
+          markClaudePtyExited(payload.id)
+          runtime?.onPtyExit(payload.id, payload.code)
+          sendPtyExitToRenderer(payload)
+          return
+        }
+        const exit: PendingNaturalPtyExit = {
+          id: payload.id,
+          code: payload.code,
+          provenance: payload.provenance
+        }
+        if (payload.verifiedAbsent) {
+          naturalPtyExitReconciliation.cancel(payload.id, payload.provenance)
+          if (finishVerifiedPtyBindingStop(localProvider, payload.id, store, payload.provenance)) {
+            deliverConfirmedNaturalExit(exit)
+          }
+        } else {
+          naturalPtyExitReconciliation.enqueue(exit)
+        }
+        return
       }
       sendPtyExitToRenderer(payload)
     })
@@ -3297,6 +3476,7 @@ export function registerPtyHandlers(
               tabId: hostSessionBinding.tabId,
               leafId: hostSessionBinding.leafId,
               ptyId: result.id,
+              provenance: getPtyBindingProvenance(provider, result.id, args.connectionId),
               ...(cwd ? { startupCwd: cwd } : {})
             })
           } catch (err) {
@@ -3426,30 +3606,54 @@ export function registerPtyHandlers(
           }
           return false
         }
-        // Why: the controller is synchronous, but ownership must remain until
-        // asynchronous shutdown proves whether the provider emitted an exit.
+        const bindingProvenance = provider.getPtyBindingProvenance?.(ptyId)
+        // Why: shutdown() is async but the controller is sync. Keep ownership
+        // fenced until the exact daemon session is verified absent.
+        markLocalDaemonStopIntent(provider, ptyId, store, false)
+        beginExplicitPtyStopFence(ptyId, bindingProvenance)
         void shutdownProviderAndDetectExit(provider, ptyId, { immediate: false })
-          .then((providerExitObserved) => {
-            finishPtyShutdown(ptyId, connectionId, store)
-            if (!providerExitObserved) {
-              runtime?.onPtyExit(ptyId, -1)
-              rememberSyntheticKillExit(ptyId)
-              sendPtyExitToRenderer({ id: ptyId, code: -1 })
+          .then(async (providerExitObserved) => {
+            let verifiedStopped = false
+            try {
+              verifiedStopped = await verifyPtyStopped(
+                provider,
+                ptyId,
+                undefined,
+                bindingProvenance
+              )
+            } catch {
+              // Unknown verification retains the retirement-pending keep claim.
             }
-          })
-          .catch((err) => {
-            if (isPtyAlreadyGoneError(err)) {
-              finishPtyShutdown(ptyId, connectionId, store)
-              runtime?.onPtyExit(ptyId, -1)
-              rememberSyntheticKillExit(ptyId)
-              sendPtyExitToRenderer({ id: ptyId, code: -1 })
+            if (bindingProvenance?.kind === 'local-daemon' && !verifiedStopped) {
+              releaseExplicitPtyStopFence(ptyId, bindingProvenance)
               return
             }
+            finishExplicitPtyStop(
+              provider,
+              ptyId,
+              connectionId,
+              bindingProvenance,
+              providerExitObserved
+            )
+          })
+          .catch(async (err) => {
+            if (isPtyAlreadyGoneError(err)) {
+              try {
+                if (await verifyPtyStopped(provider, ptyId, undefined, bindingProvenance)) {
+                  finishExplicitPtyStop(provider, ptyId, connectionId, bindingProvenance, false)
+                } else {
+                  releaseExplicitPtyStopFence(ptyId, bindingProvenance)
+                }
+              } catch {
+                releaseExplicitPtyStopFence(ptyId, bindingProvenance)
+                // Unknown verification retains both the route and durable pending claim.
+              }
+              return
+            }
+            releaseExplicitPtyStopFence(ptyId, bindingProvenance)
             console.warn(
               `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
             )
-            // Why: close runtime tails without clearing provider ownership, so
-            // a retry can still target a PTY that survived the failed shutdown.
             runtime?.onPtyExit(ptyId, -1)
           })
         return true
@@ -3493,7 +3697,10 @@ export function registerPtyHandlers(
         }
         return false
       }
+      const bindingProvenance = provider.getPtyBindingProvenance?.(ptyId)
       let providerExitObserved = false
+      markLocalDaemonStopIntent(provider, ptyId, store, opts?.keepHistory === true)
+      beginExplicitPtyStopFence(ptyId, bindingProvenance)
       try {
         providerExitObserved = await shutdownProviderAndDetectExit(provider, ptyId, {
           immediate: true,
@@ -3501,6 +3708,7 @@ export function registerPtyHandlers(
         })
       } catch (err) {
         if (!isPtyAlreadyGoneError(err)) {
+          releaseExplicitPtyStopFence(ptyId, bindingProvenance)
           console.warn(
             `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
           )
@@ -3508,10 +3716,12 @@ export function registerPtyHandlers(
         }
       }
       try {
-        if (!(await verifyPtyStopped(provider, ptyId, opts))) {
+        if (!(await verifyPtyStopped(provider, ptyId, opts, bindingProvenance))) {
+          releaseExplicitPtyStopFence(ptyId, bindingProvenance)
           return false
         }
       } catch (err) {
+        releaseExplicitPtyStopFence(ptyId, bindingProvenance)
         console.warn(
           `[pty] Failed to verify PTY ${ptyId} stopped: ${
             err instanceof Error ? err.message : String(err)
@@ -3519,11 +3729,16 @@ export function registerPtyHandlers(
         )
         return false
       }
-      finishPtyShutdown(ptyId, connectionId, store)
-      if (!providerExitObserved) {
-        runtime?.onPtyExit(ptyId, -1)
-        rememberSyntheticKillExit(ptyId)
-        sendPtyExitToRenderer({ id: ptyId, code: -1 })
+      if (
+        !finishExplicitPtyStop(
+          provider,
+          ptyId,
+          connectionId,
+          bindingProvenance,
+          providerExitObserved
+        )
+      ) {
+        return false
       }
       return true
     },
@@ -4325,13 +4540,12 @@ export function registerPtyHandlers(
         }
         ptySizes.set(result.id, { cols: args.cols, rows: args.rows })
         // Why: closes the SIGKILL-between-spawn-and-persist race (Issue #217)
-        // for local daemon PTYs and the equivalent remote-relay race for SSH.
+        // for every physical provider; provenance distinguishes daemon, fallback, and SSH routes.
         // The renderer's debounced session writer runs in parallel for every
         // other field; patch the load-bearing (tab.ptyId, ptyIdsByLeafId)
         // binding synchronously so a force-quit in the ~450 ms debounce window
         // cannot orphan either daemon history or a remote relay PTY lease.
         if (
-          (isDaemonHostSpawn || args.connectionId) &&
           store &&
           typeof args.worktreeId === 'string' &&
           typeof args.tabId === 'string' &&
@@ -4343,6 +4557,7 @@ export function registerPtyHandlers(
               tabId: args.tabId,
               leafId: validatedLeafId,
               ptyId: result.id,
+              provenance: getPtyBindingProvenance(provider, result.id, args.connectionId),
               ...(cwd ? { startupCwd: cwd } : {})
             })
           } catch (err) {
@@ -5145,7 +5360,10 @@ export function registerPtyHandlers(
       return
     }
     const shutdownProvider = provider ?? getProviderForPty(args.id)
+    const bindingProvenance = shutdownProvider.getPtyBindingProvenance?.(args.id)
     let providerExitObserved = false
+    markLocalDaemonStopIntent(shutdownProvider, args.id, store, args.keepHistory === true)
+    beginExplicitPtyStopFence(args.id, bindingProvenance)
     try {
       providerExitObserved = await shutdownProviderAndDetectExit(shutdownProvider, args.id, {
         immediate: true,
@@ -5153,6 +5371,7 @@ export function registerPtyHandlers(
       })
     } catch (err) {
       if (!isPtyAlreadyGoneError(err)) {
+        releaseExplicitPtyStopFence(args.id, bindingProvenance)
         // Why: a failed SSH shutdown can leave the remote process alive in
         // the relay grace window; daemon failures have the same risk locally.
         // Keep ownership/lease state so the user can retry.
@@ -5160,13 +5379,30 @@ export function registerPtyHandlers(
       }
       /* session already dead — cleanup below handles the rest */
     }
-    // Why: some shutdown paths do not emit onExit through the provider listener.
-    // Explicit cleanup is idempotent and covers already-dead PTYs.
-    finishPtyShutdown(args.id, connectionId, store)
-    if (!providerExitObserved) {
-      runtime?.onPtyExit(args.id, -1)
-      rememberSyntheticKillExit(args.id)
-      sendPtyExitToRenderer({ id: args.id, code: -1 })
+    let verifiedStopped = true
+    try {
+      if (bindingProvenance?.kind === 'local-daemon') {
+        verifiedStopped = await verifyPtyStopped(shutdownProvider, args.id, args, bindingProvenance)
+      }
+    } catch (error) {
+      releaseExplicitPtyStopFence(args.id, bindingProvenance)
+      throw error
+    }
+    if (!verifiedStopped) {
+      releaseExplicitPtyStopFence(args.id, bindingProvenance)
+      // Why: a completed shutdown RPC is not proof when the same route still lists the session.
+      throw new Error(`PTY ${args.id} remained live after shutdown`)
+    }
+    if (
+      !finishExplicitPtyStop(
+        shutdownProvider,
+        args.id,
+        connectionId,
+        bindingProvenance,
+        providerExitObserved
+      )
+    ) {
+      throw new Error(`PTY ${args.id} was replaced while shutdown was being verified`)
     }
   })
 

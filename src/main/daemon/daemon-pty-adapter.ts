@@ -28,10 +28,12 @@ import type {
   PtySpawnOptions,
   PtySpawnResult
 } from '../providers/types'
+import type { PtyExitPayload } from '../providers/pty-exit-payload'
 import { isShellProcess } from '../../shared/agent-detection'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import type { TerminalBindingProvenance } from '../../shared/daemon-session-ownership'
 
 type ColdRestorePayload = {
   scrollback: string
@@ -95,13 +97,17 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // lock, each would fork its own daemon process. This promise coalesces
   // concurrent respawns so only the first caller forks; the rest await it.
   private respawnPromise: Promise<void> | null = null
+  private restartFenced = false
+  private createOrAttachInFlight = 0
+  private createOrAttachDrainWaiters = new Set<() => void>()
   private dataListeners: ((payload: {
     id: string
     data: string
     sequenceChars?: number
   }) => void)[] = []
-  private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
+  private exitListeners: ((payload: PtyExitPayload) => void)[] = []
   private backgroundStreamListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
+  private bindingInventoryListeners: ((provenance: TerminalBindingProvenance) => void)[] = []
   private removeEventListener: (() => void) | null = null
   private initialCwds = new Map<string, string>()
   // Why: React re-renders and StrictMode double-mounts can call createOrAttach
@@ -158,6 +164,21 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return this.protocolVersion >= GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
   }
 
+  getPtyBindingProvenance(): { kind: 'local-daemon'; protocolVersion: number } {
+    return { kind: 'local-daemon', protocolVersion: this.protocolVersion }
+  }
+
+  getDaemonIdentity(): ReturnType<DaemonClient['getDaemonIdentity']> {
+    return this.client.getDaemonIdentity()
+  }
+
+  async listProcessesForBinding(provenance: TerminalBindingProvenance): Promise<PtyProcessInfo[]> {
+    if (provenance.kind !== 'local-daemon' || provenance.protocolVersion !== this.protocolVersion) {
+      throw new Error('Daemon binding does not belong to this adapter')
+    }
+    return this.listProcesses()
+  }
+
   canProvideAuthoritativeBufferSnapshot(_id: string): boolean {
     return this.supportsAuthoritativeBufferSnapshots
   }
@@ -191,7 +212,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
-    return this.withDaemonRetry(() => this.doSpawn(opts))
+    return this.withCreateOrAttachAdmission(() => this.withDaemonRetry(() => this.doSpawn(opts)))
   }
 
   private async doSpawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
@@ -456,15 +477,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   async attach(id: string): Promise<void> {
-    await this.ensureConnected()
-    if (!this.supportsAuthoritativeBufferSnapshots) {
-      this.setPtyBackgrounded(id, false)
-    }
-
-    await this.client.request<CreateOrAttachResult>('createOrAttach', {
-      sessionId: id,
-      cols: 80,
-      rows: 24
+    await this.withCreateOrAttachAdmission(async () => {
+      await this.ensureConnected()
+      if (!this.supportsAuthoritativeBufferSnapshots) {
+        this.setPtyBackgrounded(id, false)
+      }
+      await this.client.request<CreateOrAttachResult>('createOrAttach', {
+        sessionId: id,
+        cols: 80,
+        rows: 24
+      })
     })
   }
 
@@ -789,7 +811,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   async listProcesses(): Promise<PtyProcessInfo[]> {
     await this.ensureConnected()
     const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
-    return result.sessions
+    const processes = result.sessions
       .filter((s) => s.isAlive)
       .map((s) => ({
         id: s.sessionId,
@@ -799,6 +821,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
         title: 'shell',
         ...(s.terminalHandle ? { terminalHandle: s.terminalHandle } : {})
       }))
+    this.emitBindingInventoryAvailable()
+    return processes
   }
 
   // Why: the Manage Sessions panel needs the full SessionInfo (pid, state,
@@ -808,11 +832,44 @@ export class DaemonPtyAdapter implements IPtyProvider {
   async listSessions(): Promise<SessionInfo[]> {
     await this.ensureConnected()
     const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
-    return result.sessions.filter((s) => s.isAlive)
+    const sessions = result.sessions.filter((s) => s.isAlive)
+    this.emitBindingInventoryAvailable()
+    return sessions
+  }
+
+  onPtyBindingInventoryAvailable(
+    callback: (provenance: TerminalBindingProvenance) => void
+  ): () => void {
+    this.bindingInventoryListeners.push(callback)
+    return () => {
+      const index = this.bindingInventoryListeners.indexOf(callback)
+      if (index !== -1) {
+        this.bindingInventoryListeners.splice(index, 1)
+      }
+    }
+  }
+
+  private emitBindingInventoryAvailable(): void {
+    const provenance = this.getPtyBindingProvenance()
+    for (const listener of this.bindingInventoryListeners.slice()) {
+      listener(provenance)
+    }
   }
 
   getActiveSessionIds(): string[] {
     return [...this.activeSessionIds]
+  }
+
+  async beginRestartFence(): Promise<string[]> {
+    this.restartFenced = true
+    if (this.createOrAttachInFlight > 0) {
+      await new Promise<void>((resolve) => this.createOrAttachDrainWaiters.add(resolve))
+    }
+    return this.getActiveSessionIds()
+  }
+
+  cancelRestartFence(): void {
+    this.restartFenced = false
   }
 
   // Why: used by the "Restart daemon" handler to synthesize pty:exit for every
@@ -822,7 +879,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // writes to a disposed adapter forever. Reuses the existing exitListeners
   // path so downstream cleanup (clearProviderPtyState, markClaudePtyExited,
   // renderer pty:exit) runs exactly as it does on natural exit.
-  fanoutSyntheticExits(code: number): void {
+  fanoutSyntheticExits(code: number, options?: { verifiedAbsent?: boolean }): void {
     const ids = [...this.activeSessionIds]
     this.activeSessionIds.clear()
     this.dirtySessionVersions.clear()
@@ -839,7 +896,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
       // bug that should surface loudly, not be silently swallowed.
       // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
       for (const listener of [...this.exitListeners]) {
-        listener({ id, code })
+        listener({
+          id,
+          code,
+          provenance: this.getPtyBindingProvenance(),
+          ...(options?.verifiedAbsent === true ? { verifiedAbsent: true } : {})
+        })
       }
     }
   }
@@ -888,7 +950,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return () => {}
   }
 
-  onExit(callback: (payload: { id: string; code: number }) => void): () => void {
+  onExit(callback: (payload: PtyExitPayload) => void): () => void {
     this.exitListeners.push(callback)
     return () => {
       const idx = this.exitListeners.indexOf(callback)
@@ -1237,7 +1299,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
     try {
       return await fn()
     } catch (err) {
-      if (!this.respawnFn || !isDaemonGoneError(err)) {
+      // Why: idle self-exit removes the token after closing an authenticated
+      // endpoint; an initial missing token alone could still hide a live daemon.
+      const missingRetiredEndpointToken =
+        isMissingTokenFileError(err) && this.client.hasObservedAuthenticatedDisconnect()
+      if (!this.respawnFn || (!isDaemonGoneError(err) && !missingRetiredEndpointToken)) {
         throw err
       }
       if (!this.respawnPromise) {
@@ -1247,6 +1313,24 @@ export class DaemonPtyAdapter implements IPtyProvider {
       }
       await this.respawnPromise
       return await fn()
+    }
+  }
+
+  private async withCreateOrAttachAdmission<T>(operation: () => Promise<T>): Promise<T> {
+    if (this.restartFenced) {
+      throw new Error('Daemon restart in progress')
+    }
+    this.createOrAttachInFlight += 1
+    try {
+      return await operation()
+    } finally {
+      this.createOrAttachInFlight -= 1
+      if (this.createOrAttachInFlight === 0) {
+        for (const resolve of this.createOrAttachDrainWaiters) {
+          resolve()
+        }
+        this.createOrAttachDrainWaiters.clear()
+      }
     }
   }
 
@@ -1388,7 +1472,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.initialCwds.delete(event.sessionId)
         // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
         for (const listener of [...this.exitListeners]) {
-          listener({ id: event.sessionId, code: event.payload.code })
+          listener({
+            id: event.sessionId,
+            code: event.payload.code,
+            provenance: this.getPtyBindingProvenance()
+          })
         }
       }
     })
@@ -1414,5 +1502,18 @@ function isDaemonGoneError(err: unknown): boolean {
     return true
   }
   const msg = err.message
-  return msg === 'Connection lost' || msg === 'Not connected' || msg === 'Hello response timed out'
+  return (
+    msg === 'Connection lost' ||
+    msg === 'Not connected' ||
+    msg === 'Hello response timed out' ||
+    msg === 'Daemon temporarily unavailable; reconnect'
+  )
+}
+
+function isMissingTokenFileError(err: unknown): boolean {
+  if (!(err instanceof Error)) {
+    return false
+  }
+  const errno = err as NodeJS.ErrnoException
+  return errno.code === 'ENOENT' && errno.syscall === 'open'
 }

@@ -5,7 +5,13 @@ import { randomUUID } from 'node:crypto'
 import { StringDecoder } from 'node:string_decoder'
 import { encodeNdjson, createNdjsonParser } from './ndjson'
 import { PROTOCOL_VERSION, NOTIFY_PREFIX, DaemonProtocolError } from './types'
-import type { HelloMessage, HelloResponse, RpcResponse, DaemonEvent } from './types'
+import type {
+  DaemonEndpointIdentity,
+  HelloMessage,
+  HelloResponse,
+  RpcResponse,
+  DaemonEvent
+} from './types'
 import { addNodePtyRecoveryHint } from './node-pty-error-hints'
 
 const CONNECT_TIMEOUT_MS = 5000
@@ -42,6 +48,8 @@ export class DaemonClient {
   // all call ensureConnected(). Without a lock, each starts a separate
   // connection attempt, overwriting sockets and triggering "Connection lost".
   private connectingPromise: Promise<void> | null = null
+  private daemonIdentity: DaemonEndpointIdentity | null = null
+  private observedAuthenticatedDisconnect = false
 
   private pendingRequests = new Map<string, PendingRequest>()
   private eventListeners: ((event: unknown) => void)[] = []
@@ -57,6 +65,14 @@ export class DaemonClient {
 
   isConnected(): boolean {
     return this.connected
+  }
+
+  getDaemonIdentity(): DaemonEndpointIdentity | null {
+    return this.daemonIdentity ? { ...this.daemonIdentity } : null
+  }
+
+  hasObservedAuthenticatedDisconnect(): boolean {
+    return this.observedAuthenticatedDisconnect
   }
 
   async ensureConnected(): Promise<void> {
@@ -87,14 +103,19 @@ export class DaemonClient {
     try {
       // Sequential: control first, then stream
       this.controlSocket = await this.connectSocket()
-      await this.sendHello(this.controlSocket, token, 'control')
+      const controlIdentity = await this.sendHello(this.controlSocket, token, 'control')
       pendingListenerCleanups.push(this.setupControlParser(this.controlSocket))
 
       this.streamSocket = await this.connectSocket()
-      await this.sendHello(this.streamSocket, token, 'stream')
+      const streamIdentity = await this.sendHello(this.streamSocket, token, 'stream')
+      if (!sameDaemonIdentity(controlIdentity, streamIdentity)) {
+        throw new DaemonProtocolError('Daemon identity changed during connection')
+      }
       pendingListenerCleanups.push(this.setupStreamParser(this.streamSocket))
 
       this.connected = true
+      this.observedAuthenticatedDisconnect = false
+      this.daemonIdentity = controlIdentity
       this.disconnectArmed = true
       this.connectionGeneration++
 
@@ -120,6 +141,7 @@ export class DaemonClient {
       this.controlSocket = null
       this.streamSocket = null
       this.connected = false
+      this.daemonIdentity = null
       this.disconnectArmed = false
       throw error
     }
@@ -181,6 +203,7 @@ export class DaemonClient {
 
   disconnect(): void {
     this.connected = false
+    this.daemonIdentity = null
     this.disconnectArmed = false
     this.cleanupActiveSocketListeners()
 
@@ -223,7 +246,11 @@ export class DaemonClient {
     })
   }
 
-  private sendHello(socket: Socket, token: string, role: 'control' | 'stream'): Promise<void> {
+  private sendHello(
+    socket: Socket,
+    token: string,
+    role: 'control' | 'stream'
+  ): Promise<DaemonEndpointIdentity | null> {
     return new Promise((resolve, reject) => {
       const hello: HelloMessage = {
         type: 'hello',
@@ -245,7 +272,7 @@ export class DaemonClient {
         socket.removeListener('error', onError)
         socket.removeListener('close', onClose)
       }
-      const finish = (error?: Error): void => {
+      const finish = (error?: Error, identity: DaemonEndpointIdentity | null = null): void => {
         if (settled) {
           return
         }
@@ -255,7 +282,7 @@ export class DaemonClient {
           reject(error)
           return
         }
-        resolve()
+        resolve(identity)
       }
       // Why: daemon socket chunks can split emoji/box-drawing UTF-8 bytes.
       // Decoding each Buffer independently would permanently inject U+FFFD.
@@ -271,7 +298,12 @@ export class DaemonClient {
         try {
           const response = JSON.parse(line) as HelloResponse
           if (response.ok) {
-            finish()
+            const identity = parseDaemonEndpointIdentity(response.daemonIdentity)
+            if (response.daemonIdentity !== undefined && identity === null) {
+              finish(new DaemonProtocolError('Invalid daemon identity'))
+              return
+            }
+            finish(undefined, identity)
           } else {
             finish(
               new DaemonProtocolError(addNodePtyRecoveryHint(response.error ?? 'Hello rejected'))
@@ -352,7 +384,11 @@ export class DaemonClient {
       return
     }
     this.disconnectArmed = false
+    if (this.daemonIdentity) {
+      this.observedAuthenticatedDisconnect = true
+    }
     this.connected = false
+    this.daemonIdentity = null
     this.cleanupActiveSocketListeners()
 
     for (const [id, pending] of this.pendingRequests) {
@@ -376,4 +412,41 @@ export class DaemonClient {
     this.cleanupSocketListeners = null
     cleanup?.()
   }
+}
+
+function parseDaemonEndpointIdentity(value: unknown): DaemonEndpointIdentity | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const identity = value as { pid?: unknown; startedAtMs?: unknown; launchNonce?: unknown }
+  if (
+    !Number.isSafeInteger(identity.pid) ||
+    (identity.pid as number) <= 0 ||
+    typeof identity.startedAtMs !== 'number' ||
+    !Number.isFinite(identity.startedAtMs) ||
+    identity.startedAtMs <= 0 ||
+    typeof identity.launchNonce !== 'string' ||
+    identity.launchNonce.length === 0
+  ) {
+    return null
+  }
+  return {
+    pid: identity.pid as number,
+    startedAtMs: identity.startedAtMs,
+    launchNonce: identity.launchNonce
+  }
+}
+
+function sameDaemonIdentity(
+  left: DaemonEndpointIdentity | null,
+  right: DaemonEndpointIdentity | null
+): boolean {
+  return (
+    (left === null && right === null) ||
+    (left !== null &&
+      right !== null &&
+      left.pid === right.pid &&
+      left.startedAtMs === right.startedAtMs &&
+      left.launchNonce === right.launchNonce)
+  )
 }

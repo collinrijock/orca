@@ -42,6 +42,7 @@ import type {
 } from './project-execution-runtime'
 import type { UsagePercentageDisplay } from './usage-percentage-display'
 import type { PersistedNativeChatSessionOptions } from './native-chat-session-options'
+import type { DaemonSessionOwnershipState } from './daemon-session-ownership'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -3688,6 +3689,17 @@ export type PersistedState = {
    *  live-PTY gate on startup so an early OAuth refresh cannot rotate the
    *  single-use refresh token out from under a still-running daemon CLI. */
   claudeLivePtySessionIds?: string[]
+  /** Exact local-daemon ownership and physical binding provenance. Optional on
+   * legacy files; once present, strict readers reject malformed partial state. */
+  daemonSessionOwnership?: DaemonSessionOwnershipState
+  /** Derived authority metadata for raw cross-profile daemon ownership reads. */
+  daemonOwnershipCommit?: {
+    schemaVersion: 1
+    generation: number
+    checksum: string
+  }
+  /** Sticky fail-closed marker set when Store observed missing or invalid raw commit authority. */
+  daemonOwnershipCommitInvalid?: true
   migrationUnsupportedPtyEntries: MigrationUnsupportedPtyEntry[]
   legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
   automations: Automation[]

@@ -67,6 +67,7 @@ export function createCloudLinkedOrcaProfileRecord(
       color: 'neutral'
     },
     kind: 'cloud-linked',
+    initialized: false,
     createdAt: now,
     updatedAt: now,
     lastOpenedAt: now,
@@ -76,8 +77,10 @@ export function createCloudLinkedOrcaProfileRecord(
     ...index,
     profiles: [...index.profiles, profile]
   }
-  mkdirSync(getOrcaProfileDirectory(profile.id, userDataPath), { recursive: true })
+  // Why: commit the safely-uninitialized row before creating its directory so
+  // an index failure cannot leave an unindexed ownership source behind.
   writeProfileIndex(getOrcaProfileIndexPath(userDataPath), nextIndex)
+  mkdirSync(getOrcaProfileDirectory(profile.id, userDataPath), { recursive: true })
   return {
     activeProfileId: nextIndex.activeProfileId,
     profiles: nextIndex.profiles,

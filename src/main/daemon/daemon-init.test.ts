@@ -5,6 +5,7 @@
    across files would duplicate the vi.hoisted boundary mocks with no cleaner
    ownership seam. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ChildProcessModule from 'node:child_process'
 import { join } from 'node:path'
 import { PROTOCOL_VERSION } from './types'
 import { WEDGED_DAEMON_GRACE_RETRIES } from './daemon-init'
@@ -24,6 +25,7 @@ const {
   getPathMock,
   getAppPathMock,
   isPackagedMock,
+  pidFileExistsMock,
   probeSocketExistsMock,
   writeFileSyncMock,
   readFileSyncMock,
@@ -34,10 +36,13 @@ const {
   healthCheckDaemonMock,
   getMacDaemonSystemResolverHealthMock,
   getDaemonLaunchIdentityMock,
+  getExactDaemonProcessStateMock,
   isDaemonStaleForCurrentBundleMock,
   killStaleDaemonMock,
   getProcessStartedAtMsMock,
   parseDaemonPidFileMock,
+  unlinkOwnedDaemonPidFileMock,
+  unlinkOwnedDaemonTokenFileMock,
   daemonClientMock,
   spawnerInstances,
   ensureRunningOverrides,
@@ -53,11 +58,11 @@ const {
   const getAppPathMock = vi.fn(() => '/fake/app')
   const isPackagedMock = vi.fn(() => false)
 
+  const pidFileExistsMock = vi.fn((_path?: string) => false)
   const probeSocketExistsMock = vi.fn((_path?: string) => false)
   const writeFileSyncMock = vi.fn()
-  // Why: readFileSync throws by default so legacyDaemonProcessMayBeAlive's
-  // catch treats every legacy pid file as unreadable — matching the pre-fix
-  // cleanup behavior every existing test was written against.
+  // Why: unreadable legacy identity is conservatively unknown, so the default
+  // fixture retains its authentication artifacts and marks discovery incomplete.
   const readFileSyncMock = vi.fn((): string => {
     throw new Error('ENOENT')
   })
@@ -92,16 +97,20 @@ const {
   const healthCheckDaemonMock = vi.fn(async () => true)
   const getMacDaemonSystemResolverHealthMock = vi.fn(() => 'healthy')
   const getDaemonLaunchIdentityMock = vi.fn(() => 'match')
+  const getExactDaemonProcessStateMock = vi.fn(async () => 'absent')
   const isDaemonStaleForCurrentBundleMock = vi.fn(() => false)
   const killStaleDaemonMock = vi.fn(async () => true)
   const getProcessStartedAtMsMock = vi.fn((): number | null => 1_000_000)
   const parseDaemonPidFileMock = vi.fn(
-    (): { pid: number; startedAtMs: number | null } | null => null
+    (): { pid: number; startedAtMs: number | null; launchNonce?: string } | null => null
   )
+  const unlinkOwnedDaemonPidFileMock = vi.fn(() => true)
+  const unlinkOwnedDaemonTokenFileMock = vi.fn(() => true)
 
   const daemonClientMock = vi.fn().mockImplementation(function MockDaemonClient() {
     return {
       ensureConnected: vi.fn(async () => {}),
+      getDaemonIdentity: vi.fn(() => null),
       request: vi.fn(async () => ({ sessions: [] })),
       disconnect: vi.fn()
     }
@@ -157,6 +166,7 @@ const {
     getPathMock,
     getAppPathMock,
     isPackagedMock,
+    pidFileExistsMock,
     probeSocketExistsMock,
     writeFileSyncMock,
     readFileSyncMock,
@@ -167,10 +177,13 @@ const {
     healthCheckDaemonMock,
     getMacDaemonSystemResolverHealthMock,
     getDaemonLaunchIdentityMock,
+    getExactDaemonProcessStateMock,
     isDaemonStaleForCurrentBundleMock,
     killStaleDaemonMock,
     getProcessStartedAtMsMock,
     parseDaemonPidFileMock,
+    unlinkOwnedDaemonPidFileMock,
+    unlinkOwnedDaemonTokenFileMock,
     daemonClientMock,
     spawnerInstances,
     ensureRunningOverrides,
@@ -203,6 +216,8 @@ type MockAdapter = {
   }
   getActiveSessionIds: ReturnType<typeof vi.fn>
   fanoutSyntheticExits: ReturnType<typeof vi.fn>
+  beginRestartFence: ReturnType<typeof vi.fn>
+  cancelRestartFence: ReturnType<typeof vi.fn>
   listProcesses: ReturnType<typeof vi.fn>
   listSessions: ReturnType<typeof vi.fn>
   shutdown: ReturnType<typeof vi.fn>
@@ -230,25 +245,33 @@ vi.mock('electron', () => ({
 
 vi.mock('fs', () => ({
   mkdirSync: vi.fn(),
-  existsSync: (p: string) => probeSocketExistsMock(p) || p.includes('.pid'),
+  existsSync: (p: string) => (p.endsWith('.pid') ? pidFileExistsMock(p) : probeSocketExistsMock(p)),
   unlinkSync: unlinkSyncMock,
   readFileSync: readFileSyncMock,
   writeFileSync: writeFileSyncMock
 }))
 
-vi.mock('child_process', () => ({ fork: forkMock }))
+vi.mock('child_process', async (importOriginal) => ({
+  ...(await importOriginal<typeof ChildProcessModule>()),
+  fork: forkMock
+}))
 
 vi.mock('net', () => ({ connect: netConnectMock }))
 
 vi.mock('./daemon-health', () => ({
   checkDaemonHealth: checkDaemonHealthMock,
   getDaemonLaunchIdentity: getDaemonLaunchIdentityMock,
+  getExactDaemonProcessState: getExactDaemonProcessStateMock,
   getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock,
   healthCheckDaemon: healthCheckDaemonMock,
   isDaemonStaleForCurrentBundle: isDaemonStaleForCurrentBundleMock,
   killStaleDaemon: killStaleDaemonMock,
   getProcessStartedAtMs: getProcessStartedAtMsMock,
   parseDaemonPidFile: parseDaemonPidFileMock
+}))
+
+vi.mock('./daemon-ownership-commit-migration', () => ({
+  backfillDaemonOwnershipCommit: vi.fn()
 }))
 
 vi.mock('./client', () => ({ DaemonClient: daemonClientMock }))
@@ -301,7 +324,9 @@ vi.mock('./daemon-spawner', () => ({
     `/fake/daemon/daemon-v${version ?? PROTOCOL_VERSION}.token`,
   getDaemonPidPath: (_dir: string, version?: number) =>
     `/fake/daemon/daemon-v${version ?? PROTOCOL_VERSION}.pid`,
-  serializeDaemonPidFile: (obj: unknown) => JSON.stringify(obj)
+  serializeDaemonPidFile: (obj: unknown) => JSON.stringify(obj),
+  unlinkOwnedDaemonPidFile: unlinkOwnedDaemonPidFileMock,
+  unlinkOwnedDaemonTokenFile: unlinkOwnedDaemonTokenFileMock
 }))
 
 vi.mock('./daemon-pty-adapter', () => ({
@@ -310,6 +335,8 @@ vi.mock('./daemon-pty-adapter', () => ({
     readonly options: MockAdapter['options']
     readonly getActiveSessionIds: ReturnType<typeof vi.fn>
     readonly fanoutSyntheticExits: ReturnType<typeof vi.fn>
+    readonly beginRestartFence: ReturnType<typeof vi.fn>
+    readonly cancelRestartFence: ReturnType<typeof vi.fn>
     readonly listProcesses: ReturnType<typeof vi.fn>
     readonly listSessions: ReturnType<typeof vi.fn>
     readonly shutdown: ReturnType<typeof vi.fn>
@@ -323,6 +350,10 @@ vi.mock('./daemon-pty-adapter', () => ({
       this.options = opts
       this.callOrder = []
       this.getActiveSessionIds = vi.fn(() => [] as string[])
+      this.beginRestartFence = vi.fn(async () =>
+        (this.getActiveSessionIds as unknown as () => string[])()
+      )
+      this.cancelRestartFence = vi.fn()
       this.fanoutSyntheticExits = vi.fn(() => {
         this.callOrder.push('fanoutSyntheticExits')
       })
@@ -366,6 +397,8 @@ async function importFresh() {
   getMacDaemonSystemResolverHealthMock.mockReset()
   getMacDaemonSystemResolverHealthMock.mockReturnValue('healthy')
   getDaemonLaunchIdentityMock.mockClear()
+  getExactDaemonProcessStateMock.mockReset()
+  getExactDaemonProcessStateMock.mockResolvedValue('absent')
   isDaemonStaleForCurrentBundleMock.mockReset()
   isDaemonStaleForCurrentBundleMock.mockReturnValue(false)
   killStaleDaemonMock.mockClear()
@@ -375,15 +408,19 @@ async function importFresh() {
   isPackagedMock.mockReset()
   isPackagedMock.mockReturnValue(false)
   daemonClientMock.mockClear()
+  pidFileExistsMock.mockReset()
+  pidFileExistsMock.mockReturnValue(false)
   probeSocketExistsMock.mockClear()
   writeFileSyncMock.mockClear()
   readFileSyncMock.mockReset()
   readFileSyncMock.mockImplementation(() => {
     throw new Error('ENOENT')
   })
-  unlinkSyncMock.mockClear()
+  unlinkSyncMock.mockReset()
   parseDaemonPidFileMock.mockReset()
   parseDaemonPidFileMock.mockReturnValue(null)
+  unlinkOwnedDaemonPidFileMock.mockClear()
+  unlinkOwnedDaemonTokenFileMock.mockClear()
   getProcessStartedAtMsMock.mockReset()
   getProcessStartedAtMsMock.mockReturnValue(1_000_000)
   // Why: importing daemon-init *after* resetModules means the module-level
@@ -391,6 +428,66 @@ async function importFresh() {
   // the only way to reliably exercise the "first-time init" path and the
   // coalescer independently.
   return import('./daemon-init')
+}
+
+function makeCurrentDaemonCleanupVerifiable(): void {
+  pidFileExistsMock.mockReturnValue(true)
+  readFileSyncMock.mockReturnValue('{}')
+  parseDaemonPidFileMock.mockReturnValue({
+    pid: 1234,
+    startedAtMs: 1_000_000,
+    launchNonce: 'test-launch'
+  })
+  daemonClientMock.mockImplementationOnce(function VerifiedShutdownClient() {
+    return {
+      ensureConnected: vi.fn(async () => {}),
+      getDaemonIdentity: vi.fn(() => ({
+        pid: 1234,
+        startedAtMs: 1_000_000,
+        launchNonce: 'test-launch'
+      })),
+      request: vi.fn(async (method: string) =>
+        method === 'listSessions' ? { sessions: [] } : undefined
+      ),
+      disconnect: vi.fn()
+    }
+  })
+  probeSocketExistsMock.mockReturnValue(true)
+  netConnectMock.mockImplementationOnce(() => {
+    const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+    return {
+      on(event: string, cb: () => void) {
+        handlers[event]?.push(cb)
+        if (event === 'connect') {
+          queueMicrotask(() => cb())
+        }
+        return this
+      },
+      removeListener(event: string, cb: () => void) {
+        handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+        return this
+      },
+      destroy() {}
+    }
+  })
+}
+
+function socketProbeResult(outcome: 'connect' | 'error') {
+  const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+  return {
+    on(event: string, callback: () => void) {
+      handlers[event]?.push(callback)
+      if (event === outcome) {
+        queueMicrotask(callback)
+      }
+      return this
+    },
+    removeListener(event: string, callback: () => void) {
+      handlers[event] = handlers[event]?.filter((handler) => handler !== callback) ?? []
+      return this
+    },
+    destroy() {}
+  }
 }
 
 describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
@@ -437,6 +534,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     // module registry so the module-level gate state matches daemon-init's.
     const gate = await import('../claude-accounts/live-pty-gate')
     defaultListSessionsSessions.push({ sessionId: 'claude-alive' })
+    const noSuchProcess = Object.assign(new Error('ESRCH'), { code: 'ESRCH' })
+    readFileSyncMock.mockImplementation(() => {
+      throw noSuchProcess
+    })
     gate.seedLiveClaudePtysFromPersistence(['claude-alive', 'claude-dead'])
     try {
       await mod.initDaemonPtyProvider()
@@ -500,7 +601,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     expect(result.id).toBe('local-fallback-pty')
     expect(localFallbackProvider.spawn).toHaveBeenCalledWith({ cols: 80, rows: 24 })
-    expect(adapterInstances[0].listProcesses).toHaveBeenCalled()
+    expect(adapterInstances[0].listSessions).toHaveBeenCalled()
   })
 
   it('fans pty:exit for every active session *before* unbinding listeners, and killedCount is captured pre-fanout', async () => {
@@ -524,6 +625,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     unbindLocalProviderListenersMock.mockImplementation(() => {
       order.push('unbind')
     })
+    makeCurrentDaemonCleanupVerifiable()
 
     const result = await mod.restartDaemon()
 
@@ -531,7 +633,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     // cleared the set. A bug that swapped these two lines in source would
     // report 0 here.
     expect(result.killedCount).toBe(3)
-    expect(originalAdapter.fanoutSyntheticExits).toHaveBeenCalledWith(-1)
+    expect(originalAdapter.fanoutSyntheticExits).toHaveBeenCalledWith(-1, {
+      verifiedAbsent: true
+    })
     // The load-bearing ordering invariant: the synthetic exits must reach
     // the renderer *before* listeners are torn down. Step 1 before Step 2.
     expect(order).toEqual(['fanout', 'unbind'])
@@ -552,9 +656,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const degradedProvider = provider as InstanceType<typeof DegradedDaemonPtyProvider>
 
     const originalAdapter = adapterInstances[0]
-    originalAdapter.listProcesses.mockResolvedValueOnce([
-      { id: 'preserved-current-session', cwd: '/repo', title: 'shell' }
-    ])
+    originalAdapter.listSessions.mockResolvedValueOnce([{ sessionId: 'preserved-current-session' }])
     await degradedProvider.discoverDaemonSessions()
 
     const order: string[] = []
@@ -569,11 +671,26 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     unbindLocalProviderListenersMock.mockImplementation(() => {
       order.push('unbind')
     })
+    makeCurrentDaemonCleanupVerifiable()
 
     const result = await mod.restartDaemon()
 
     expect(result.killedCount).toBe(1)
     expect(order).toEqual(['adapter-fanout', 'degraded-fanout', 'unbind'])
+  })
+
+  it('keeps routes and exits intact when restart cannot verify session shutdown', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const originalAdapter = adapterInstances[0]
+    originalAdapter.getActiveSessionIds.mockReturnValue(['still-unknown'])
+
+    await expect(mod.restartDaemon()).rejects.toThrow('Unable to verify daemon session shutdown')
+
+    expect(originalAdapter.fanoutSyntheticExits).not.toHaveBeenCalled()
+    expect(unbindLocalProviderListenersMock).not.toHaveBeenCalled()
+    expect(spawnerInstances[0].resetHandle).not.toHaveBeenCalled()
+    await new Promise<void>((resolve) => setImmediate(resolve))
   })
 
   it('reuses the existing DaemonSpawner across restart (resetHandle + ensureRunning on same instance)', async () => {
@@ -645,6 +762,62 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(rebindOrder).toBeGreaterThan(swapOrder)
   })
 
+  it('restores the old provider fence and listeners when replacement launch fails', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const originalProvider = mod.getDaemonProvider()
+    const originalAdapter = adapterInstances[0]
+    ensureRunningOverrides.push(async () => {
+      throw new Error('replacement launch failed')
+    })
+    rebindLocalProviderListenersMock.mockClear()
+    unbindLocalProviderListenersMock.mockClear()
+
+    await expect(mod.restartDaemon()).rejects.toThrow('replacement launch failed')
+
+    expect(originalAdapter.cancelRestartFence).toHaveBeenCalledOnce()
+    expect(unbindLocalProviderListenersMock).toHaveBeenCalledOnce()
+    expect(rebindLocalProviderListenersMock).toHaveBeenCalledOnce()
+    expect(mod.getDaemonProvider()).toBe(originalProvider)
+    expect(setLocalPtyProviderMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('disposes a partial replacement and restores listeners when rediscovery fails', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const { DaemonPtyRouter } = await import('./daemon-pty-router')
+    const { DaemonPtyAdapter } = await import('./daemon-pty-adapter')
+    const currentAtConstruction = adapterInstances[0]
+    const legacyAdapter = new DaemonPtyAdapter({
+      socketPath: '/fake/legacy.sock',
+      tokenPath: '/fake/legacy.token',
+      protocolVersion: 3
+    })
+    const routerWithLegacy = new DaemonPtyRouter({
+      current: currentAtConstruction as unknown as InstanceType<typeof DaemonPtyAdapter>,
+      legacy: [legacyAdapter as unknown as InstanceType<typeof DaemonPtyAdapter>]
+    })
+    mod.replaceDaemonProvider(routerWithLegacy)
+    const discover = vi
+      .spyOn(DaemonPtyRouter.prototype, 'discoverLegacySessions')
+      .mockRejectedValueOnce(new Error('rediscovery failed'))
+    rebindLocalProviderListenersMock.mockClear()
+    unbindLocalProviderListenersMock.mockClear()
+
+    try {
+      await expect(mod.restartDaemon()).rejects.toThrow('rediscovery failed')
+
+      expect(currentAtConstruction.cancelRestartFence).toHaveBeenCalledOnce()
+      expect(adapterInstances.at(-1)?.dispose).toHaveBeenCalledOnce()
+      expect(legacyAdapter.dispose).not.toHaveBeenCalled()
+      expect(unbindLocalProviderListenersMock).toHaveBeenCalledOnce()
+      expect(rebindLocalProviderListenersMock).toHaveBeenCalledOnce()
+      expect(mod.getDaemonProvider()).toBe(routerWithLegacy)
+    } finally {
+      discover.mockRestore()
+    }
+  })
+
   it('preserves legacy adapter instances by identity, drains outgoing router via disposeRouterOnly, and re-discovers legacy sessions on the new router', async () => {
     const mod = await importFresh()
 
@@ -693,6 +866,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     // The outgoing router was drained via disposeRouterOnly (router-only
     // teardown), so legacy adapters' underlying connections are untouched.
     expect(legacyAdapter.disconnectOnly).not.toHaveBeenCalled()
+    expect(currentAtConstruction.dispose).toHaveBeenCalledTimes(1)
     // The outgoing router's subscriptions were drained but the adapters
     // behind it were NOT disposed — that's the whole point of disposeRouterOnly.
     expect(disposeRouterOnlySpy).toHaveBeenCalledTimes(1)
@@ -700,7 +874,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     // The replacement router must re-run discovery so spawns targeting a
     // surviving legacy sessionId still route to the legacy adapter.
-    expect(legacyAdapter.listProcesses).toHaveBeenCalled()
+    expect(legacyAdapter.listSessions).toHaveBeenCalled()
   })
 
   it('routes affected v9 daemon sessions through a legacy adapter on launch', async () => {
@@ -826,6 +1000,11 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     daemonClientMock.mockImplementationOnce(function MockDaemonClientForShutdown() {
       return {
         ensureConnected: ensureConnectedMock,
+        getDaemonIdentity: vi.fn(() => ({
+          pid: 1234,
+          startedAtMs: 1_000_000,
+          launchNonce: 'test-launch'
+        })),
         request: requestMock,
         disconnect: disconnectMock
       }
@@ -833,6 +1012,13 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
+    pidFileExistsMock.mockReturnValue(true)
+    readFileSyncMock.mockReturnValue('{}')
+    parseDaemonPidFileMock.mockReturnValue({
+      pid: 1234,
+      startedAtMs: 1_000_000,
+      launchNonce: 'test-launch'
+    })
 
     // Make probeSocket return true for the current-version path by toggling
     // both the fs.existsSync proxy AND net.connect resolving "alive".
@@ -863,6 +1049,316 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     // The fallback killStaleDaemon must NOT fire when the RPC path worked.
     expect(killStaleDaemonMock).not.toHaveBeenCalled()
   })
+
+  it('refuses shutdown when the authenticated endpoint differs from the captured pid record', async () => {
+    const mod = await importFresh()
+    pidFileExistsMock.mockReturnValue(true)
+    readFileSyncMock.mockReturnValue('{}')
+    parseDaemonPidFileMock.mockReturnValue({
+      pid: 1234,
+      startedAtMs: 1_000_000,
+      launchNonce: 'captured'
+    })
+    const request = vi.fn()
+    daemonClientMock.mockImplementationOnce(function MismatchedShutdownClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        getDaemonIdentity: vi.fn(() => ({
+          pid: 5678,
+          startedAtMs: 2_000_000,
+          launchNonce: 'replacement'
+        })),
+        request,
+        disconnect: vi.fn()
+      }
+    })
+    probeSocketExistsMock.mockReturnValue(true)
+    netConnectMock.mockImplementationOnce(() => socketProbeResult('connect'))
+
+    await expect(mod.cleanupDaemonForProtocol('/fake/daemon', PROTOCOL_VERSION)).resolves.toEqual({
+      cleaned: false,
+      shutdownAttempted: true,
+      killedCount: 0
+    })
+
+    expect(request).not.toHaveBeenCalled()
+    expect(getExactDaemonProcessStateMock).not.toHaveBeenCalled()
+    expect(unlinkOwnedDaemonPidFileMock).not.toHaveBeenCalled()
+    expect(unlinkOwnedDaemonTokenFileMock).not.toHaveBeenCalled()
+  })
+
+  it('does not signal a replacement incarnation after a v23 handshake failure', async () => {
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      const mod = await importFresh()
+      pidFileExistsMock.mockReturnValue(true)
+      readFileSyncMock.mockReturnValue('{}')
+      parseDaemonPidFileMock.mockReturnValue({
+        pid: 1234,
+        startedAtMs: 1_000_000,
+        launchNonce: 'captured'
+      })
+      getExactDaemonProcessStateMock.mockResolvedValue('absent')
+      daemonClientMock.mockImplementationOnce(function FailedHandshakeClient() {
+        return {
+          ensureConnected: vi.fn(async () => {
+            throw new Error('replacement rejected captured token')
+          }),
+          getDaemonIdentity: vi.fn(() => null),
+          request: vi.fn(),
+          disconnect: vi.fn()
+        }
+      })
+      probeSocketExistsMock.mockReturnValue(true)
+      let probeCount = 0
+      netConnectMock.mockImplementation(() =>
+        socketProbeResult(probeCount++ === 0 ? 'connect' : 'error')
+      )
+
+      await expect(mod.cleanupDaemonForProtocol('/fake/daemon', PROTOCOL_VERSION)).resolves.toEqual(
+        {
+          cleaned: true,
+          shutdownAttempted: true,
+          killedCount: 0
+        }
+      )
+
+      expect(getExactDaemonProcessStateMock).toHaveBeenCalledWith(
+        1234,
+        '/fake/daemon/daemon-v23.sock',
+        '/fake/daemon/daemon-v23.token',
+        1_000_000,
+        'captured'
+      )
+      expect(
+        processKill.mock.calls.filter(([, signal]) => signal === 'SIGTERM' || signal === 'SIGKILL')
+      ).toEqual([])
+    } finally {
+      processKill.mockRestore()
+    }
+  })
+
+  it('terminates a live exact pid before replacing a daemon whose endpoint is dead', async () => {
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      const mod = await importFresh()
+      pidFileExistsMock.mockReturnValue(true)
+      readFileSyncMock.mockReturnValue('{}')
+      parseDaemonPidFileMock.mockReturnValue({
+        pid: 1234,
+        startedAtMs: 1_000_000,
+        launchNonce: 'captured'
+      })
+      probeSocketExistsMock.mockReturnValue(true)
+      let termSent = false
+      processKill.mockImplementation((_pid, signal) => {
+        if (signal === 'SIGTERM') {
+          termSent = true
+        }
+        return true
+      })
+      getExactDaemonProcessStateMock.mockImplementation(async () => (termSent ? 'absent' : 'alive'))
+
+      await expect(mod.cleanupDaemonForProtocol('/fake/daemon', PROTOCOL_VERSION)).resolves.toEqual(
+        {
+          cleaned: true,
+          shutdownAttempted: true,
+          killedCount: 0
+        }
+      )
+
+      expect(processKill).toHaveBeenCalledWith(1234, 'SIGTERM')
+      expect(unlinkOwnedDaemonPidFileMock).toHaveBeenCalledWith(
+        '/fake/daemon/daemon-v23.pid',
+        1234,
+        'captured'
+      )
+      expect(unlinkOwnedDaemonTokenFileMock).not.toHaveBeenCalled()
+      if (process.platform === 'win32') {
+        expect(unlinkSyncMock).not.toHaveBeenCalledWith('/fake/daemon/daemon-v23.sock')
+      } else {
+        expect(unlinkSyncMock).toHaveBeenCalledWith('/fake/daemon/daemon-v23.sock')
+      }
+      expect(daemonClientMock).not.toHaveBeenCalled()
+    } finally {
+      processKill.mockRestore()
+    }
+  })
+
+  it('fails closed when a dead endpoint has an incomplete v23 pid record', async () => {
+    const mod = await importFresh()
+    pidFileExistsMock.mockReturnValue(true)
+    readFileSyncMock.mockReturnValue('{}')
+    parseDaemonPidFileMock.mockReturnValue({
+      pid: 1234,
+      startedAtMs: null
+    })
+
+    await expect(mod.cleanupDaemonForProtocol('/fake/daemon', PROTOCOL_VERSION)).resolves.toEqual({
+      cleaned: false,
+      shutdownAttempted: true,
+      killedCount: 0
+    })
+
+    expect(getExactDaemonProcessStateMock).not.toHaveBeenCalled()
+    expect(forkMock).not.toHaveBeenCalled()
+  })
+
+  it('waits through SIGTERM and SIGKILL until the exact daemon incarnation is absent', async () => {
+    vi.useFakeTimers()
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      const mod = await importFresh()
+      pidFileExistsMock.mockReturnValue(true)
+      readFileSyncMock.mockReturnValue('{}')
+      parseDaemonPidFileMock.mockReturnValue({
+        pid: 1234,
+        startedAtMs: 1_000_000,
+        launchNonce: 'captured'
+      })
+      let sigkillSent = false
+      processKill.mockImplementation((_pid, signal) => {
+        if (signal === 'SIGKILL') {
+          sigkillSent = true
+        }
+        return true
+      })
+      getExactDaemonProcessStateMock.mockImplementation(async () =>
+        sigkillSent ? 'absent' : 'alive'
+      )
+      daemonClientMock.mockImplementationOnce(function ExactShutdownClient() {
+        return {
+          ensureConnected: vi.fn(async () => {}),
+          getDaemonIdentity: vi.fn(() => ({
+            pid: 1234,
+            startedAtMs: 1_000_000,
+            launchNonce: 'captured'
+          })),
+          request: vi.fn(async (method: string) =>
+            method === 'listSessions'
+              ? { sessions: [{ sessionId: 'live', isAlive: true }] }
+              : undefined
+          ),
+          disconnect: vi.fn()
+        }
+      })
+      let probeCount = 0
+      probeSocketExistsMock.mockReturnValue(true)
+      netConnectMock.mockImplementation(() =>
+        socketProbeResult(probeCount++ === 0 ? 'connect' : 'error')
+      )
+
+      const cleanup = mod.cleanupDaemonForProtocol('/fake/daemon', PROTOCOL_VERSION)
+      await vi.advanceTimersByTimeAsync(7_000)
+      await expect(cleanup).resolves.toEqual({
+        cleaned: true,
+        shutdownAttempted: true,
+        killedCount: 1
+      })
+
+      expect(processKill).toHaveBeenCalledWith(1234, 'SIGTERM')
+      expect(processKill).toHaveBeenCalledWith(1234, 'SIGKILL')
+      expect(unlinkOwnedDaemonPidFileMock).toHaveBeenCalledWith(
+        '/fake/daemon/daemon-v23.pid',
+        1234,
+        'captured'
+      )
+      expect(unlinkOwnedDaemonTokenFileMock).toHaveBeenCalledWith(
+        '/fake/daemon/daemon-v23.token',
+        '{}'
+      )
+      if (process.platform !== 'win32') {
+        expect(unlinkSyncMock).toHaveBeenCalledWith('/fake/daemon/daemon-v23.sock')
+      }
+    } finally {
+      processKill.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not authorize old-session exits when a replacement endpoint appears', async () => {
+    const mod = await importFresh()
+    pidFileExistsMock.mockReturnValue(true)
+    readFileSyncMock.mockReturnValue('{}')
+    parseDaemonPidFileMock.mockReturnValue({
+      pid: 1234,
+      startedAtMs: 1_000_000,
+      launchNonce: 'captured'
+    })
+    getExactDaemonProcessStateMock.mockResolvedValue('absent')
+    daemonClientMock.mockImplementationOnce(function ReplacedAfterShutdownClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        getDaemonIdentity: vi.fn(() => ({
+          pid: 1234,
+          startedAtMs: 1_000_000,
+          launchNonce: 'captured'
+        })),
+        request: vi.fn(async (method: string) =>
+          method === 'listSessions' ? { sessions: [] } : undefined
+        ),
+        disconnect: vi.fn()
+      }
+    })
+    probeSocketExistsMock.mockReturnValue(true)
+    netConnectMock.mockImplementation(() => socketProbeResult('connect'))
+
+    await expect(mod.cleanupDaemonForProtocol('/fake/daemon', PROTOCOL_VERSION)).resolves.toEqual({
+      cleaned: false,
+      shutdownAttempted: true,
+      killedCount: 0
+    })
+
+    expect(unlinkOwnedDaemonPidFileMock).not.toHaveBeenCalled()
+    expect(unlinkOwnedDaemonTokenFileMock).not.toHaveBeenCalled()
+  })
+
+  it.runIf(process.platform !== 'win32')(
+    'fails closed when a verified exit leaves an unlinkable Unix socket',
+    async () => {
+      const mod = await importFresh()
+      pidFileExistsMock.mockReturnValue(true)
+      readFileSyncMock.mockReturnValue('{}')
+      parseDaemonPidFileMock.mockReturnValue({
+        pid: 1234,
+        startedAtMs: 1_000_000,
+        launchNonce: 'captured'
+      })
+      getExactDaemonProcessStateMock.mockResolvedValue('absent')
+      daemonClientMock.mockImplementationOnce(function ExactShutdownClient() {
+        return {
+          ensureConnected: vi.fn(async () => {}),
+          getDaemonIdentity: vi.fn(() => ({
+            pid: 1234,
+            startedAtMs: 1_000_000,
+            launchNonce: 'captured'
+          })),
+          request: vi.fn(async (method: string) =>
+            method === 'listSessions' ? { sessions: [] } : undefined
+          ),
+          disconnect: vi.fn()
+        }
+      })
+      let probeCount = 0
+      probeSocketExistsMock.mockReturnValue(true)
+      netConnectMock.mockImplementation(() =>
+        socketProbeResult(probeCount++ === 0 ? 'connect' : 'error')
+      )
+      unlinkSyncMock.mockImplementation(() => {
+        throw new Error('permission denied')
+      })
+
+      await expect(mod.cleanupDaemonForProtocol('/fake/daemon', PROTOCOL_VERSION)).resolves.toEqual(
+        {
+          cleaned: false,
+          shutdownAttempted: true,
+          killedCount: 0
+        }
+      )
+
+      expect(unlinkOwnedDaemonPidFileMock).not.toHaveBeenCalled()
+    }
+  )
 
   it('cleans up daemon socket probe listeners when the probe times out', async () => {
     vi.useFakeTimers()
@@ -897,7 +1393,11 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
       await vi.advanceTimersByTimeAsync(1000)
 
-      await expect(cleanup).resolves.toEqual({ cleaned: false, killedCount: 0 })
+      await expect(cleanup).resolves.toEqual({
+        cleaned: false,
+        shutdownAttempted: false,
+        killedCount: 0
+      })
       expect(socket.destroy).toHaveBeenCalledTimes(1)
       expect(socket.listenerCount('connect')).toBe(0)
       expect(socket.listenerCount('error')).toBe(0)
@@ -1017,11 +1517,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       '/fake/token',
       FAKE_DAEMON_ENTRY_PATH
     )
-    expect(killStaleDaemonMock).toHaveBeenCalledWith(
-      FAKE_RUNTIME_DIR,
-      '/fake/socket',
-      '/fake/token'
-    )
+    expect(killStaleDaemonMock).not.toHaveBeenCalled()
     expect(forkMock).toHaveBeenCalledWith(
       FAKE_DAEMON_ENTRY_PATH,
       expect.arrayContaining([
@@ -1150,11 +1646,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     expect(getMacDaemonSystemResolverHealthMock).toHaveBeenCalledWith('/fake/socket', '/fake/token')
     expect(getDaemonLaunchIdentityMock).not.toHaveBeenCalled()
-    expect(killStaleDaemonMock).toHaveBeenCalledWith(
-      FAKE_RUNTIME_DIR,
-      '/fake/socket',
-      '/fake/token'
-    )
+    expect(killStaleDaemonMock).not.toHaveBeenCalled()
     expect(forkMock).toHaveBeenCalledWith(
       FAKE_DAEMON_ENTRY_PATH,
       expect.arrayContaining([
@@ -1336,16 +1828,17 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(handlers.exit).toHaveLength(0)
     expect(child.disconnect).toHaveBeenCalledOnce()
     expect(child.unref).toHaveBeenCalledOnce()
-    expect(writeFileSyncMock).toHaveBeenCalledWith(
-      `/fake/daemon/daemon-v${PROTOCOL_VERSION}.pid`,
-      JSON.stringify({
-        pid: 12345,
-        startedAtMs: 1_000_000,
-        entryPath: FAKE_DAEMON_ENTRY_PATH,
-        appVersion: '1.2.3'
-      }),
-      { mode: 0o600 }
-    )
+    expect(writeFileSyncMock).toHaveBeenCalledOnce()
+    const [pidPath, pidContents, pidOptions] = writeFileSyncMock.mock.calls[0]
+    expect(pidPath).toBe(`/fake/daemon/daemon-v${PROTOCOL_VERSION}.pid`)
+    expect(JSON.parse(pidContents as string)).toEqual({
+      pid: 12345,
+      startedAtMs: 1_000_000,
+      entryPath: FAKE_DAEMON_ENTRY_PATH,
+      appVersion: '1.2.3',
+      launchNonce: expect.stringMatching(/^[0-9a-f-]{36}$/)
+    })
+    expect(pidOptions).toEqual({ mode: 0o600 })
   })
 
   it('removes detached daemon startup listeners after startup error', async () => {
@@ -1615,11 +2108,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     await launcher('/fake/socket', '/fake/token')
 
-    expect(killStaleDaemonMock).toHaveBeenCalledWith(
-      FAKE_RUNTIME_DIR,
-      '/fake/socket',
-      '/fake/token'
-    )
+    expect(killStaleDaemonMock).not.toHaveBeenCalled()
     expect(forkMock).toHaveBeenCalled()
   })
 
@@ -1717,7 +2206,21 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     ) => Promise<{ shutdown(): Promise<void> }>
     checkDaemonHealthMock.mockResolvedValueOnce('unreachable')
     probeSocketExistsMock.mockReturnValue(true)
-    netConnectMock.mockImplementation(stubAliveSocketConnect)
+    pidFileExistsMock.mockReturnValue(true)
+    readFileSyncMock.mockReturnValue('{}')
+    parseDaemonPidFileMock.mockReturnValue({
+      pid: 1234,
+      startedAtMs: 1_000_000,
+      launchNonce: 'wedged-launch'
+    })
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    getExactDaemonProcessStateMock.mockResolvedValueOnce('alive').mockResolvedValueOnce('absent')
+    let socketProbeCount = 0
+    netConnectMock.mockImplementation(() =>
+      socketProbeCount++ <= WEDGED_DAEMON_GRACE_RETRIES
+        ? stubAliveSocketConnect()
+        : socketProbeResult('error')
+    )
     forkMock.mockImplementationOnce(() => ({
       pid: 12345,
       on(event: string, cb: (arg?: unknown) => void) {
@@ -1739,18 +2242,16 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     try {
       await launcher('/fake/socket', '/fake/token')
 
-      expect(killStaleDaemonMock).toHaveBeenCalledWith(
-        FAKE_RUNTIME_DIR,
-        '/fake/socket',
-        '/fake/token'
-      )
+      expect(killStaleDaemonMock).not.toHaveBeenCalled()
       expect(forkMock).toHaveBeenCalled()
       // The launcher probes the full grace budget before giving up: 1 initial
-      // probe + WEDGED_DAEMON_GRACE_RETRIES retries.
-      expect(daemonClientMock).toHaveBeenCalledTimes(1 + WEDGED_DAEMON_GRACE_RETRIES)
+      // probe + retries, then one exact cleanup client.
+      expect(daemonClientMock).toHaveBeenCalledTimes(2 + WEDGED_DAEMON_GRACE_RETRIES)
+      expect(processKill).toHaveBeenCalledWith(1234, 'SIGTERM')
     } finally {
       // Restore the answering default so the persistent throwing impl above
       // does not leak into later tests (clearAllMocks clears calls, not impls).
+      processKill.mockRestore()
       daemonClientMock.mockImplementation(answeringDefault)
     }
   })
@@ -1837,7 +2338,19 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     ) => Promise<{ shutdown(): Promise<void> }>
     checkDaemonHealthMock.mockResolvedValueOnce('rejected')
     probeSocketExistsMock.mockReturnValue(true)
-    netConnectMock.mockImplementation(stubAliveSocketConnect)
+    pidFileExistsMock.mockReturnValue(true)
+    readFileSyncMock.mockReturnValue('{}')
+    parseDaemonPidFileMock.mockReturnValue({
+      pid: 1234,
+      startedAtMs: 1_000_000,
+      launchNonce: 'rejected-launch'
+    })
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    getExactDaemonProcessStateMock.mockResolvedValueOnce('alive').mockResolvedValueOnce('absent')
+    let socketProbeCount = 0
+    netConnectMock.mockImplementation(() =>
+      socketProbeCount++ === 0 ? stubAliveSocketConnect() : socketProbeResult('error')
+    )
     forkMock.mockImplementationOnce(() => ({
       pid: 12345,
       on(event: string, cb: (arg?: unknown) => void) {
@@ -1854,18 +2367,18 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     }))
     daemonClientMock.mockClear()
 
-    await launcher('/fake/socket', '/fake/token')
+    try {
+      await launcher('/fake/socket', '/fake/token')
 
-    expect(killStaleDaemonMock).toHaveBeenCalledWith(
-      FAKE_RUNTIME_DIR,
-      '/fake/socket',
-      '/fake/token'
-    )
-    expect(forkMock).toHaveBeenCalled()
-    // Pins the 'rejected' fast-path: a daemon that actively refuses the
-    // handshake is never worth a grace window, so it is probed exactly once
-    // (no retries) before replacement.
-    expect(daemonClientMock).toHaveBeenCalledTimes(1)
+      expect(killStaleDaemonMock).not.toHaveBeenCalled()
+      expect(forkMock).toHaveBeenCalled()
+      // Pins the 'rejected' fast-path: one session probe and one exact cleanup
+      // client, with no grace-window retries before replacement.
+      expect(daemonClientMock).toHaveBeenCalledTimes(2)
+      expect(processKill).toHaveBeenCalledWith(1234, 'SIGTERM')
+    } finally {
+      processKill.mockRestore()
+    }
   })
 
   it('adopts a healthy daemon whose pid-file identity cannot be verified (null startedAtMs metadata)', async () => {
@@ -1888,9 +2401,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(forkMock).not.toHaveBeenCalled()
   })
 
-  it('writes the daemon self-reported start time to the pid file when the OS query returns null', async () => {
-    // Why: getProcessStartedAtMs has no cheap Windows implementation, so the
-    // pid file's pid-recycling guard depends on the ready-message fallback.
+  it('prefers the daemon self-reported start time over differently rounded OS time', async () => {
+    // Why: audit binds the PID record to the endpoint hello exactly, while the
+    // OS start-time query is second/tick-rounded on macOS and Linux.
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
 
@@ -1899,7 +2412,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
     checkDaemonHealthMock.mockResolvedValueOnce('unreachable')
-    getProcessStartedAtMsMock.mockReturnValue(null)
+    getProcessStartedAtMsMock.mockReturnValue(1_700_000_123_000)
     forkMock.mockImplementationOnce(() => ({
       pid: 12345,
       on(event: string, cb: (arg?: unknown) => void) {
@@ -1917,16 +2430,17 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     await launcher('/fake/socket', '/fake/token')
 
-    expect(writeFileSyncMock).toHaveBeenCalledWith(
-      `/fake/daemon/daemon-v${PROTOCOL_VERSION}.pid`,
-      JSON.stringify({
-        pid: 12345,
-        startedAtMs: 1_700_000_123_456,
-        entryPath: FAKE_DAEMON_ENTRY_PATH,
-        appVersion: '1.2.3'
-      }),
-      { mode: 0o600 }
-    )
+    expect(writeFileSyncMock).toHaveBeenCalledOnce()
+    const [pidPath, pidContents, pidOptions] = writeFileSyncMock.mock.calls[0]
+    expect(pidPath).toBe(`/fake/daemon/daemon-v${PROTOCOL_VERSION}.pid`)
+    expect(JSON.parse(pidContents as string)).toEqual({
+      pid: 12345,
+      startedAtMs: 1_700_000_123_456,
+      entryPath: FAKE_DAEMON_ENTRY_PATH,
+      appVersion: '1.2.3',
+      launchNonce: expect.stringMatching(/^[0-9a-f-]{36}$/)
+    })
+    expect(pidOptions).toEqual({ mode: 0o600 })
   })
 
   it('keeps legacy daemon pid/token files when the probe fails but the pid-file process is alive', async () => {
@@ -1945,13 +2459,24 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(legacyUnlinks).toEqual([])
   })
 
+  it('keeps legacy daemon artifacts when pid identity is missing or unreadable', async () => {
+    const mod = await importFresh()
+
+    await mod.initDaemonPtyProvider()
+
+    const legacyUnlinks = unlinkSyncMock.mock.calls.filter(
+      ([p]) => typeof p === 'string' && (p.includes('.token') || p.includes('.pid'))
+    )
+    expect(legacyUnlinks).toEqual([])
+  })
+
   it('cleans up legacy daemon pid/token files when the probe fails and the process is gone', async () => {
     const mod = await importFresh()
     readFileSyncMock.mockReturnValue('{"pid":123}')
     // Why: spy on process.kill so the liveness probe deterministically reports
     // "no such process" without depending on an unallocated real pid.
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
-      throw new Error('ESRCH')
+      throw Object.assign(new Error('ESRCH'), { code: 'ESRCH' })
     })
     parseDaemonPidFileMock.mockReturnValue({ pid: 999_999, startedAtMs: null })
 
@@ -2002,11 +2527,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     await launcher('/fake/socket', '/fake/token')
 
-    expect(killStaleDaemonMock).toHaveBeenCalledWith(
-      FAKE_RUNTIME_DIR,
-      '/fake/socket',
-      '/fake/token'
-    )
+    expect(killStaleDaemonMock).not.toHaveBeenCalled()
     expect(forkMock).toHaveBeenCalledWith(
       FAKE_DAEMON_ENTRY_PATH,
       expect.arrayContaining([
@@ -2094,11 +2615,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       '/fake/token',
       '1.2.3'
     )
-    expect(killStaleDaemonMock).toHaveBeenCalledWith(
-      FAKE_RUNTIME_DIR,
-      '/fake/socket',
-      '/fake/token'
-    )
+    expect(killStaleDaemonMock).not.toHaveBeenCalled()
     expect(forkMock).toHaveBeenCalledWith(
       FAKE_DAEMON_ENTRY_PATH,
       expect.arrayContaining([

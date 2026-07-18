@@ -57,10 +57,11 @@ vi.mock('../orca-profiles/profile-index-store', () => ({
 
 function makeStoreMock(flush = vi.fn()): {
   flush: typeof flush
+  flushOrThrow: typeof flush
   freezeWrites: ReturnType<typeof vi.fn>
   getSettings: () => Record<string, never>
 } {
-  return { flush, freezeWrites: vi.fn(), getSettings: () => ({}) }
+  return { flush, flushOrThrow: flush, freezeWrites: vi.fn(), getSettings: () => ({}) }
 }
 
 vi.mock('../orca-profiles/profile-project-transfer', () => ({
@@ -258,6 +259,7 @@ describe('registerOrcaProfileHandlers', () => {
 
   it('moves a project out of the active profile and relaunches into the target profile', async () => {
     const flush = vi.fn()
+    const store = makeStoreMock(flush)
     const onBeforeRelaunch = vi.fn()
     const result = {
       status: 'transferred',
@@ -273,7 +275,7 @@ describe('registerOrcaProfileHandlers', () => {
       profiles: []
     })
     transferOrcaProfileProjectMock.mockReturnValue(result)
-    registerOrcaProfileHandlers(makeStoreMock(flush) as never, { onBeforeRelaunch })
+    registerOrcaProfileHandlers(store as never, { onBeforeRelaunch })
 
     await expect(
       Promise.resolve(
@@ -295,8 +297,10 @@ describe('registerOrcaProfileHandlers', () => {
         repoId: 'repo-1',
         mode: 'move'
       },
-      '/tmp/orca-user-data'
+      '/tmp/orca-user-data',
+      expect.objectContaining({ onSourcePendingCommitted: expect.any(Function) })
     )
+    expect(store.freezeWrites).toHaveBeenCalledOnce()
     expect(setActiveOrcaProfileMock).toHaveBeenCalledWith('work')
     expect(appRelaunchMock).not.toHaveBeenCalled()
 
@@ -306,6 +310,37 @@ describe('registerOrcaProfileHandlers', () => {
     expect(relaunchAppMock).toHaveBeenCalledWith('profile-transfer')
     expect(appQuitMock).toHaveBeenCalledOnce()
     expect(appExitMock).not.toHaveBeenCalled()
+  })
+
+  it('freezes and reloads the active Store after a partial move write', async () => {
+    const store = makeStoreMock()
+    const onBeforeRelaunch = vi.fn()
+    getOrcaProfileListStateMock.mockReturnValue({ activeProfileId: 'personal', profiles: [] })
+    transferOrcaProfileProjectMock.mockImplementation(
+      (_args, _path, transferOptions: { onSourcePendingCommitted(): void }) => {
+        transferOptions.onSourcePendingCommitted()
+        throw new Error('injected_target_write_failure')
+      }
+    )
+    registerOrcaProfileHandlers(store as never, { onBeforeRelaunch })
+
+    await expect(
+      Promise.resolve(
+        handlers.get('orcaProfiles:transferProject')?.(null, {
+          sourceProfileId: 'personal',
+          targetProfileId: 'work',
+          repoId: 'repo-1',
+          mode: 'move'
+        })
+      )
+    ).rejects.toThrow('injected_target_write_failure')
+
+    expect(store.freezeWrites).toHaveBeenCalledOnce()
+    expect(onBeforeRelaunch).toHaveBeenCalledOnce()
+    expect(setActiveOrcaProfileMock).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(150)
+    expect(appRelaunchMock).toHaveBeenCalledOnce()
+    expect(appQuitMock).toHaveBeenCalledOnce()
   })
 
   it('rejects transfers that would mutate the active target profile offline', async () => {
@@ -327,5 +362,29 @@ describe('registerOrcaProfileHandlers', () => {
     ).rejects.toThrow('active_target_orca_profile_transfer_requires_relaunch')
 
     expect(transferOrcaProfileProjectMock).not.toHaveBeenCalled()
+  })
+
+  it('aborts an active-source transfer when the authoritative flush fails', async () => {
+    const flush = vi.fn(() => {
+      throw new Error('injected_flush_failure')
+    })
+    const store = makeStoreMock(flush)
+    getOrcaProfileListStateMock.mockReturnValue({ activeProfileId: 'personal', profiles: [] })
+    registerOrcaProfileHandlers(store as never)
+
+    await expect(
+      Promise.resolve(
+        handlers.get('orcaProfiles:transferProject')?.(null, {
+          sourceProfileId: 'personal',
+          targetProfileId: 'work',
+          repoId: 'repo-1',
+          mode: 'move'
+        })
+      )
+    ).rejects.toThrow('injected_flush_failure')
+
+    expect(transferOrcaProfileProjectMock).not.toHaveBeenCalled()
+    expect(store.freezeWrites).not.toHaveBeenCalled()
+    expect(appRelaunchMock).not.toHaveBeenCalled()
   })
 })

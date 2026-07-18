@@ -12,8 +12,10 @@ import { getHistorySessionDirName } from './history-paths'
 import type { HistoryReader } from './history-reader'
 import type { SubprocessHandle } from './session'
 import type { DaemonFileLog } from './daemon-file-log'
+import type { PtyExitPayload } from '../providers/pty-exit-payload'
 import type * as DaemonHealthModule from './daemon-health'
 import { getDaemonSocketPath } from './daemon-spawner'
+import { PROTOCOL_VERSION } from './types'
 
 const { getMacDaemonSystemResolverHealthMock } = vi.hoisted(() => ({
   getMacDaemonSystemResolverHealthMock: vi.fn(async () => 'unknown')
@@ -116,6 +118,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       socketPath,
       tokenPath,
       log: daemonLog,
+      launchNonce: 'initial-test-daemon',
+      startedAtMs: 1,
       spawnSubprocess: (opts) => {
         lastSpawnOpts = opts
         lastSubprocess = createMockSubprocess(subprocessDataOnSubscribe)
@@ -575,7 +579,11 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       lastSubprocess._simulateExit(42)
 
       await waitFor(() => exits.length > 0)
-      expect(exits[0]).toEqual({ id, code: 42 })
+      expect(exits[0]).toEqual({
+        id,
+        code: 42,
+        provenance: adapter.getPtyBindingProvenance()
+      })
     })
   })
 
@@ -648,6 +656,18 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('listProcesses', () => {
+    it('announces only a successfully materialized physical inventory', async () => {
+      const listener = vi.fn()
+      adapter.onPtyBindingInventoryAvailable(listener)
+
+      await adapter.listProcesses()
+
+      expect(listener).toHaveBeenCalledWith({
+        kind: 'local-daemon',
+        protocolVersion: PROTOCOL_VERSION
+      })
+    })
+
     it('returns active sessions', async () => {
       await adapter.spawn({ cols: 80, rows: 24, cwd: '/repo/owned-before-osc7' })
       await adapter.spawn({ cols: 80, rows: 24 })
@@ -2007,6 +2027,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         respawnServer = new DaemonServer({
           socketPath,
           tokenPath,
+          launchNonce: 'respawned-test-daemon',
+          startedAtMs: 2,
           spawnSubprocess: () => createMockSubprocess()
         })
         await respawnServer.start()
@@ -2030,6 +2052,39 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await respawnServer?.shutdown()
     })
 
+    it('respawns after an idle-style exit removed the token before the next spawn', async () => {
+      let respawnServer: DaemonServer | undefined
+      const respawnFn = vi.fn(async () => {
+        respawnServer = new DaemonServer({
+          socketPath,
+          tokenPath,
+          launchNonce: 'idle-respawned-test-daemon',
+          startedAtMs: 3,
+          spawnSubprocess: () => createMockSubprocess()
+        })
+        await respawnServer.start()
+      })
+      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
+      await respawnAdapter.spawn({ cols: 80, rows: 24 })
+      expect(respawnAdapter.getDaemonIdentity()).toMatchObject({
+        launchNonce: 'initial-test-daemon'
+      })
+
+      await server.shutdown()
+      await vi.waitFor(() => {
+        expect(existsSync(tokenPath)).toBe(false)
+        expect(respawnAdapter.getDaemonIdentity()).toBeNull()
+      })
+
+      await expect(respawnAdapter.spawn({ cols: 80, rows: 24 })).resolves.toMatchObject({
+        id: expect.any(String)
+      })
+      expect(respawnFn).toHaveBeenCalledOnce()
+
+      respawnAdapter.dispose()
+      await respawnServer?.shutdown()
+    })
+
     it('propagates the error when no respawn callback is provided', async () => {
       const noRespawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath })
 
@@ -2043,6 +2098,20 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await expect(noRespawnAdapter.spawn({ cols: 80, rows: 24 })).rejects.toThrow()
 
       noRespawnAdapter.dispose()
+    })
+
+    it('does not respawn for an initial missing token without an authenticated disconnect', async () => {
+      const respawnFn = vi.fn()
+      const untrustedAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
+      rmSync(tokenPath)
+
+      await expect(untrustedAdapter.spawn({ cols: 80, rows: 24 })).rejects.toMatchObject({
+        code: 'ENOENT',
+        syscall: 'open'
+      })
+      expect(respawnFn).not.toHaveBeenCalled()
+
+      untrustedAdapter.dispose()
     })
 
     it('treats a hello handshake timeout as daemon-gone and respawns (#8689)', async () => {
@@ -2066,6 +2135,30 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       try {
         const result = await respawnAdapter.spawn({ cols: 80, rows: 24 })
         expect(result.id).toBeDefined()
+        expect(respawnFn).toHaveBeenCalledOnce()
+      } finally {
+        ensureConnectedSpy.mockRestore()
+        respawnAdapter.dispose()
+      }
+    })
+
+    it('retries when an idle-shutdown fence rejects the handshake', async () => {
+      const realEnsureConnected = DaemonClient.prototype.ensureConnected
+      const ensureConnectedSpy = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockImplementationOnce(async () => {
+          throw new DaemonProtocolError('Daemon temporarily unavailable; reconnect')
+        })
+        .mockImplementation(function (this: DaemonClient) {
+          return realEnsureConnected.call(this)
+        })
+      const respawnFn = vi.fn(async () => {})
+      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
+
+      try {
+        await expect(respawnAdapter.spawn({ cols: 80, rows: 24 })).resolves.toMatchObject({
+          id: expect.any(String)
+        })
         expect(respawnFn).toHaveBeenCalledOnce()
       } finally {
         ensureConnectedSpy.mockRestore()
@@ -2278,8 +2371,31 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       adapter.fanoutSyntheticExits(-1)
 
-      expect(aExits).toEqual([{ id: 'sess-a', code: -1 }])
-      expect(bExits).toEqual([{ id: 'sess-a', code: -1 }])
+      const expectedExit = {
+        id: 'sess-a',
+        code: -1,
+        provenance: adapter.getPtyBindingProvenance()
+      }
+      expect(aExits).toEqual([expectedExit])
+      expect(bExits).toEqual([expectedExit])
+    })
+
+    it('marks restart exits verified only when the caller already proved absence', () => {
+      const exits: PtyExitPayload[] = []
+      adapter.onExit((payload) => exits.push(payload))
+      const internals = adapter as unknown as { activeSessionIds: Set<string> }
+      internals.activeSessionIds.add('sess-a')
+
+      adapter.fanoutSyntheticExits(-1, { verifiedAbsent: true })
+
+      expect(exits).toEqual([
+        {
+          id: 'sess-a',
+          code: -1,
+          provenance: adapter.getPtyBindingProvenance(),
+          verifiedAbsent: true
+        }
+      ])
     })
   })
 })

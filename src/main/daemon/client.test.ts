@@ -68,6 +68,11 @@ describe('DaemonClient', () => {
     onStreamHello?: (msg: HelloMessage) => void
     rejectVersion?: boolean
     suppressHelloResponse?: boolean
+    helloIdentity?: (role: 'control' | 'stream') => {
+      pid: number
+      startedAtMs: number
+      launchNonce: string
+    }
   }): Promise<void> {
     return new Promise((resolve) => {
       server = createServer((socket) => {
@@ -103,7 +108,13 @@ describe('DaemonClient', () => {
                 socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Version mismatch' }))
                 return
               }
-              socket.write(encodeNdjson({ type: 'hello', ok: true }))
+              socket.write(
+                encodeNdjson({
+                  type: 'hello',
+                  ok: true,
+                  ...(opts?.helloIdentity ? { daemonIdentity: opts.helloIdentity(hello.role) } : {})
+                })
+              )
               if (hello.role === 'stream') {
                 opts?.onStreamHello?.(hello)
               }
@@ -134,6 +145,33 @@ describe('DaemonClient', () => {
       expect(client.isConnected()).toBe(true)
       // Both control and stream sockets should have sent hello
       await waitFor(() => hellos.length > 0)
+    })
+
+    it('captures one matching endpoint identity from both authenticated sockets', async () => {
+      const identity = { pid: 123, startedAtMs: 456, launchNonce: 'launch-a' }
+      await startMockDaemon({ helloIdentity: () => identity })
+
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+
+      expect(client.getDaemonIdentity()).toEqual(identity)
+    })
+
+    it('rejects when control and stream sockets report different daemon identities', async () => {
+      await startMockDaemon({
+        helloIdentity: (role) => ({
+          pid: role === 'control' ? 123 : 124,
+          startedAtMs: 456,
+          launchNonce: 'launch-a'
+        })
+      })
+
+      client = new DaemonClient({ socketPath, tokenPath })
+
+      await expect(client.ensureConnected()).rejects.toThrow(
+        'Daemon identity changed during connection'
+      )
+      expect(client.getDaemonIdentity()).toBeNull()
     })
 
     it('removes socket startup listeners after connecting', async () => {

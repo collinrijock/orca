@@ -61,6 +61,8 @@ export type OrcaProfileSummary = {
   createdAt: number
   updatedAt: number
   lastOpenedAt: number
+  /** False until the profile has been selected at least once. */
+  initialized?: boolean
   cloud?: OrcaProfileCloudSummary
 }
 
@@ -306,6 +308,7 @@ export function createDefaultLocalOrcaProfile(now: number): OrcaProfileSummary {
     name: DEFAULT_LOCAL_ORCA_PROFILE_NAME,
     avatar: { kind: 'initials', initials: 'P', color: 'neutral' },
     kind: 'local',
+    initialized: false,
     createdAt: now,
     updatedAt: now,
     lastOpenedAt: now

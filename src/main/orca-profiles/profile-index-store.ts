@@ -8,7 +8,6 @@ import {
 } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
-import type { GlobalSettings } from '../../shared/types'
 import {
   createDefaultLocalOrcaProfile,
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
@@ -32,6 +31,7 @@ import {
   legacyDataFilePath,
   profileBackupPath
 } from './profile-storage-paths'
+import { ensureProfileOwnershipAuthority } from './profile-ownership-authority-seed'
 
 export {
   getOrcaProfileBrowserSessionMetaFile,
@@ -41,6 +41,7 @@ export {
   getOrcaProfilesDirectory,
   initOrcaProfilePaths
 } from './profile-storage-paths'
+export { seedNewOrcaProfileTelemetryConsent } from './profile-ownership-authority-seed'
 
 export type ActiveOrcaProfileState = {
   index: OrcaProfileIndex
@@ -70,6 +71,7 @@ function isProfileSummary(value: unknown): value is OrcaProfileSummary {
     typeof value.createdAt === 'number' &&
     typeof value.updatedAt === 'number' &&
     typeof value.lastOpenedAt === 'number' &&
+    (value.initialized === undefined || typeof value.initialized === 'boolean') &&
     isObject(avatar) &&
     avatar.kind === 'initials' &&
     typeof avatar.initials === 'string' &&
@@ -157,28 +159,6 @@ function copyLegacyStateToProfile(userDataPath: string, profileId: string): void
   }
 }
 
-// Why: a brand-new profile has no data file, which the telemetry cohort
-// migration reads as a fresh install and defaults to opted-in. Copying the
-// active profile's consent block keeps an opted-out user opted out (and keeps
-// one installId per install) when they create additional profiles.
-export function seedNewOrcaProfileTelemetryConsent(
-  profileId: string,
-  telemetry: GlobalSettings['telemetry'],
-  userDataPath = getProfileUserDataPath()
-): void {
-  if (!telemetry) {
-    return
-  }
-  const dataFile = getOrcaProfileDataFile(profileId, userDataPath)
-  if (existsSync(dataFile)) {
-    return
-  }
-  mkdirSync(dirname(dataFile), { recursive: true })
-  const tmpPath = `${dataFile}.tmp`
-  writeFileSync(tmpPath, JSON.stringify({ settings: { telemetry } }, null, 2), 'utf-8')
-  renameSync(tmpPath, dataFile)
-}
-
 function createInitialProfileIndex(now = Date.now()): OrcaProfileIndex {
   const profile = createDefaultLocalOrcaProfile(now)
   return {
@@ -212,16 +192,22 @@ export function ensureActiveOrcaProfile(
 ): ActiveOrcaProfileState {
   const indexPath = getOrcaProfileIndexPath(userDataPath)
   let index = existsSync(indexPath) ? readProfileIndex(indexPath) : null
-  let shouldWriteIndex = false
+  let shouldWriteIndex = index === null
+  index ??= createInitialProfileIndex()
 
-  if (!index) {
-    index = createInitialProfileIndex()
-    shouldWriteIndex = true
-  }
-
-  const activeProfile = getActiveProfile(index)
+  let activeProfile = getActiveProfile(index)
   if (activeProfile.id !== index.activeProfileId) {
     index = { ...index, activeProfileId: activeProfile.id }
+    shouldWriteIndex = true
+  }
+  if (activeProfile.initialized !== true) {
+    activeProfile = { ...activeProfile, initialized: true }
+    index = {
+      ...index,
+      profiles: index.profiles.map((profile) =>
+        profile.id === activeProfile.id ? activeProfile : profile
+      )
+    }
     shouldWriteIndex = true
   }
 
@@ -230,6 +216,7 @@ export function ensureActiveOrcaProfile(
   if (activeProfile.id === DEFAULT_LOCAL_ORCA_PROFILE_ID) {
     copyLegacyStateToProfile(userDataPath, activeProfile.id)
   }
+  ensureProfileOwnershipAuthority(activeProfile.id, userDataPath)
 
   if (shouldWriteIndex) {
     writeProfileIndex(indexPath, index)
@@ -275,6 +262,7 @@ export function createLocalOrcaProfile(
       color: 'neutral'
     },
     kind: 'local',
+    initialized: false,
     createdAt: now,
     updatedAt: now,
     lastOpenedAt: now
@@ -283,8 +271,10 @@ export function createLocalOrcaProfile(
     ...index,
     profiles: [...index.profiles, profile]
   }
-  mkdirSync(getOrcaProfileDirectory(profile.id, userDataPath), { recursive: true })
+  // Why: initialized:false makes a missing profile state safe; commit that row
+  // before creating its directory so a failed index write cannot leave an orphan.
   writeProfileIndex(getOrcaProfileIndexPath(userDataPath), nextIndex)
+  mkdirSync(getOrcaProfileDirectory(profile.id, userDataPath), { recursive: true })
   return {
     activeProfileId: nextIndex.activeProfileId,
     profiles: nextIndex.profiles,
