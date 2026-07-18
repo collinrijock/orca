@@ -41,7 +41,7 @@ const {
   writeFileSyncMock,
   chmodSyncMock,
   getPathMock,
-  loginPreflightSpawnSyncMock,
+  loginPreflightExecFileMock,
   spawnMock,
   openCodeBuildPtyEnvMock,
   openCodeClearPtyMock,
@@ -73,7 +73,7 @@ const {
   writeFileSyncMock: vi.fn(),
   chmodSyncMock: vi.fn(),
   getPathMock: vi.fn(),
-  loginPreflightSpawnSyncMock: vi.fn(),
+  loginPreflightExecFileMock: vi.fn(),
   spawnMock: vi.fn(),
   openCodeBuildPtyEnvMock: vi.fn(),
   mimoCodeBuildPtyEnvMock: vi.fn(),
@@ -135,7 +135,7 @@ vi.mock('node-pty', () => ({
 // while preserving every other child_process API used by the IPC graph.
 vi.mock('node:child_process', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  spawnSync: loginPreflightSpawnSyncMock
+  execFile: loginPreflightExecFileMock
 }))
 
 vi.mock('../opencode/hook-service', () => ({
@@ -336,7 +336,7 @@ describe('registerPtyHandlers', () => {
     writeFileSyncMock.mockReset()
     chmodSyncMock.mockReset()
     getPathMock.mockReset()
-    loginPreflightSpawnSyncMock.mockReset()
+    loginPreflightExecFileMock.mockReset()
     spawnMock.mockReset()
     openCodeBuildPtyEnvMock.mockReset()
     mimoCodeBuildPtyEnvMock.mockReset()
@@ -7214,10 +7214,17 @@ describe('registerPtyHandlers', () => {
     // Re-enable the TCC login wrapper the suite-level beforeEach disables.
     delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
     process.env.SHELL = '/bin/zsh'
-    loginPreflightSpawnSyncMock.mockReturnValue({
-      status: 0,
-      stdout: 'ORCA_LOGIN_PREFLIGHT_OK'
-    })
+    loginPreflightExecFileMock.mockImplementation(
+      (
+        _file: string,
+        _args: string[],
+        _options: unknown,
+        callback: (error: Error | null, stdout: string, stderr: string) => void
+      ) => {
+        callback(null, 'ORCA_LOGIN_PREFLIGHT_OK', '')
+        return { stdin: { end: vi.fn() } }
+      }
+    )
     resetMacosLoginShellPreflightForTests()
 
     try {

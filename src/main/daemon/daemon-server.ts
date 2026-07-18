@@ -35,6 +35,7 @@ export type DaemonServerOptions = {
   socketPath: string
   tokenPath: string
   ptySpawnHealthCheck?: () => Promise<void>
+  preparePtySpawn?: () => Promise<void>
   log?: DaemonFileLog
   spawnSubprocess: (opts: {
     sessionId: string
@@ -60,6 +61,7 @@ export class DaemonServer {
   private socketPath: string
   private tokenPath: string
   private ptySpawnHealthCheck: () => Promise<void>
+  private preparePtySpawn: () => Promise<void>
   private log: DaemonFileLog
 
   private clients = new Map<string, ConnectedClient>()
@@ -111,6 +113,7 @@ export class DaemonServer {
     this.token = randomUUID()
     this.host = new TerminalHost({ spawnSubprocess: opts.spawnSubprocess })
     this.ptySpawnHealthCheck = opts.ptySpawnHealthCheck ?? checkPtySpawnHealth
+    this.preparePtySpawn = opts.preparePtySpawn ?? (() => Promise.resolve())
     this.stopStreamBacklogProbe = startDaemonStreamBacklogProbe(() => ({
       clients: Array.from(this.clients.values(), (client) => ({
         clientId: client.clientId,
@@ -341,6 +344,9 @@ export class DaemonServer {
     switch (request.type) {
       case 'createOrAttach': {
         const p = request.payload
+        // Why: keep capability probes outside TerminalHost's synchronous create
+        // section so concurrent requests cannot create two subprocess generations.
+        await this.preparePtySpawn()
         const result = await this.host.createOrAttach({
           sessionId: p.sessionId,
           cols: p.cols,

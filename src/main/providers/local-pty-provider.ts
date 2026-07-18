@@ -27,6 +27,7 @@ import {
   validateWorkingDirectory,
   spawnShellWithFallback
 } from './local-pty-utils'
+import { prepareMacosTccLoginShell } from './macos-tcc-login-shell'
 import {
   getAttributionShellLaunchConfig,
   getShellReadyLaunchConfig,
@@ -795,6 +796,9 @@ export class LocalPtyProvider implements IPtyProvider {
       logHistoryInjection(worktreeId, historyResult)
     }
 
+    // Why: PAM can take hundreds of milliseconds. Await its one-time probe at
+    // the async provider boundary so Electron stays responsive during fallback spawns.
+    await prepareMacosTccLoginShell()
     const spawnResult = spawnShellWithFallback({
       shellPath,
       shellArgs,

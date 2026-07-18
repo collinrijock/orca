@@ -181,6 +181,44 @@ describe('DaemonServer', () => {
       })
     })
 
+    it('keeps RPC responsive and creates one subprocess while spawn preparation is pending', async () => {
+      let finishPreparation!: () => void
+      const preparation = new Promise<void>((resolve) => {
+        finishPreparation = resolve
+      })
+      const preparePtySpawn = vi.fn(() => preparation)
+      const spawnSubprocess = vi.fn(() => createMockSubprocess())
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        preparePtySpawn,
+        spawnSubprocess
+      })
+      await server.start()
+      const c = await connectClient()
+
+      const firstCreate = c.request<{ isNew: boolean }>('createOrAttach', {
+        sessionId: 'prepared-session',
+        cols: 80,
+        rows: 24
+      })
+      const concurrentCreate = c.request<{ isNew: boolean }>('createOrAttach', {
+        sessionId: 'prepared-session',
+        cols: 80,
+        rows: 24
+      })
+      await vi.waitFor(() => expect(preparePtySpawn).toHaveBeenCalledTimes(2))
+
+      // The old spawnSync probe blocked this ping and all live PTY traffic.
+      await expect(c.request('ping', undefined)).resolves.toEqual({ pong: true })
+      expect(spawnSubprocess).not.toHaveBeenCalled()
+
+      finishPreparation()
+      const results = await Promise.all([firstCreate, concurrentCreate])
+      expect(results.map((result) => result.isNew).sort()).toEqual([false, true])
+      expect(spawnSubprocess).toHaveBeenCalledOnce()
+    })
+
     it('persists only an allowlisted launch identity across reattach', async () => {
       await startServer()
       const c = await connectClient()
