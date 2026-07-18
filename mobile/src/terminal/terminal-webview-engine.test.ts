@@ -90,25 +90,6 @@ attachWebglAddon(true);`).runInNewContext(context)
   }
 }
 
-function shouldUseWebglRenderer(navigator: {
-  userAgent: string
-  platform: string
-  maxTouchPoints: number
-}): boolean {
-  const functionStart = terminalHtmlSource.indexOf('  function isIOSWebView()')
-  const functionEnd = terminalHtmlSource.indexOf(
-    '  // Why: iOS WebKit does not reliably resolve',
-    functionStart
-  )
-  expect(functionStart).toBeGreaterThanOrEqual(0)
-  expect(functionEnd).toBeGreaterThan(functionStart)
-  const context = { navigator, useWebgl: false }
-  new Script(
-    `${terminalHtmlSource.slice(functionStart, functionEnd)}\nuseWebgl = shouldUseWebglRenderer();`
-  ).runInNewContext(context)
-  return context.useWebgl
-}
-
 describe('terminal WebView bundled engine', () => {
   it('keeps the assembled terminal HTML free of external engine URLs', () => {
     expect(XTERM_HTML).not.toMatch(/\bhttps?:\/\//)
@@ -119,6 +100,13 @@ describe('terminal WebView bundled engine', () => {
 
   it('parses the bundled engine at the Chrome 74 syntax floor', () => {
     expect(() => parse(XTERM_ENGINE_JS, { ecmaVersion: 2019 })).not.toThrow()
+  })
+
+  it('bundles per-renderer shared-atlas invalidation tracking', () => {
+    // Why: Relay reconnect replays can overlap old/new WebGL terminals. Every
+    // renderer sharing the atlas must rebuild after another renderer clears it.
+    expect(XTERM_ENGINE_JS).toContain('_clearModelGeneration')
+    expect(XTERM_ENGINE_JS).toContain('atlas page count')
   })
 
   // Why: the context deliberately omits WeakRef (Chrome 84+) / structuredClone
@@ -227,39 +215,6 @@ describe('terminal WebView bundled engine', () => {
     expect(addons[1]?.dispose).toHaveBeenCalledTimes(1)
     expect(term.refresh).toHaveBeenCalledTimes(3)
     expect(timers).toHaveLength(0)
-  })
-
-  it.each([
-    {
-      name: 'iPhone',
-      navigator: {
-        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X)',
-        platform: 'iPhone',
-        maxTouchPoints: 5
-      },
-      expected: false
-    },
-    {
-      name: 'touch MacIntel iPadOS',
-      navigator: {
-        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0)',
-        platform: 'MacIntel',
-        maxTouchPoints: 5
-      },
-      expected: false
-    },
-    {
-      name: 'Android',
-      navigator: {
-        userAgent: 'Mozilla/5.0 (Linux; Android 16)',
-        platform: 'Linux armv8l',
-        maxTouchPoints: 5
-      },
-      expected: true
-    }
-  ])('selects the expected renderer for $name', ({ navigator, expected }) => {
-    expect(shouldUseWebglRenderer(navigator)).toBe(expected)
-    expect(terminalHtmlSource).toContain('if (shouldUseWebglRenderer()) attachWebglAddon(true);')
   })
 
   it('falls back to a refreshed DOM renderer when the delayed WebGL retry fails', () => {
