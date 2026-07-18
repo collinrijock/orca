@@ -4,13 +4,14 @@ This is the **UI/visual design** doc for Orca — color tokens, typography, comp
 
 ## Overview
 
-Orca is an Electron desktop app for orchestrating coding agents across git worktrees. The visual identity is **monochrome and quiet** — neutral grays carry the chrome, color is reserved for state (selection ring, destructive, git decorations). The product spends most of its time hosting other people's tools (Monaco, xterm, Markdown previews), so Orca's own UI should recede and frame.
+Orca is an Electron desktop app for orchestrating coding agents across git worktrees. The visual identity is **agent-first, monochrome, and quiet**: a dense graphite workspace, crisp hierarchy, and low-radius controls. Neutral grays carry the chrome; cool blue is reserved for active, interactive, and status states. The product spends most of its time hosting other people's tools (Monaco, xterm, Markdown previews), so Orca's own UI should recede and frame.
 
 When in doubt:
 
 - Reach for **muted/accent/border** before reaching for color.
 - Reach for **CSS variables** before hardcoding hex.
 - Match the nearest **shadcn primitive** before writing custom CSS.
+- Prefer flat groups and hairline dividers over cards, gradients, glass, or decorative shadows.
 
 ## Source of truth
 
@@ -83,9 +84,9 @@ This keeps light/dark parity automatic.
 
 ## Typography
 
-- **Family:** `Geist` is loaded as a single variable woff2 (weight range 100–900). Always reach for `Geist` for sans, never `Inter` or system sans.
-- **Mono:** `var(--font-mono)` — used for paths, terminal-adjacent UI, code, and anywhere monospace conveys "this is literal."
-- **Body letter-spacing:** `0.01em` (set globally on `body`). Don't override per component.
+- **Family:** bundled `Geist` is loaded as a single variable woff2 (weight range 100–900), with optical sizing, kerning, ligatures, and contextual alternates enabled globally. Always reach for `Geist` for sans, never `Inter` or system sans.
+- **Mono:** `var(--font-mono)` — currently the native SF Mono/Cascadia/Menlo stack because Geist Mono is not bundled. Use it for paths, terminal-adjacent UI, code, and anywhere monospace conveys "this is literal."
+- **Body letter-spacing:** `-0.006em` (set globally on `body`). Use tighter tracking only for large headings and wider tracking only for uppercase category labels.
 - **Sizes:** Tailwind's default scale. Common sizes in this repo:
   - 11px (uppercase meta, sidebar headers, captions) — pair with `font-weight: 600` and `text-transform: uppercase` and `letter-spacing: 0.05em` for category labels.
   - 12px (sub-text, paths, secondary content)
@@ -94,7 +95,7 @@ This keeps light/dark parity automatic.
 
 ## Radius
 
-`--radius: 0.625rem` (10px) is the base; the rest are computed (`--radius-sm` = 0.6×, `--radius-md` = 0.8×, `--radius-lg` = 1×, `--radius-xl` = 1.4×, etc.). Buttons and inputs use `rounded-md`; the `Card` primitive uses `rounded-xl`; badges use `rounded-full`. Match the existing primitive's radius rather than introducing a new one.
+`--radius: 0.375rem` (6px) is the base; the rest are computed (`--radius-sm` = 0.6×, `--radius-md` = 0.8×, `--radius-lg` = 1×, `--radius-xl` = 1.4×, etc.). Buttons and inputs use `rounded-md`; the `Card` primitive uses `rounded-xl`; badges use `rounded-full`. Match the existing primitive's radius rather than introducing a new one.
 
 ## Elevation & shadows
 
