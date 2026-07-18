@@ -17,7 +17,6 @@ const SidebarHeader = React.memo(function SidebarHeader({
 }: SidebarHeaderProps) {
   const openModal = useAppStore((s) => s.openModal)
   const newWorktreeShortcutLabel = useShortcutLabel('workspace.create')
-  const groupBy = useAppStore((s) => s.groupBy)
   const canCreateWorkspace = useAppStore((s) => s.repos.length > 0)
 
   return (
@@ -25,7 +24,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
       <div className="flex min-w-0 items-center gap-1">
         <span
           className="select-none pl-2 pr-0.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground/80"
-          data-sidebar-section-title={groupBy === 'repo' ? 'projects' : 'workspaces'}
+          data-sidebar-section-title="agents"
         >
           {translate('auto.components.sidebar.SidebarNav.9c95e1ce91', 'Agents')}
         </span>

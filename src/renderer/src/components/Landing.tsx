@@ -384,17 +384,25 @@ export default function Landing(): React.JSX.Element {
                 </Button>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="outline" size="sm" asChild>
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        aria-disabled="true"
-                        aria-describedby="landing-new-agent-workspace-disabled-hint"
-                        className="cursor-not-allowed opacity-50"
-                      >
-                        <GitBranchPlus className="size-3.5" />
-                        {newAgentWorkspaceLabel}
-                      </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      aria-disabled="true"
+                      aria-describedby="landing-new-agent-workspace-disabled-hint"
+                      className="cursor-not-allowed opacity-50"
+                      onClick={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          event.stopPropagation()
+                        }
+                      }}
+                    >
+                      <GitBranchPlus className="size-3.5" />
+                      {newAgentWorkspaceLabel}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={6}>
