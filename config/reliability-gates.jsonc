@@ -2287,7 +2287,7 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/startup/ssh-startup-reconnect.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts src/renderer/src/runtime/web-session-terminal-handle-events.test.ts src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts",
           "result": "passed",
           "durationSeconds": 15,
-          "summary": "Ten provider-contract files and 565 tests passed, including post-timeout snapshot recovery, listener cleanup, in-flight inventory deduplication, and replacement-state migration after snapshot-first ordering."
+          "summary": "Ten provider-contract files and 566 tests passed, including post-timeout snapshot recovery, same-tick snapshot ordering, listener cleanup, in-flight inventory deduplication, and replacement-state migration after snapshot-first ordering."
         }
       ],
       "runtimeBudget": {
