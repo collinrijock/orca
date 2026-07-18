@@ -61,8 +61,24 @@ export async function launchInstalledApp({
       ...extraEnv
     }
   })
-  const page = await app.firstWindow({ timeout: 120_000 })
-  await page.waitForLoadState('domcontentloaded')
+  // If firstWindow times out (the launched main never shows a window), the
+  // Electron process is still running — force-kill its tree before rethrowing so
+  // a driving failure never leaks an orphaned main to the CI job timeout.
+  let page
+  try {
+    page = await app.firstWindow({ timeout: 120_000 })
+    await page.waitForLoadState('domcontentloaded')
+  } catch (err) {
+    const pid = app.process()?.pid
+    if (pid) {
+      try {
+        execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' })
+      } catch {
+        /* already gone */
+      }
+    }
+    throw err
+  }
   return { app, page }
 }
 
@@ -339,6 +355,10 @@ export async function readTerminalTextBestEffort(page) {
  * left alive exactly as a normal quit would.
  */
 export async function closeApp(app, timeoutMs = 10_000) {
+  // A partially-created session (launch failed before assignment) passes undefined.
+  if (!app) {
+    return
+  }
   const proc = app.process()
   try {
     await Promise.race([
