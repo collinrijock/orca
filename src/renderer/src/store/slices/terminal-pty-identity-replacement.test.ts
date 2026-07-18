@@ -23,4 +23,23 @@ describe('terminal PTY identity replacement', () => {
     expect(state.tabsByWorktree[worktreeId][0]?.ptyId).toBe(thirdPtyId)
     expect(state.lastKnownRelayPtyIdByTabId['tab-1']).toBe(thirdPtyId)
   })
+
+  it('migrates stale PTY state when the host snapshot published the replacement first', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+    const stalePtyId = 'remote:env-1@@terminal-stale'
+    const replacementPtyId = 'remote:env-1@@terminal-replacement'
+    seedStore(store, {
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: replacementPtyId })]
+      },
+      ptyIdsByTabId: { 'tab-1': [replacementPtyId] },
+      pendingCodexPaneRestartIds: { [stalePtyId]: true }
+    })
+
+    store.getState().updateTabPtyId('tab-1', replacementPtyId, stalePtyId)
+
+    expect(store.getState().ptyIdsByTabId['tab-1']).toEqual([replacementPtyId])
+    expect(store.getState().pendingCodexPaneRestartIds).toEqual({ [replacementPtyId]: true })
+  })
 })

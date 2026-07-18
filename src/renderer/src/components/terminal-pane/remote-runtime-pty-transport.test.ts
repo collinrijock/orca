@@ -581,17 +581,19 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(subscribedTerminals).toEqual(['terminal-stale', 'terminal-reconnected'])
   })
 
-  it('keeps the mirror mounted when bounded replacement polling has no removal evidence', async () => {
+  it('reattaches from a later host snapshot after bounded replacement polling stops', async () => {
     vi.useFakeTimers()
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onError = vi.fn()
       const onPtyExit = vi.fn()
+      const onPtyRebind = vi.fn()
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-tab-1',
         leafId: 'pane:1',
-        onPtyExit
+        onPtyExit,
+        onPtyRebind
       })
 
       transport.attach({
@@ -649,6 +651,44 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(onPtyExit).not.toHaveBeenCalled()
       expect(transport.getPtyId()).toBe('remote:env-1@@terminal-stale')
       expect(transport.isConnected()).toBe(true)
+      const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
+      expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(1)
+
+      handleEvents.queueAcceptedWebSessionTerminalSnapshot(
+        {
+          worktree: 'wt-1',
+          publicationEpoch: 'epoch-2',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: 'tab-1::pane:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1::pane:1',
+              parentTabId: 'tab-1',
+              leafId: 'pane:1',
+              title: 'Claude Code',
+              isActive: true,
+              status: 'ready',
+              terminal: 'terminal-after-timeout'
+            }
+          ]
+        },
+        'env-1'
+      )
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.waitFor(() =>
+        expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-after-timeout' })
+      )
+
+      expect(onPtyRebind).toHaveBeenCalledWith(
+        'remote:env-1@@terminal-after-timeout',
+        'remote:env-1@@terminal-stale'
+      )
+      expect(onPtyExit).not.toHaveBeenCalled()
+      expect(transport.getPtyId()).toBe('remote:env-1@@terminal-after-timeout')
+      expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(0)
       const subscribedTerminals = subscriptionSendBinary.mock.calls
         .map((call) => decodeTerminalStreamFrame(call[0]))
         .flatMap((frame) => {
@@ -658,7 +698,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           const payload = decodeTerminalStreamJson<{ terminal: string }>(frame.payload)
           return payload ? [payload.terminal] : []
         })
-      expect(subscribedTerminals).toEqual(['terminal-stale'])
+      expect(subscribedTerminals).toEqual(['terminal-stale', 'terminal-after-timeout'])
     } finally {
       vi.useRealTimers()
     }

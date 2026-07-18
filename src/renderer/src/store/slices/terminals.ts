@@ -2016,14 +2016,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const hasLegacyPtyBinding = legacyRemotePtyId
         ? existingPtyIds.includes(legacyRemotePtyId)
         : false
+      const explicitReplacementPtyId = replacedPtyId !== ptyId ? replacedPtyId : undefined
       const replacementPtyId =
-        replacedPtyId && existingPtyIds.includes(replacedPtyId)
-          ? replacedPtyId
-          : hasLegacyPtyBinding
-            ? legacyRemotePtyId
-            : null
-      const nextPtyIds = replacementPtyId
-        ? [...new Set(existingPtyIds.map((id) => (id === replacementPtyId ? ptyId : id)))]
+        explicitReplacementPtyId ?? (hasLegacyPtyBinding ? legacyRemotePtyId : null)
+      const boundReplacementPtyId =
+        replacementPtyId && existingPtyIds.includes(replacementPtyId) ? replacementPtyId : null
+      const nextPtyIds = boundReplacementPtyId
+        ? [...new Set(existingPtyIds.map((id) => (id === boundReplacementPtyId ? ptyId : id)))]
         : existingPtyIds.includes(ptyId)
           ? existingPtyIds
           : [...existingPtyIds, ptyId]
