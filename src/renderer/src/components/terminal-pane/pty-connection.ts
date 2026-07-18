@@ -2795,6 +2795,11 @@ export function connectPanePty(
     // once the PTY exists, then let real hook events refine or complete it.
     bindActivePanePty(ptyId, { seedInitialAgentStatus: true })
   }
+  const onPtyRebind = (ptyId: string): void => {
+    // Why: provider handle rotation keeps the existing pane/session generation;
+    // treating it as a fresh spawn can strand a later real exit as a newborn.
+    bindActivePanePty(ptyId)
+  }
   // ─── Attention signal: BEL ────────────────────────────────────────────
   //
   // BEL (0x07) is the attention signal. A BEL raises tab- and worktree-level
@@ -3083,6 +3088,9 @@ export function connectPanePty(
     }
   }
   const onAgentExited = (): void => {
+    // Why: eligibility can disappear transiently during reconnect, but a
+    // confirmed shell-title transition is authoritative for native-chat exit.
+    deps.onAgentExitedRef.current(pane.leafId)
     clearSuppressedTitleSideEffects()
     clearCommandInferredPaneAgent()
     requestKnownDroidReconfirmation()
@@ -3298,6 +3306,7 @@ export function connectPanePty(
     ...(paneStartup?.telemetry ? { telemetry: paneStartup.telemetry } : {}),
     onPtyExit: onExit,
     onPtySpawn,
+    onPtyRebind,
     ...(mainSideEffectAuthority
       ? {}
       : {

@@ -306,11 +306,13 @@ describe('createRemoteRuntimePtyTransport', () => {
   it('re-derives the host session handle after a transport close instead of resubscribing the stale one', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onPtySpawn = vi.fn()
+    const onPtyRebind = vi.fn()
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-tab-1',
       leafId: 'pane:1',
-      onPtySpawn
+      onPtySpawn,
+      onPtyRebind
     })
 
     transport.attach({
@@ -364,7 +366,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-2' })
     )
     expect(transport.getPtyId()).toContain('terminal-2')
-    expect(onPtySpawn).toHaveBeenCalledWith(expect.stringContaining('terminal-2'))
+    expect(onPtySpawn).not.toHaveBeenCalled()
+    expect(onPtyRebind).toHaveBeenCalledWith(expect.stringContaining('terminal-2'))
   })
 
   it('retires the mirror when the host no longer publishes the surface after a transport close', async () => {
@@ -463,6 +466,8 @@ describe('createRemoteRuntimePtyTransport', () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onError = vi.fn()
     const onPtyExit = vi.fn()
+    const onPtySpawn = vi.fn()
+    const onPtyRebind = vi.fn()
     const onExit = vi.fn()
     const onDisconnect = vi.fn()
     const renderedScreen: string[] = []
@@ -470,7 +475,9 @@ describe('createRemoteRuntimePtyTransport', () => {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-tab-1',
       leafId: 'pane:1',
-      onPtyExit
+      onPtyExit,
+      onPtySpawn,
+      onPtyRebind
     })
 
     transport.attach({
@@ -543,6 +550,9 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     expect(onError).not.toHaveBeenCalled()
     expect(onPtyExit).not.toHaveBeenCalled()
+    expect(onPtySpawn).not.toHaveBeenCalled()
+    expect(onPtyRebind).toHaveBeenCalledOnce()
+    expect(onPtyRebind).toHaveBeenCalledWith('remote:env-1@@terminal-reconnected')
     expect(onExit).not.toHaveBeenCalled()
     expect(onDisconnect).not.toHaveBeenCalled()
     expect(transport.getPtyId()).toBe('remote:env-1@@terminal-reconnected')
@@ -559,6 +569,88 @@ describe('createRemoteRuntimePtyTransport', () => {
         return payload ? [payload.terminal] : []
       })
     expect(subscribedTerminals).toEqual(['terminal-stale', 'terminal-reconnected'])
+  })
+
+  it('coalesces concurrent stale errors for the handle that was replaced', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtyExit = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-tab-1',
+      leafId: 'pane:1',
+      onPtyExit
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-stale',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+
+    let resolveHostList: (response: unknown) => void = () => {}
+    const hostListResponse = new Promise((resolve) => {
+      resolveHostList = resolve
+    })
+    let hostListCalls = 0
+    runtimeCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'terminal.send') {
+        return Promise.resolve({
+          ok: false,
+          error: { code: 'terminal_handle_stale', message: 'terminal_handle_stale' }
+        })
+      }
+      if (args.method === 'session.tabs.list') {
+        hostListCalls += 1
+        return hostListResponse
+      }
+      return Promise.resolve({ ok: true, result: {} })
+    })
+
+    const sendInputAccepted = transport.sendInputAccepted
+    if (!sendInputAccepted) {
+      throw new Error('Expected acknowledged remote terminal input')
+    }
+    const sends = Promise.all([sendInputAccepted('first'), sendInputAccepted('second')])
+    await vi.waitFor(() => expect(hostListCalls).toBe(1))
+    await expect(sends).resolves.toEqual([false, false])
+
+    resolveHostList({
+      ok: true,
+      result: {
+        worktree: 'wt-1',
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 2,
+        activeGroupId: null,
+        activeTabId: 'tab-1::pane:1',
+        activeTabType: 'terminal',
+        tabs: [
+          {
+            type: 'terminal',
+            id: 'tab-1::pane:1',
+            parentTabId: 'tab-1',
+            leafId: 'pane:1',
+            title: 'Claude Code',
+            isActive: true,
+            status: 'ready',
+            terminal: 'terminal-reconnected'
+          }
+        ]
+      }
+    })
+
+    await vi.waitFor(() =>
+      expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-reconnected' })
+    )
+    await Promise.resolve()
+
+    // Why: the second stale response belonged to terminal-stale. Replaying it
+    // against the replacement would add another polling loop and retire it.
+    expect(hostListCalls).toBe(1)
+    expect(onPtyExit).not.toHaveBeenCalled()
+    expect(transport.getPtyId()).toBe('remote:env-1@@terminal-reconnected')
+    expect(transport.isConnected()).toBe(true)
   })
 
   it('still retires the regular TUI surface after an explicit terminal exit', async () => {

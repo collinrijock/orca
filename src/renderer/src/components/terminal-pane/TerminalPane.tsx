@@ -103,7 +103,8 @@ import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
 import {
   nativeChatLaunchAgentForLeaf,
-  resolveNativeChatLeafRoute
+  resolveNativeChatLeafRoute,
+  type NativeChatLeafRoute
 } from '../native-chat/native-chat-leaf-routing'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
@@ -402,6 +403,7 @@ export default function TerminalPane({
   } | null>(null)
   const [quickCommandEditorOpen, setQuickCommandEditorOpen] = useState(false)
   const [chatLeafId, setChatLeafId] = useState<string | null>(null)
+  const onAgentExitedRef = useRef<(leafId: string) => void>(() => {})
   const [tabWideAgentHintLeafId, setTabWideAgentHintLeafId] = useState<string | null | undefined>(
     undefined
   )
@@ -784,6 +786,39 @@ export default function TerminalPane({
       resolveTitleAgentForLeaf
     ]
   )
+  const applyNativeChatLeafRoute = useCallback(
+    (route: NativeChatLeafRoute): void => {
+      if (route.chatLeafId !== chatLeafId) {
+        setChatLeafId(route.chatLeafId)
+      }
+      if (route.exitChat && unifiedTabId) {
+        // Why: event/effect replay must not flip terminal mode back to chat.
+        setTabViewMode(unifiedTabId, 'terminal')
+      }
+    },
+    [chatLeafId, setTabViewMode, unifiedTabId]
+  )
+  const handleConfirmedAgentExit = useCallback(
+    (leafId: string): void => {
+      if (leafId !== chatLeafId) {
+        return
+      }
+      const panes = managerRef.current?.getPanes() ?? []
+      const activeLeafId = managerRef.current?.getActivePane()?.leafId ?? null
+      applyNativeChatLeafRoute(
+        resolveNativeChatLeafRoute({
+          isChatViewMode,
+          chatLeafId,
+          activeLeafId,
+          chatLeafStillMounted: panes.some((pane) => pane.leafId === chatLeafId),
+          activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId),
+          chatLeafHasConfirmedAgentExit: true
+        })
+      )
+    },
+    [applyNativeChatLeafRoute, chatLeafId, isChatEligibleForLeaf, isChatViewMode]
+  )
+  onAgentExitedRef.current = handleConfirmedAgentExit
   const canToggleChatForLeaf = useCallback(
     (leafId: string | null): boolean => {
       // Scope the "always allow toggling back" rule to the leaf actually showing
@@ -1530,6 +1565,7 @@ export default function TerminalPane({
     isActiveRef,
     isVisibleRef,
     onPtyExitRef,
+    onAgentExitedRef,
     onPtyErrorRef,
     clearTabPtyId,
     consumeSuppressedPtyExit: useAppStore((store) => store.consumeSuppressedPtyExit),
@@ -1754,6 +1790,7 @@ export default function TerminalPane({
         isActiveRef,
         isVisibleRef,
         onPtyExitRef,
+        onAgentExitedRef,
         onPtyErrorRef,
         clearTabPtyId,
         consumeSuppressedPtyExit: useAppStore.getState().consumeSuppressedPtyExit,
@@ -1790,6 +1827,7 @@ export default function TerminalPane({
       clearTerminalTabUnread,
       clearTerminalPaneUnread,
       showRestoredSessionBanner,
+      onAgentExitedRef,
       onPtyExitRef,
       setCacheTimerStartedAt,
       setRuntimePaneTitle,
@@ -2989,21 +3027,14 @@ export default function TerminalPane({
       chatLeafStillMounted,
       activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId)
     })
-    if (route.chatLeafId !== chatLeafId) {
-      setChatLeafId(route.chatLeafId)
-    }
-    if (route.exitChat && unifiedTabId) {
-      // Why: effect replay must not flip terminal mode back to chat.
-      setTabViewMode(unifiedTabId, 'terminal')
-    }
+    applyNativeChatLeafRoute(route)
   }, [
     isChatViewMode,
     chatLeafId,
     activePane?.leafId,
     chatLeafStillMounted,
-    isChatEligibleForLeaf,
-    unifiedTabId,
-    setTabViewMode
+    applyNativeChatLeafRoute,
+    isChatEligibleForLeaf
   ])
   const chatPane =
     isChatViewMode && chatLeafId

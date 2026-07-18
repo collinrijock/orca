@@ -147,6 +147,32 @@ describe('resolveNativeChatLeafRoute', () => {
     ).toEqual({ chatLeafId: 'stopped-agent', exitChat: false })
   })
 
+  it('exits chat when the mounted agent has authoritatively returned to its shell', () => {
+    expect(
+      resolveNativeChatLeafRoute({
+        isChatViewMode: true,
+        chatLeafId: 'exited-agent',
+        activeLeafId: 'exited-agent',
+        chatLeafStillMounted: true,
+        activeLeafIsEligible: true,
+        chatLeafHasConfirmedAgentExit: true
+      })
+    ).toEqual({ chatLeafId: null, exitChat: true })
+  })
+
+  it('moves chat to an eligible sibling after the owning agent exits', () => {
+    expect(
+      resolveNativeChatLeafRoute({
+        isChatViewMode: true,
+        chatLeafId: 'exited-agent',
+        activeLeafId: 'agent-sibling',
+        chatLeafStillMounted: true,
+        activeLeafIsEligible: true,
+        chatLeafHasConfirmedAgentExit: true
+      })
+    ).toEqual({ chatLeafId: 'agent-sibling', exitChat: false })
+  })
+
   it('attaches a tab-level chat request to the eligible active leaf', () => {
     expect(
       resolveNativeChatLeafRoute({

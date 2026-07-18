@@ -77,6 +77,7 @@ export function createRemoteRuntimePtyTransport(
     activate,
     onPtyExit,
     onPtySpawn,
+    onPtyRebind,
     onTitleChange,
     onBell,
     onAgentBecameIdle,
@@ -94,8 +95,8 @@ export function createRemoteRuntimePtyTransport(
   let desiredViewport: { cols: number; rows: number } | null = null
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
   let resubscribing = false
-  let resubscribeRequested = false
-  let resubscribeRequiresReplacement = false
+  let resubscribeRequestedHandle: string | null = null
+  let resubscribeRequestedRequiresReplacement = false
   let subscriptionGeneration = 0
   let pendingViewportClaim = false
   let pendingClaimInput = ''
@@ -504,7 +505,9 @@ export function createRemoteRuntimePtyTransport(
       if (nextHandle !== previousHandle) {
         handle = nextHandle
         remotePtyId = toRemoteRuntimePtyId(nextHandle, currentRuntimeEnvironmentId)
-        onPtySpawn?.(remotePtyId)
+        // Why: the host replaced an existing mirror identity; rebinding must not
+        // apply fresh-spawn exit/agent seeding semantics to the mounted pane.
+        onPtyRebind?.(remotePtyId)
       }
     }
     await subscribeToHandle()
@@ -515,8 +518,14 @@ export function createRemoteRuntimePtyTransport(
       return
     }
     if (resubscribing) {
-      resubscribeRequested = true
-      resubscribeRequiresReplacement ||= requireReplacement
+      // Why: concurrent stale errors belong to the handle that produced them.
+      // Do not carry an old handle's replacement requirement onto its successor.
+      if (resubscribeRequestedHandle !== handle) {
+        resubscribeRequestedHandle = handle
+        resubscribeRequestedRequiresReplacement = requireReplacement
+      } else {
+        resubscribeRequestedRequiresReplacement ||= requireReplacement
+      }
       return
     }
     resubscribing = true
@@ -530,10 +539,11 @@ export function createRemoteRuntimePtyTransport(
       })
       .finally(() => {
         resubscribing = false
-        if (resubscribeRequested) {
-          resubscribeRequested = false
-          const pendingRequiresReplacement = resubscribeRequiresReplacement
-          resubscribeRequiresReplacement = false
+        const pendingHandle = resubscribeRequestedHandle
+        const pendingRequiresReplacement = resubscribeRequestedRequiresReplacement
+        resubscribeRequestedHandle = null
+        resubscribeRequestedRequiresReplacement = false
+        if (pendingHandle && pendingHandle === handle) {
           scheduleResubscribeAfterTransportClose(pendingRequiresReplacement)
         }
       })
