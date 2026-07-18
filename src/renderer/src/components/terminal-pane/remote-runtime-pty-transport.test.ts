@@ -614,6 +614,12 @@ describe('createRemoteRuntimePtyTransport', () => {
 
       let hostListCalls = 0
       runtimeCall.mockImplementation(async (args: { method: string }) => {
+        if (args.method === 'terminal.send') {
+          return {
+            ok: false,
+            error: { code: 'terminal_handle_stale', message: 'terminal_handle_stale' }
+          }
+        }
         if (args.method !== 'session.tabs.list') {
           return { ok: true, result: {} }
         }
@@ -655,11 +661,27 @@ describe('createRemoteRuntimePtyTransport', () => {
 
       expect(hostListCalls).toBeGreaterThan(1)
       expect(hostListCalls).toBeLessThan(25)
+      const listTimeouts = runtimeCall.mock.calls
+        .map(([args]) => args)
+        .filter((args) => args.method === 'session.tabs.list')
+        .map((args) => args.timeoutMs as number)
+      expect(listTimeouts[0]).toBe(15_000)
+      expect(listTimeouts.every((timeoutMs) => timeoutMs > 0 && timeoutMs <= 15_000)).toBe(true)
+      expect(listTimeouts.at(-1)).toBeLessThanOrEqual(1_000)
       expect(onError).not.toHaveBeenCalled()
       expect(onPtyExit).not.toHaveBeenCalled()
       expect(transport.getPtyId()).toBe('remote:env-1@@terminal-stale')
       expect(transport.isConnected()).toBe(true)
       const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
+      expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(1)
+
+      const listCallsAfterBound = hostListCalls
+      await expect(transport.sendInputAccepted?.('retry while reconnecting')).resolves.toBe(false)
+      await vi.advanceTimersByTimeAsync(16_000)
+
+      // The accepted-snapshot listener already owns recovery. User input must
+      // not turn a bounded reconnect into recurring host-inventory polling.
+      expect(hostListCalls).toBe(listCallsAfterBound)
       expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(1)
 
       handleEvents.queueAcceptedWebSessionTerminalSnapshot(

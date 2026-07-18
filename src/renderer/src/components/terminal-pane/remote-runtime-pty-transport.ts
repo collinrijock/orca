@@ -225,15 +225,34 @@ export function createRemoteRuntimePtyTransport(
     const startedAt = Date.now()
     let pollMs = HOST_SESSION_ATTACH_POLL_MS
     let lastListError: unknown = null
+    const finishWithUnknownLiveness = (): undefined => {
+      if (lastListError) {
+        console.warn(
+          '[remote-runtime-pty] host session inventory unavailable during reconnect:',
+          runtimeTerminalErrorMessage(lastListError)
+        )
+      }
+      // Why: a bounded wait without removal evidence is unknown liveness;
+      // keep the mounted pane for an external snapshot to reattach later.
+      return undefined
+    }
     while (!destroyed && connected && handle === previousHandle) {
+      const requestRemainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)
+      if (requestRemainingMs <= 0) {
+        return finishWithUnknownLiveness()
+      }
       try {
         const listed = await listRemoteRuntimeSessionTabsDeduped({
           environmentId: currentRuntimeEnvironmentId,
           worktreeId,
           load: () =>
-            callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', {
-              worktree
-            })
+            callRuntime<RuntimeMobileSessionTabsResult>(
+              'session.tabs.list',
+              {
+                worktree
+              },
+              requestRemainingMs
+            )
         })
         lastListError = null
         const nextHandle = findReadyHostSessionHandle(listed, hostTabId)
@@ -250,15 +269,7 @@ export function createRemoteRuntimePtyTransport(
       }
       const remainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)
       if (remainingMs <= 0) {
-        if (lastListError) {
-          console.warn(
-            '[remote-runtime-pty] host session inventory unavailable during reconnect:',
-            runtimeTerminalErrorMessage(lastListError)
-          )
-        }
-        // Why: a bounded wait without removal evidence is unknown liveness;
-        // keep the mounted pane for an external snapshot to reattach later.
-        return undefined
+        return finishWithUnknownLiveness()
       }
       // Why: a stale response can precede publication of its replacement.
       // Bounded backoff avoids retrying the known-stale handle in a hot loop.
@@ -303,12 +314,16 @@ export function createRemoteRuntimePtyTransport(
     } satisfies PtyConnectResult
   }
 
-  async function callRuntime<TResult>(method: string, params?: unknown): Promise<TResult> {
+  async function callRuntime<TResult>(
+    method: string,
+    params?: unknown,
+    timeoutMs = 15_000
+  ): Promise<TResult> {
     const response = await window.api.runtimeEnvironments.call({
       selector: currentRuntimeEnvironmentId,
       method,
       params,
-      timeoutMs: 15_000
+      timeoutMs
     })
     return unwrapRuntimeRpcResult(response as RuntimeRpcResponse<TResult>)
   }
@@ -593,6 +608,11 @@ export function createRemoteRuntimePtyTransport(
 
   function scheduleResubscribeAfterTransportClose(requireReplacement = false): void {
     if (destroyed || !connected || !handle) {
+      return
+    }
+    if (requireReplacement && stopWaitingForPublishedHandle) {
+      // Why: once bounded polling has handed recovery to accepted snapshots,
+      // repeated sends to the known-stale handle must not re-arm inventory RPCs.
       return
     }
     if (resubscribing) {
