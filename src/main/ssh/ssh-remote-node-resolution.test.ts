@@ -51,9 +51,9 @@ describe('resolveRemoteNodePath', () => {
       '/home/u/.nvm/versions/node/v22.22.0/bin/node'
     )
 
-    expect(execCommandMock.mock.calls[1]![1]).toContain("'/usr/bin/npm' --version")
+    expect(execCommandMock.mock.calls[1]![1]).toContain("PATH='/usr/bin':$PATH npm --version")
     expect(execCommandMock.mock.calls[2]![1]).toContain(
-      "'/home/u/.nvm/versions/node/v22.22.0/bin/npm' --version"
+      "PATH='/home/u/.nvm/versions/node/v22.22.0/bin':$PATH npm --version"
     )
   })
 

@@ -8,26 +8,29 @@ const NPM_VERSION_MARKER = '__ORCA_NPM_VERSION__'
 
 export function buildPosixNodeToolchainProbe(nodePath: string): string {
   const nodeBinDir = posixPath.dirname(nodePath)
-  const npmPath = posixPath.join(nodeBinDir, 'npm')
   return [
     `printf '%s\\n' '${NODE_VERSION_MARKER}'`,
     `${shellEscape(nodePath)} --version`,
     `printf '%s\\n' '${NPM_VERSION_MARKER}'`,
-    `PATH=${shellEscape(nodeBinDir)}:$PATH ${shellEscape(npmPath)} --version`
+    // Why: deploy runs bare `npm` with nodeBinDir merely prepended to PATH
+    // (see commandWithNodePath), so probe npm the same way. Requiring npm
+    // colocated at <nodeBinDir>/npm would reject hosts deploy accepts (#9165).
+    `PATH=${shellEscape(nodeBinDir)}:$PATH npm --version`
   ].join(' && ')
 }
 
 export function buildWindowsNodeToolchainProbe(nodePath: string): string {
   const nodeBinDir = posixPath.dirname(nodePath)
-  const npmPath = posixPath.join(nodeBinDir, 'npm.cmd')
+  const windowsNodeBinDir = nodeBinDir.replace(/\//g, '\\')
   return [
-    `if (!(Test-Path -LiteralPath ${powerShellLiteral(npmPath)} -PathType Leaf)) { exit 1 }`,
-    `$env:PATH = ${powerShellLiteral(nodeBinDir)} + ';' + $env:PATH`,
+    // Why: mirror deploy's PATH-prepend + bare `npm` resolution (#9165); a
+    // colocated npm.cmd requirement rejects hosts deploy would accept.
+    `$env:PATH = ${powerShellLiteral(windowsNodeBinDir)} + ';' + $env:PATH`,
     `Write-Output ${powerShellLiteral(NODE_VERSION_MARKER)}`,
     `& ${powerShellLiteral(nodePath)} --version`,
     'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
     `Write-Output ${powerShellLiteral(NPM_VERSION_MARKER)}`,
-    `& ${powerShellLiteral(npmPath)} --version`,
+    '& npm --version',
     'exit $LASTEXITCODE'
   ].join('; ')
 }
