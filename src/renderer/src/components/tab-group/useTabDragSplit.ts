@@ -63,6 +63,9 @@ export type TabDragItemData = {
   label: string
   iconPath?: string
   color?: string | null
+  /** Display-only shell identity for terminal drag previews. This is resolved
+   *  from existing tab/runtime metadata and never participates in PTY launch. */
+  shell?: string | null
   /** Coding-harness agent running in a terminal tab, so the drag ghost shows
    *  the provider glyph and matches the resting tab. Resolved per-tab in
    *  SortableTab (not at the TabBar level) to avoid re-rendering the whole tab

@@ -117,6 +117,35 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
+  it('preserves an existing per-tab shell override through hydration', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt: [
+          {
+            id: 'tab1',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'Build shell',
+            customTitle: 'Build shell',
+            color: '#a855f7',
+            sortOrder: 0,
+            createdAt: 1,
+            shellOverride: '/bin/fish'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree.wt[0].shellOverride).toBe('/bin/fish')
+    }
+  })
+
   it('drops an unknown launchAgent without failing the whole session', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

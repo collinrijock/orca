@@ -1,8 +1,33 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   consumeFloatingTerminalOpenMaximizedIntent,
-  requestFloatingTerminalOpenMaximized
+  requestFloatingTerminalOpenMaximized,
+  shouldMountFloatingTerminalPanelForShell
 } from './floating-terminal'
+
+describe('floating terminal shell visibility', () => {
+  it('does not mount an already-open panel over Landing', () => {
+    expect(
+      shouldMountFloatingTerminalPanelForShell({
+        enabled: true,
+        open: true,
+        visibleTabCount: 1,
+        landingActive: true
+      })
+    ).toBe(false)
+  })
+
+  it('remounts retained floating state inside a workspace', () => {
+    expect(
+      shouldMountFloatingTerminalPanelForShell({
+        enabled: true,
+        open: true,
+        visibleTabCount: 1,
+        landingActive: false
+      })
+    ).toBe(true)
+  })
+})
 
 describe('floating terminal open-maximized intent', () => {
   afterEach(() => {

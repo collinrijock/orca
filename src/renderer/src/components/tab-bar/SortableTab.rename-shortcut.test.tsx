@@ -15,6 +15,7 @@ const storeState = vi.hoisted(
     repos: unknown[]
     setRenamingTabId: ReturnType<typeof vi.fn>
     terminalLayoutsByTabId: Record<string, unknown>
+    runtimePaneTitlesByTabId: Record<string, Record<number, string>>
     worktreesByRepo: Record<string, unknown>
     unreadTerminalTabs: Record<string, boolean>
   } => ({
@@ -28,6 +29,7 @@ const storeState = vi.hoisted(
       storeState.renamingTabId = tabId
     }),
     terminalLayoutsByTabId: {},
+    runtimePaneTitlesByTabId: {},
     worktreesByRepo: {},
     unreadTerminalTabs: {} as Record<string, boolean>
   })
@@ -182,7 +184,9 @@ vi.mock('@/components/ui/tooltip', () => ({
 vi.mock('./shell-icons', () => ({
   ShellIcon: function ShellIcon(props: Record<string, unknown>) {
     return { type: 'ShellIcon', props }
-  }
+  },
+  resolveTerminalTabDisplayShell: ({ tab }: { tab: { shellOverride?: string } }) =>
+    tab.shellOverride
 }))
 
 vi.mock('../sidebar/WorktreeCardHelpers', () => ({
@@ -193,7 +197,11 @@ vi.mock('../sidebar/WorktreeCardHelpers', () => ({
 
 vi.mock('./drop-indicator', () => ({
   ACTIVE_TAB_INDICATOR_CLASSES: 'active-tab-indicator',
+  TAB_CLOSE_BUTTON_BASE_CLASSES: 'tab-close',
+  TAB_ROOT_BASE_CLASSES: 'tab-root',
   getDropIndicatorClasses: () => '',
+  getTabAccentStyle: () => undefined,
+  getTabCloseButtonVisibilityClasses: () => '',
   getTabStripBorderClasses: () => '',
   getTabRootStateClasses: () => ''
 }))

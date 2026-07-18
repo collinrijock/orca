@@ -1079,10 +1079,10 @@
         "commentTooLarge": "Comment is too large to submit safely."
       },
       "Landing": {
-        "76a95f7f47": "Create",
-        "f05d237049": "Add a project first",
-        "f9eaa9e12d": "Add Project",
-        "6ca6ff404e": "ORCA",
+        "76a95f7f47": "New agent workspace",
+        "f9eaa9e12d": "Add project",
+        "shortcutNewAgentWorkspace": "New agent workspace",
+        "6ca6ff404e": "Start an agent",
         "520304a067": "Orca logo",
         "ce44fad849": "Missing dependencies",
         "c1cf168479": "Hide",
@@ -1092,8 +1092,6 @@
         "5beaef5f9e": "GitHub CLI is not installed",
         "b673e7cf1b": "Git is required for Git projects, source control, and workspace management.",
         "e5b7296d9d": "Git is not installed",
-        "cd21242762": "Add a project to get started.",
-        "9c00bd4adf": "Select a workspace from the sidebar to begin.",
         "16e9e3df89": "starred",
         "0d0ace8861": "Star on GitHub",
         "ec43b38ba7": "Starred on GitHub",

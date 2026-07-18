@@ -105,8 +105,8 @@ export function TerminalTabLeadingIcon({
     )
   }
 
-  // Why: ShellIcon renders a colored brand-style tile for PowerShell, CMD,
-  // Git Bash, and WSL while retaining the generic terminal fallback elsewhere.
+  // Why: ShellIcon uses one quiet token-based badge system while preserving
+  // recognizable shell identities across Windows and Unix hosts.
   return (
     <span
       className={`mr-1 inline-flex shrink-0 ${isActive ? '' : 'opacity-70'}`}

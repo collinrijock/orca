@@ -1,5 +1,19 @@
 export const TOGGLE_FLOATING_TERMINAL_EVENT = 'orca-toggle-floating-terminal'
 
+export function shouldMountFloatingTerminalPanelForShell({
+  enabled,
+  open,
+  visibleTabCount,
+  landingActive
+}: {
+  enabled: boolean
+  open: boolean
+  visibleTabCount: number
+  landingActive: boolean
+}): boolean {
+  return !landingActive && enabled && (open || visibleTabCount > 0)
+}
+
 // Why: maximize/restore lives in the panel's own keydown handler, but that
 // handler is unmounted while the panel is closed. When Cmd+Opt+Shift+A is
 // pressed with the panel closed, App opens it and records a one-shot intent

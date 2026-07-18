@@ -200,7 +200,10 @@ vi.mock('./SortableTab', () => ({
 
 vi.mock('./drop-indicator', () => ({
   ACTIVE_TAB_INDICATOR_CLASSES: 'active-tab-indicator',
+  TAB_CLOSE_BUTTON_BASE_CLASSES: 'tab-close',
+  TAB_ROOT_BASE_CLASSES: 'tab-root',
   getDropIndicatorClasses: () => '',
+  getTabCloseButtonVisibilityClasses: () => '',
   getTabStripBorderClasses: () => '',
   getTabRootStateClasses: () => ''
 }))

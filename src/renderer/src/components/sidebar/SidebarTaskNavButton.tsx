@@ -184,9 +184,9 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
           aria-current={tasksActive ? 'page' : undefined}
           data-contextual-tour-target="sidebar-tasks"
           className={cn(
-            'group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+            'group flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
             tasksActive
-              ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+              ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground shadow-[inset_2px_0_0_var(--sidebar-primary)]'
               : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8',
             !canBrowseTasks && 'cursor-not-allowed opacity-50 hover:bg-transparent'
           )}

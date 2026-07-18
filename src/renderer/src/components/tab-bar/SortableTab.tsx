@@ -12,7 +12,11 @@ import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { useAppStore } from '../../store'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
+  TAB_CLOSE_BUTTON_BASE_CLASSES,
+  TAB_ROOT_BASE_CLASSES,
   getDropIndicatorClasses,
+  getTabAccentStyle,
+  getTabCloseButtonVisibilityClasses,
   getTabRootStateClasses,
   getTabStripBorderClasses,
   type DropIndicator
@@ -29,6 +33,7 @@ import {
   isTerminalTabActivityLive,
   resolveTerminalTabActivityStatus
 } from './terminal-tab-activity-status'
+import { resolveTerminalTabDisplayShell } from './shell-icons'
 
 type SortableTabProps = {
   tab: TerminalTab
@@ -109,10 +114,14 @@ export default function SortableTab({
   const renamingTabId = useAppStore((s) => s.renamingTabId)
   const setRenamingTabId = useAppStore((s) => s.setRenamingTabId)
 
-  // Why: createTab stamps the shell used at creation time, so changing the
-  // default shell later does not repaint existing tabs as a different shell.
-  // Older persisted tabs without this field fall back to the generic icon.
-  const shellForIcon = tab.shellOverride
+  const runtimePaneTitles = useAppStore((s) => s.runtimePaneTitlesByTabId[tab.id])
+  // Why: createTab stamps the authoritative shell used at creation time.
+  // Legacy tabs without it may use an exact shell-like live/title value for
+  // display only; this never writes shellOverride or changes PTY launch data.
+  const shellForIcon = resolveTerminalTabDisplayShell({
+    tab,
+    runtimePaneTitles
+  })
 
   // Why: hook status and title evidence make the tab icon reflect the
   // coding harness currently running in the pane, not just the launch command.
@@ -125,14 +134,14 @@ export default function SortableTab({
 
   const { attributes, listeners, setNodeRef } = useSortable({
     id: tab.id,
-    // Why: carry the resolved agent into the drag overlay so dragged tabs keep
-    // the same provider glyph as the tab strip without another store lookup.
-    data: { ...dragData, agent: tabAgent }
+    // Why: carry resolved display identity into the drag overlay so the ghost
+    // matches the tab strip without another store lookup.
+    data: { ...dragData, agent: tabAgent, shell: shellForIcon }
   })
 
   // Why: intentionally no transform/transition/opacity here. The PR's
   // design is that tabs stay visually anchored during a drag — only the
-  // blue insertion bar moves. Siblings also don't shift (see
+  // insertion bar moves. Siblings also don't shift (see
   // SortableContext in TabBar.tsx, which omits a strategy for that reason).
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
@@ -265,7 +274,8 @@ export default function SortableTab({
       // tab still reads as "selected + has activity". The wash is
       // rendered as an absolutely-positioned child below so the ::after
       // pseudo-element stays free for the drop indicator.
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`${TAB_ROOT_BASE_CLASSES} ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      style={getTabAccentStyle(tab.color)}
       onDoubleClick={(e) => {
         if (isEditing) {
           return
@@ -387,7 +397,7 @@ export default function SortableTab({
       )}
       {tab.color && !isEditing && (
         <span
-          className="mr-1.5 size-2 rounded-full shrink-0"
+          className="mr-1.5 size-1.5 shrink-0 rounded-full"
           style={{ backgroundColor: tab.color }}
         />
       )}
@@ -413,11 +423,7 @@ export default function SortableTab({
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              className={`relative z-10 flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
-                isActive
-                  ? 'text-muted-foreground hover:text-foreground hover:bg-muted focus-visible:text-foreground focus-visible:bg-muted'
-                  : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted focus-visible:!text-foreground focus-visible:!bg-muted'
-              }`}
+              className={`${TAB_CLOSE_BUTTON_BASE_CLASSES} ${getTabCloseButtonVisibilityClasses(isActive)}`}
               // Why: per-tab close affordance needs a stable accessible name so
               // E2E specs can drive the same path a user takes (hover, then X)
               // instead of bypassing the render layer by calling closeTab() on
