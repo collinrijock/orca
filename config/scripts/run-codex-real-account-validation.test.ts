@@ -8,7 +8,7 @@ import {
   snapshotValidationState
 } from './run-codex-real-account-validation.mjs'
 
-const cleanupPaths = []
+const cleanupPaths: string[] = []
 
 afterEach(async () => {
   await Promise.all(

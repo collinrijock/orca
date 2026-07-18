@@ -10,7 +10,7 @@ import {
   startCodexPrimaryHomeTripwire
 } from './codex-primary-home-tripwire.mjs'
 
-const cleanupPaths = []
+const cleanupPaths: string[] = []
 
 afterEach(async () => {
   await Promise.all(
@@ -18,7 +18,7 @@ afterEach(async () => {
   )
 })
 
-async function createPrimaryHome() {
+async function createPrimaryHome(): Promise<string> {
   const primaryHome = await mkdtemp(path.join(os.tmpdir(), 'orca-codex-tripwire-'))
   cleanupPaths.push(primaryHome)
   await mkdir(path.join(primaryHome, '.codex'))
@@ -71,15 +71,21 @@ describe('Codex primary-home tripwire', () => {
   })
 })
 
-function waitForStdout(child, expectedText) {
-  return new Promise((resolve, reject) => {
+function waitForStdout(child: ReturnType<typeof spawn>, expectedText: string): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(
       () => reject(new Error(`Timed out waiting for ${expectedText}`)),
       2_000
     )
     let output = ''
-    child.stdout.setEncoding('utf8')
-    child.stdout.on('data', (chunk) => {
+    const stdout = child.stdout
+    if (!stdout) {
+      clearTimeout(timeout)
+      reject(new Error('Tripwire child stdout is unavailable'))
+      return
+    }
+    stdout.setEncoding('utf8')
+    stdout.on('data', (chunk) => {
       output += chunk
       if (output.includes(expectedText)) {
         clearTimeout(timeout)
