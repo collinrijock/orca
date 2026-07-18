@@ -158,6 +158,7 @@ export class DaemonServer {
   async shutdown(): Promise<void> {
     this.stopStreamBacklogProbe()
     this.transientFactRelay.dispose()
+    this.cancelAllPendingPtySpawnPreparations()
     try {
       await this.host.dispose()
     } catch (err) {
@@ -375,6 +376,12 @@ export class DaemonServer {
     return true
   }
 
+  private cancelAllPendingPtySpawnPreparations(): void {
+    for (const sessionId of this.pendingPtySpawnPreparations.keys()) {
+      this.cancelPendingPtySpawnPreparations(sessionId)
+    }
+  }
+
   private async routeRequest(clientId: string, request: DaemonRequest): Promise<unknown> {
     const client = this.clients.get(clientId)
 
@@ -542,7 +549,7 @@ export class DaemonServer {
         return {}
       }
 
-      case 'kill':
+      case 'kill': {
         const canceledPendingSpawn = this.cancelPendingPtySpawnPreparations(
           request.payload.sessionId
         )
@@ -561,6 +568,7 @@ export class DaemonServer {
           }
         }
         return {}
+      }
 
       case 'signal':
         this.host.signal(request.payload.sessionId, request.payload.signal)

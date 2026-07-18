@@ -276,6 +276,39 @@ describe('DaemonServer', () => {
       }
     )
 
+    it('cancels pending subprocess preparation during daemon shutdown', async () => {
+      let finishPreparation!: () => void
+      const preparation = new Promise<void>((resolve) => {
+        finishPreparation = resolve
+      })
+      const preparePtySpawn = vi.fn(() => preparation)
+      const spawnSubprocess = vi.fn(() => createMockSubprocess())
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        preparePtySpawn,
+        spawnSubprocess
+      })
+      await server.start()
+      const daemon = server as unknown as DaemonServerPrivate
+
+      const create = daemon.routeRequest('shutdown-client', {
+        id: 'shutdown-create',
+        type: 'createOrAttach',
+        payload: { sessionId: 'shutdown-pending', cols: 80, rows: 24 }
+      })
+      const canceledCreate = expect(create).rejects.toThrow(
+        'Attach canceled for session shutdown-pending'
+      )
+      await vi.waitFor(() => expect(preparePtySpawn).toHaveBeenCalledOnce())
+
+      const shutdown = server.shutdown()
+      finishPreparation()
+      await canceledCreate
+      await shutdown
+      expect(spawnSubprocess).not.toHaveBeenCalled()
+    })
+
     it('persists only an allowlisted launch identity across reattach', async () => {
       await startServer()
       const c = await connectClient()
