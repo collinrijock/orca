@@ -1024,7 +1024,7 @@ export type UISlice = {
 
 export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   sidebarOpen: true,
-  sidebarWidth: 280,
+  sidebarWidth: 240,
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   setSidebarWidth: (width) => set({ sidebarWidth: width }),

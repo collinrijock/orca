@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { cn } from '../lib/utils'
 import { useAppStore } from '../store'
 import type { Repo } from '../../../shared/types'
 import {
@@ -10,9 +9,7 @@ import {
   isPreflightIssueDismissed
 } from './landing-preflight-dismissal'
 import { ShortcutKeyCombo } from './ShortcutKeyCombo'
-import { useShortcutKeyDetails, type ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
-import { useMountedRef } from '@/hooks/useMountedRef'
-import logo from '../../../../resources/logo.svg'
+import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import {
   getLandingPreflightIssues,
@@ -20,129 +17,6 @@ import {
   type PreflightIssue
 } from './landing-preflight-issues'
 import { Button } from './ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
-
-type ShortcutItem = {
-  id: string
-  shortcut: ShortcutKeyComboDetails
-  action: string
-}
-
-const ORCA_STARGAZERS_URL = 'https://github.com/stablyai/orca/stargazers'
-
-type StarState = 'loading' | 'starred' | 'not-starred' | 'web-fallback' | 'hidden'
-
-function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Element | null {
-  const [state, setState] = useState<StarState>('loading')
-  const [menuOpen, setMenuOpen] = useState(false)
-  const wrapperRef = useRef<HTMLDivElement | null>(null)
-  const mountedRef = useMountedRef()
-
-  useEffect(() => {
-    let cancelled = false
-    void window.api.gh.checkOrcaStarred().then((result) => {
-      if (cancelled) {
-        return
-      }
-      if (result === null) {
-        setState('web-fallback')
-      } else {
-        setState(result ? 'starred' : 'not-starred')
-      }
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!menuOpen) {
-      return
-    }
-    const onDocClick = (e: MouseEvent): void => {
-      if (!wrapperRef.current?.contains(e.target as Node)) {
-        setMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
-  }, [menuOpen])
-
-  const handleClick = async (): Promise<void> => {
-    if (state === 'starred') {
-      setMenuOpen((v) => !v)
-      return
-    }
-    if (state === 'web-fallback') {
-      await window.api.shell.openUrl(ORCA_STARGAZERS_URL)
-      return
-    }
-    if (state !== 'not-starred') {
-      return
-    }
-    setState('starred') // optimistic
-    const ok = await window.api.gh.starOrca('landing')
-    if (!ok) {
-      if (mountedRef.current) {
-        setState('web-fallback')
-      }
-      return
-    }
-    // Why: starring from any entry point mutes the threshold-based nag.
-    // Without this the background notification could still fire on the next
-    // threshold crossing, which would feel like a bug to the user.
-    await window.api.starNag.complete()
-  }
-
-  // Hide once the user has already starred and added a repo.
-  if (state === 'hidden' || (state === 'starred' && hasRepos)) {
-    return null
-  }
-
-  return (
-    <div ref={wrapperRef} className="relative inline-block">
-      <button
-        className={cn(
-          'inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-          state === 'loading' && 'pointer-events-none opacity-0',
-          state !== 'loading' && 'cursor-pointer',
-          state === 'starred' && 'bg-muted text-foreground'
-        )}
-        onClick={handleClick}
-        disabled={state === 'loading'}
-      >
-        {state === 'web-fallback' ? (
-          <ExternalLink className="size-3.5" />
-        ) : (
-          <Star
-            className={cn(
-              'size-3.5',
-              state === 'starred' ? 'fill-current text-foreground' : 'text-muted-foreground'
-            )}
-          />
-        )}
-        {state === 'starred'
-          ? translate('auto.components.Landing.ec43b38ba7', 'Starred on GitHub')
-          : state === 'web-fallback'
-            ? translate('auto.components.Landing.157bb5ecbb', 'Open GitHub')
-            : translate('auto.components.Landing.0d0ace8861', 'Star on GitHub')}
-      </button>
-      {state === 'starred' && menuOpen && (
-        <div className="absolute right-0 top-[calc(100%+4px)] z-10 min-w-[100px] rounded-md border border-border bg-popover py-1 shadow-md">
-          <button
-            className="w-full px-3 py-1.5 text-left text-[13px] text-foreground hover:bg-muted focus-visible:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            onClick={() => {
-              setMenuOpen(false)
-              setState('hidden')
-            }}
-          >
-            {translate('auto.components.Landing.c1cf168479', 'Hide')}
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
 
 function PreflightBanner({
   issues,
@@ -230,9 +104,7 @@ export default function Landing(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const openModal = useAppStore((s) => s.openModal)
 
-  const canCreateWorktree = repos.length > 0
   const hasGitHubProject = useMemo(() => hasGitHubBackedProject(repos), [repos])
-  const showGitHubSupportFooter = repos.length === 0 || hasGitHubProject
 
   const [preflightIssues, setPreflightIssues] = useState<PreflightIssue[]>([])
 
@@ -296,148 +168,63 @@ export default function Landing(): React.JSX.Element {
   }, [hasGitHubProject, preflightIssues.length])
 
   const createWorktreeShortcut = useShortcutKeyDetails('workspace.create')
-  const previousWorktreeShortcut = useShortcutKeyDetails('worktree.navigateUp')
-  const nextWorktreeShortcut = useShortcutKeyDetails('worktree.navigateDown')
   const newAgentWorkspaceLabel = translate(
     'auto.components.Landing.76a95f7f47',
     'New agent workspace'
   )
-  const projectRequiredHint = translate('auto.components.Landing.f05d237049', 'Add a project first')
-  const shortcuts: ShortcutItem[] = [
-    {
-      id: 'create',
-      shortcut: createWorktreeShortcut,
-      action: translate('auto.components.Landing.shortcutNewAgentWorkspace', 'New agent workspace')
-    },
-    {
-      id: 'up',
-      shortcut: previousWorktreeShortcut,
-      action: translate('auto.components.Landing.shortcutPreviousWorkspace', 'Previous workspace')
-    },
-    {
-      id: 'down',
-      shortcut: nextWorktreeShortcut,
-      action: translate('auto.components.Landing.shortcutNextWorkspace', 'Next workspace')
-    }
-  ]
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-background">
-      <main className="w-full max-w-md px-6 py-10">
-        <div className="flex flex-col items-start">
-          <div className="mb-7 flex items-center gap-2.5">
-            <div className="flex size-7 items-center justify-center rounded-sm border border-border bg-foreground">
-              <img
-                src={logo}
-                alt={translate('auto.components.Landing.520304a067', 'Orca logo')}
-                className="size-4 dark:invert"
-              />
-            </div>
-            <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-              {translate('auto.components.sidebar.SidebarNav.9c95e1ce91', 'Agents')}
+    <div
+      className="absolute inset-0 flex items-center justify-center bg-background"
+      data-landing-agent-creation
+    >
+      <main className="w-full max-w-lg px-6 py-10">
+        <section aria-labelledby="landing-agent-creation-title">
+          <h1
+            id="landing-agent-creation-title"
+            className="mb-2 text-[12px] font-medium text-muted-foreground"
+          >
+            {translate('auto.components.Landing.6ca6ff404e', 'Start an agent')}
+          </h1>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-14 w-full justify-start gap-3 rounded-md border-border bg-card px-4 text-left shadow-none hover:border-muted-foreground/35 hover:bg-accent/60"
+            onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
+          >
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-sm border border-border bg-muted text-muted-foreground">
+              <GitBranchPlus className="size-3.5" />
             </span>
+            <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+              {newAgentWorkspaceLabel}
+            </span>
+            <ShortcutKeyCombo
+              keys={createWorktreeShortcut.keys}
+              doubleTap={createWorktreeShortcut.doubleTap}
+              separatorClassName="mx-0.5 text-[10px] text-muted-foreground"
+            />
+          </Button>
+
+          <div className="mt-2 flex justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="text-muted-foreground"
+              onClick={() => openModal('add-repo')}
+            >
+              <FolderPlus className="size-3" />
+              {translate('auto.components.Landing.f9eaa9e12d', 'Add project')}
+            </Button>
           </div>
 
-          <h1 className="text-2xl font-semibold tracking-[-0.025em] text-foreground">
-            {translate('auto.components.Landing.6ca6ff404e', 'Build with agents')}
-          </h1>
-          <p className="mt-2 max-w-sm text-[13px] leading-5 text-muted-foreground">
-            {canCreateWorktree
-              ? translate(
-                  'auto.components.Landing.9c00bd4adf',
-                  'Choose an agent workspace from the sidebar, or start a new one.'
-                )
-              : translate(
-                  'auto.components.Landing.cd21242762',
-                  'Add a project to start an agent in an isolated workspace.'
-                )}
-          </p>
-
-          {preflightIssues.length > 0 && (
-            <div className="mt-5 w-full">
+          {preflightIssues.length > 0 ? (
+            <div className="mt-5">
               <PreflightBanner issues={preflightIssues} repos={repos} />
             </div>
-          )}
-
-          <div className="mt-6 flex flex-wrap items-center gap-2">
-            {canCreateWorktree ? (
-              <>
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    openModal('new-workspace-composer', { telemetrySource: 'unknown' })
-                  }
-                >
-                  <GitBranchPlus className="size-3.5" />
-                  {newAgentWorkspaceLabel}
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => openModal('add-repo')}>
-                  <FolderPlus className="size-3.5" />
-                  {translate('auto.components.Landing.f9eaa9e12d', 'Add project')}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button size="sm" onClick={() => openModal('add-repo')}>
-                  <FolderPlus className="size-3.5" />
-                  {translate('auto.components.Landing.f9eaa9e12d', 'Add project')}
-                </Button>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      aria-disabled="true"
-                      aria-describedby="landing-new-agent-workspace-disabled-hint"
-                      className="cursor-not-allowed opacity-50"
-                      onClick={(event) => {
-                        event.preventDefault()
-                        event.stopPropagation()
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault()
-                          event.stopPropagation()
-                        }
-                      }}
-                    >
-                      <GitBranchPlus className="size-3.5" />
-                      {newAgentWorkspaceLabel}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    {projectRequiredHint}
-                  </TooltipContent>
-                </Tooltip>
-                <span id="landing-new-agent-workspace-disabled-hint" className="sr-only">
-                  {projectRequiredHint}
-                </span>
-              </>
-            )}
-          </div>
-
-          <div className="mt-10 w-full border-t border-border pt-4">
-            <div className="space-y-2">
-              {shortcuts.map((shortcut) => (
-                <div key={shortcut.id} className="grid grid-cols-[1fr_auto] items-center gap-3">
-                  <span className="text-[13px] text-muted-foreground">{shortcut.action}</span>
-                  <ShortcutKeyCombo
-                    keys={shortcut.shortcut.keys}
-                    doubleTap={shortcut.shortcut.doubleTap}
-                    separatorClassName="mx-0.5 text-[10px] text-muted-foreground"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+          ) : null}
+        </section>
       </main>
-
-      {showGitHubSupportFooter && (
-        <div className="absolute bottom-5 right-5">
-          <GitHubStarButton hasRepos={repos.length > 0} />
-        </div>
-      )}
     </div>
   )
 }

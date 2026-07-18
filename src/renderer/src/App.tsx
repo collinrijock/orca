@@ -24,7 +24,7 @@ import logo from '../../../resources/logo.svg'
 import { SYNC_FIT_PANES_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
-import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
+import { canShowRightSidebar } from '@/lib/right-sidebar-visibility'
 import {
   isPairedWebClientWindow,
   shouldRenderDesktopWindowChrome
@@ -517,9 +517,6 @@ function App(): React.JSX.Element {
     (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
   )
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
-  const showFloatingTerminalButton =
-    floatingTerminalEnabled &&
-    (floatingTerminalTriggerLocation === 'floating-button' || !statusBarVisible)
   const hasMountedTerminalWorkbenchRef = useRef(false)
   if (activeWorktreeId !== null || backgroundTerminalMountRequested) {
     hasMountedTerminalWorkbenchRef.current = true
@@ -541,8 +538,14 @@ function App(): React.JSX.Element {
   })
   const workspaceChromeActive =
     activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
+  const landingActive =
+    activeView === 'terminal' && activeWorktreeId === null && !creationLayoutActive
   const terminalWorkbenchVisible =
     activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
+  const showFloatingTerminalButton =
+    !landingActive &&
+    floatingTerminalEnabled &&
+    (floatingTerminalTriggerLocation === 'floating-button' || !statusBarVisible)
   // Why: a closed empty floating workspace is not startup-critical. Once it owns
   // tabs, keep it mounted while closed so hidden terminal/browser/editor panes
   // retain their local state.
@@ -1552,9 +1555,10 @@ function App(): React.JSX.Element {
     creationLayoutActive,
     sidebarOpen
   })
-  // Why: suppress right sidebar controls on full-page navigation surfaces
-  // since those surfaces intentionally own the full content area.
-  const showRightSidebarControls = !creationLayoutActive && canShowRightSidebarForView(activeView)
+  // Why: full-page and no-workspace surfaces own the full canvas. Keep the
+  // persisted open/width preferences untouched while their rail is unmounted.
+  const showRightSidebarControls =
+    !creationLayoutActive && canShowRightSidebar({ activeView, activeWorktreeId })
   const showProfileSwitcherInSidebarFooter = showSidebar && sidebarOpen
   const showProfileSwitcherInTopRight = !showProfileSwitcherInSidebarFooter
 
@@ -1654,7 +1658,8 @@ function App(): React.JSX.Element {
         })
       }
 
-      const canRevealRightSidebar = !creationLayoutActive && canShowRightSidebarForView(activeView)
+      const canRevealRightSidebar =
+        !creationLayoutActive && canShowRightSidebar({ activeView, activeWorktreeId })
 
       const openSearchSidebar = (query: string | null): void => {
         actions.showRightSidebarSearch(query ? { query } : undefined)
@@ -2524,7 +2529,7 @@ function App(): React.JSX.Element {
                 </RecoverableRenderErrorBoundary>
               </Suspense>
             ) : null}
-            {statusBarVisible ? (
+            {statusBarVisible && !landingActive ? (
               <Suspense
                 fallback={
                   <div className="h-6 min-h-[24px] shrink-0 border-t border-border bg-[var(--bg-titlebar,var(--card))]" />
