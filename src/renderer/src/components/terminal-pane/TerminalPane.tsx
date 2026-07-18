@@ -818,7 +818,11 @@ export default function TerminalPane({
     },
     [applyNativeChatLeafRoute, chatLeafId, isChatEligibleForLeaf, isChatViewMode]
   )
-  onAgentExitedRef.current = handleConfirmedAgentExit
+  useEffect(() => {
+    // Why: transport callbacks must only observe committed chat ownership;
+    // render work can be replayed or discarded under concurrent React.
+    onAgentExitedRef.current = handleConfirmedAgentExit
+  }, [handleConfirmedAgentExit])
   const canToggleChatForLeaf = useCallback(
     (leafId: string | null): boolean => {
       // Scope the "always allow toggling back" rule to the leaf actually showing

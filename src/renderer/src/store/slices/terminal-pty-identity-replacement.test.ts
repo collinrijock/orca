@@ -12,7 +12,8 @@ describe('terminal PTY identity replacement', () => {
       tabsByWorktree: {
         [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: firstPtyId })]
       },
-      ptyIdsByTabId: { 'tab-1': [firstPtyId] }
+      ptyIdsByTabId: { 'tab-1': [firstPtyId] },
+      suppressedPtyExitIds: { [firstPtyId]: true }
     })
 
     store.getState().updateTabPtyId('tab-1', secondPtyId, firstPtyId)
@@ -22,6 +23,7 @@ describe('terminal PTY identity replacement', () => {
     expect(state.ptyIdsByTabId['tab-1']).toEqual([thirdPtyId])
     expect(state.tabsByWorktree[worktreeId][0]?.ptyId).toBe(thirdPtyId)
     expect(state.lastKnownRelayPtyIdByTabId['tab-1']).toBe(thirdPtyId)
+    expect(state.suppressedPtyExitIds).toEqual({ [thirdPtyId]: true })
   })
 
   it('migrates stale PTY state when the host snapshot published the replacement first', () => {

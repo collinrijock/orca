@@ -33,8 +33,8 @@ import {
   createRemoteRuntimeViewportBatcher
 } from './remote-runtime-pty-batching'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
-import { setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
+import { replaceFitOverridePtyId, setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
+import { replaceDriverPtyId, setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '@/runtime/web-terminal-surface-id'
 import { listRemoteRuntimeSessionTabsDeduped } from '@/runtime/remote-runtime-session-tabs-inflight'
 import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session-terminal-handle-events'
@@ -487,6 +487,8 @@ export function createRemoteRuntimePtyTransport(
     // Why: host handle rotation preserves the pane generation; only the store
     // identity changes, without fresh-spawn or terminal-exit semantics.
     if (replacedPtyId) {
+      replaceFitOverridePtyId(replacedPtyId, remotePtyId)
+      replaceDriverPtyId(replacedPtyId, remotePtyId)
       onPtyRebind?.(remotePtyId, replacedPtyId)
     }
   }

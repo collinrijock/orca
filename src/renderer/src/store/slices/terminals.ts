@@ -2071,10 +2071,20 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const isFirstPty = existingPtyIds.length === 0
       const isActiveWorktree = worktreeId != null && s.activeWorktreeId === worktreeId
       const shouldBumpSortEpoch = isFirstPty && isActiveWorktree && !wasActivationSpawn
+      const shouldRetainSuppressedExit = Boolean(
+        explicitReplacementPtyId &&
+        (s.suppressedPtyExitIds[ptyId] ||
+          (replacementPtyId && s.suppressedPtyExitIds[replacementPtyId]))
+      )
       const nextSuppressedPtyExitIds = { ...s.suppressedPtyExitIds }
       delete nextSuppressedPtyExitIds[ptyId]
       if (replacementPtyId) {
         delete nextSuppressedPtyExitIds[replacementPtyId]
+      }
+      if (shouldRetainSuppressedExit) {
+        // Why: explicit handle rotation preserves the same terminal lifecycle;
+        // an intentional exit racing the rotation must stay suppressed once.
+        nextSuppressedPtyExitIds[ptyId] = true
       }
       const hasReplacementPendingRestart = replacementPtyId
         ? replacementPtyId in s.pendingCodexPaneRestartIds

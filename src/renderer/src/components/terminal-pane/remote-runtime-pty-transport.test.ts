@@ -305,6 +305,10 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('re-derives the host session handle after a transport close instead of resubscribing the stale one', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const { getAllOverrides, setFitOverride } =
+      await import('@/lib/pane-manager/mobile-fit-overrides')
+    const { getAllDrivers, setDriverForPty } =
+      await import('@/lib/pane-manager/mobile-driver-state')
     const onPtySpawn = vi.fn()
     const onPtyRebind = vi.fn()
     const transport = createRemoteRuntimePtyTransport('env-1', {
@@ -323,6 +327,8 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
     await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
     expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-1' })
+    setFitOverride('remote:env-1@@terminal-1', 'mobile-fit', 49, 20)
+    setDriverForPty('remote:env-1@@terminal-1', { kind: 'mobile', clientId: 'phone-1' })
 
     // Why: while the tunnel was down the host re-minted this pane's handle;
     // resubscribing the stale closure handle would bind the mirror to a
@@ -371,6 +377,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect.stringContaining('terminal-2'),
       expect.stringContaining('terminal-1')
     )
+    expect([...getAllOverrides().keys()]).toEqual(['remote:env-1@@terminal-2'])
+    expect([...getAllDrivers().keys()]).toEqual(['remote:env-1@@terminal-2'])
   })
 
   it('retires the mirror when the host no longer publishes the surface after a transport close', async () => {
