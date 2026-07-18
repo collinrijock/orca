@@ -54,7 +54,12 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     expect(spawnSyncMock).toHaveBeenCalledWith(
       '/usr/bin/login',
       ['-flpq', 'ada', '/usr/bin/printf', 'ORCA_LOGIN_PREFLIGHT_OK'],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 2_000 }
+      {
+        encoding: 'utf8',
+        killSignal: 'SIGKILL',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 500
+      }
     )
   })
 
@@ -81,6 +86,21 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     expect(wrapShellSpawnForMacosTccAttribution('/bin/bash', ['-l']).file).toBe('/bin/bash')
     expect(spawnSyncMock).toHaveBeenCalledTimes(1)
     expect(console.warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects a marker emitted by a preflight that does not exit cleanly', () => {
+    setPlatform('darwin')
+    spawnSyncMock.mockReturnValue({
+      status: null,
+      error: Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' }),
+      stdout: 'ORCA_LOGIN_PREFLIGHT_OK'
+    })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l'])).toEqual({
+      file: '/bin/zsh',
+      args: ['-l']
+    })
   })
 
   it('caches a successful login preflight for later terminal spawns', () => {

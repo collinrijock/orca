@@ -5,7 +5,7 @@ import { userInfo } from 'node:os'
 const MACOS_LOGIN_PATH = '/usr/bin/login'
 const MACOS_ENV_PATH = '/usr/bin/env'
 const MACOS_PRINTF_PATH = '/usr/bin/printf'
-const LOGIN_PREFLIGHT_TIMEOUT_MS = 2_000
+const LOGIN_PREFLIGHT_TIMEOUT_MS = 500
 const LOGIN_PREFLIGHT_MARKER = 'ORCA_LOGIN_PREFLIGHT_OK'
 
 /**
@@ -35,13 +35,17 @@ function loginPreflightSucceeds(username: string): boolean {
       ['-flpq', username, MACOS_PRINTF_PATH, LOGIN_PREFLIGHT_MARKER],
       {
         encoding: 'utf8',
+        // Why: this runs once on the Electron main thread; bound UI impact and
+        // use SIGKILL because spawnSync waits past timeouts when PAM ignores SIGTERM.
+        killSignal: 'SIGKILL',
         stdio: ['ignore', 'pipe', 'pipe'],
         timeout: LOGIN_PREFLIGHT_TIMEOUT_MS
       }
     )
     // login(1) can return zero after an EOF-driven failed prompt, so only the
-    // requested child program's output proves PAM accepted the session.
-    cachedLoginPreflightResult = result.stdout === LOGIN_PREFLIGHT_MARKER
+    // requested child program's output plus a clean exit proves PAM accepted it.
+    cachedLoginPreflightResult =
+      result.error === undefined && result.status === 0 && result.stdout === LOGIN_PREFLIGHT_MARKER
   } catch {
     cachedLoginPreflightResult = false
   }
