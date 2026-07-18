@@ -118,9 +118,8 @@ let _getPendingUpdateNudgeId: (() => string | null) | null = null
 let _getDismissedUpdateNudgeId: (() => string | null) | null = null
 let _setPendingUpdateNudgeId: ((id: string | null) => void) | null = null
 let _setDismissedUpdateNudgeId: ((id: string | null) => void) | null = null
-// Why: guards against duplicate download() calls when both the card and
-// Settings trigger a download before the first download-progress event
-// flips the status to 'downloading'.
+// Why: guards against duplicate download() calls while an accepted request
+// transitions the authoritative status to 'downloading'.
 let downloadInFlight = false
 /** Guards against the macOS `activate` handler re-opening the old version
  *  while Squirrel's ShipIt is replacing the .app bundle. */
@@ -1519,8 +1518,15 @@ export function downloadUpdate(): void {
   if (!canStart) {
     return
   }
+  const version = currentStatus.state === 'available' ? currentStatus.version : availableVersion
+  if (!version) {
+    return
+  }
   downloadInFlight = true
   beginMacUpdateDownload()
+  // Why: retries may spend seconds in setup before electron-updater emits
+  // progress; surface acceptance immediately so the action never looks inert.
+  sendStatus({ state: 'downloading', percent: 0, version })
   getAutoUpdater()
     .downloadUpdate()
     .catch((err) => {

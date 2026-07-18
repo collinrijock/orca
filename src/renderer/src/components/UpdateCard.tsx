@@ -1039,7 +1039,7 @@ function ErrorCardContent({
             aria-controls={detailId}
           >
             <ChevronRight
-              className={`size-3.5 transition-transform ${showDetails ? 'rotate-90' : ''}`}
+              className={`size-3.5 transition-transform motion-reduce:transition-none ${showDetails ? 'rotate-90' : ''}`}
             />
             {showDetails
               ? translate('auto.components.UpdateCard.5194358929', 'Hide details')
