@@ -11,6 +11,7 @@ import { HeadlessEmulator } from './headless-emulator'
 import { getHistorySessionDirName } from './history-paths'
 import type { HistoryReader } from './history-reader'
 import type { SubprocessHandle } from './session'
+import type { DaemonFileLog } from './daemon-file-log'
 import type * as DaemonHealthModule from './daemon-health'
 import { getDaemonSocketPath } from './daemon-spawner'
 
@@ -97,6 +98,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     command?: string
   } | null
   let subprocessDataOnSubscribe: string | undefined
+  let daemonLog: DaemonFileLog
+  let daemonLogEvents: string[]
 
   beforeEach(async () => {
     subprocessDataOnSubscribe = undefined
@@ -104,9 +107,15 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     socketPath = getDaemonSocketPath(dir)
     tokenPath = join(dir, 'test.token')
 
+    daemonLogEvents = []
+    daemonLog = {
+      log: (event) => daemonLogEvents.push(event),
+      close() {}
+    }
     server = new DaemonServer({
       socketPath,
       tokenPath,
+      log: daemonLog,
       spawnSubprocess: (opts) => {
         lastSpawnOpts = opts
         lastSubprocess = createMockSubprocess(subprocessDataOnSubscribe)
@@ -462,6 +471,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         )
       )
       const freshAdapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+      daemonLogEvents.length = 0
 
       try {
         await Promise.all(ids.map((id) => freshAdapter.shutdown(id, { immediate: true })))
@@ -470,6 +480,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
 
       await expect(adapter.listProcesses()).resolves.toEqual([])
+      expect(daemonLogEvents.filter((event) => event === 'client-hello-accepted')).toHaveLength(2)
     })
   })
 

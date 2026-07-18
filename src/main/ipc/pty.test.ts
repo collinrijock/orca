@@ -3601,7 +3601,8 @@ describe('registerPtyHandlers', () => {
   // shutdown can falsely succeed and orphan the restored daemon PTY (#7742).
   it('waits for the desktop startup barrier before renderer local kills resolve the provider', async () => {
     const barrier = makeDeferred()
-    const awaitLocalPtyStartup = vi.fn(() => barrier.promise)
+    const awaitLocalPtyStartup = vi.fn(() => new Promise<void>(() => {}))
+    const awaitLocalPtyProviderStartup = vi.fn(() => barrier.promise)
     const fallbackShutdown = vi.spyOn(getLocalPtyProvider(), 'shutdown')
     registerPtyHandlers(
       mainWindow as never,
@@ -3611,7 +3612,8 @@ describe('registerPtyHandlers', () => {
       undefined,
       undefined,
       {
-        awaitLocalPtyStartup
+        awaitLocalPtyStartup,
+        awaitLocalPtyProviderStartup
       }
     )
 
@@ -3619,7 +3621,8 @@ describe('registerPtyHandlers', () => {
     const pendingKill = handlers.get('pty:kill')!(null, { id: daemonSessionId }) as Promise<void>
 
     await Promise.resolve()
-    expect(awaitLocalPtyStartup).toHaveBeenCalledTimes(1)
+    expect(awaitLocalPtyStartup).not.toHaveBeenCalled()
+    expect(awaitLocalPtyProviderStartup).toHaveBeenCalledTimes(1)
     expect(fallbackShutdown).not.toHaveBeenCalled()
     const daemon = installObservableDaemonTestProvider()
     barrier.resolve()
@@ -3635,7 +3638,7 @@ describe('registerPtyHandlers', () => {
 
   it('waits for the desktop startup barrier before runtime local kills resolve the provider', async () => {
     const barrier = makeDeferred()
-    const awaitLocalPtyStartup = vi.fn(() => barrier.promise)
+    const awaitLocalPtyProviderStartup = vi.fn(() => barrier.promise)
     const fallbackShutdown = vi.spyOn(getLocalPtyProvider(), 'shutdown')
     const runtime = { setPtyController: vi.fn(), onPtyExit: vi.fn() }
     registerPtyHandlers(
@@ -3646,7 +3649,7 @@ describe('registerPtyHandlers', () => {
       undefined,
       undefined,
       {
-        awaitLocalPtyStartup
+        awaitLocalPtyProviderStartup
       }
     )
     const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
@@ -3655,7 +3658,7 @@ describe('registerPtyHandlers', () => {
 
     expect(controller.kill('daemon-session')).toBe(true)
     await Promise.resolve()
-    expect(awaitLocalPtyStartup).toHaveBeenCalledTimes(1)
+    expect(awaitLocalPtyProviderStartup).toHaveBeenCalledTimes(1)
     expect(fallbackShutdown).not.toHaveBeenCalled()
 
     const daemon = installObservableDaemonTestProvider()
@@ -3669,7 +3672,7 @@ describe('registerPtyHandlers', () => {
 
   it('waits for the desktop startup barrier before runtime exact stops resolve the provider', async () => {
     const barrier = makeDeferred()
-    const awaitLocalPtyStartup = vi.fn(() => barrier.promise)
+    const awaitLocalPtyProviderStartup = vi.fn(() => barrier.promise)
     const fallbackShutdown = vi.spyOn(getLocalPtyProvider(), 'shutdown')
     const runtime = { setPtyController: vi.fn(), onPtyExit: vi.fn() }
     registerPtyHandlers(
@@ -3680,7 +3683,7 @@ describe('registerPtyHandlers', () => {
       undefined,
       undefined,
       {
-        awaitLocalPtyStartup
+        awaitLocalPtyProviderStartup
       }
     )
     const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
@@ -3689,7 +3692,7 @@ describe('registerPtyHandlers', () => {
 
     const pendingStop = controller.stopAndWait('daemon-session')
     await Promise.resolve()
-    expect(awaitLocalPtyStartup).toHaveBeenCalledTimes(1)
+    expect(awaitLocalPtyProviderStartup).toHaveBeenCalledTimes(1)
     expect(fallbackShutdown).not.toHaveBeenCalled()
 
     const daemon = installObservableDaemonTestProvider()

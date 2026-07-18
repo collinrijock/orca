@@ -2185,13 +2185,14 @@
         "https://github.com/stablyai/orca/pull/7836"
       ],
       "invariant": "A local PTY shutdown requested during desktop cold start must resolve its provider only after daemon startup settles, and a fresh daemon adapter must connect before issuing the destructive request; a fallback provider must never falsely acknowledge shutdown while the restored daemon session remains live, and SSH shutdown must not wait on local startup.",
-      "oracle": "Hold the desktop startup promise unresolved, request shutdown through renderer IPC and both runtime-controller entry points, install the daemon provider, and assert the fallback receives zero shutdowns while the daemon receives exactly the requested kill; prove an SSH spawn and kill complete without touching the barrier. Separately, spawn a session through one adapter, kill it through a fresh unconnected adapter, and assert the daemon no longer lists it.",
+      "oracle": "Hold the desktop provider-startup promise unresolved, request shutdown through renderer IPC and both runtime-controller entry points, install the daemon provider, and assert the fallback receives zero shutdowns while the daemon receives exactly the requested kill; prove the provider gate opens as soon as daemon authority settles even while optional hook startup remains unresolved, and prove an SSH spawn and kill complete without touching either local barrier. Separately, spawn a session through one adapter, kill it through a fresh unconnected adapter, and assert the daemon no longer lists it.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts src/main/daemon/daemon-pty-adapter.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/startup/first-window-startup-services.test.ts"
       ],
       "testFiles": [
         "src/main/ipc/pty.test.ts",
-        "src/main/daemon/daemon-pty-adapter.test.ts"
+        "src/main/daemon/daemon-pty-adapter.test.ts",
+        "src/main/startup/first-window-startup-services.test.ts"
       ],
       "assertionRefs": [
         {
@@ -2207,7 +2208,14 @@
           "file": "src/main/daemon/daemon-pty-adapter.test.ts",
           "assertions": [
             "a fresh unconnected adapter kills a session hosted by the live daemon and the session disappears from daemon inventory",
-            "concurrent shutdowns through a fresh adapter share the lazy connection and remove both daemon sessions"
+            "concurrent shutdowns through a fresh adapter perform exactly one control-plus-stream handshake and remove both daemon sessions"
+          ]
+        },
+        {
+          "file": "src/main/startup/first-window-startup-services.test.ts",
+          "assertions": [
+            "daemon provider authority opens before an unresolved optional hook startup while the broader local spawn gate remains closed",
+            "the provider authority gate shares the bounded 60-second fail-open when daemon startup hangs"
           ]
         }
       ],
@@ -2216,10 +2224,10 @@
           "date": "2026-07-17",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts src/main/daemon/daemon-pty-adapter.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/startup/first-window-startup-services.test.ts",
           "result": "passed",
-          "durationSeconds": 3.28,
-          "summary": "2 files and 400 tests passed, including single and concurrent real-socket fresh-adapter shutdown, three deferred local provider-selection teardown paths, and SSH barrier bypass."
+          "durationSeconds": 3.27,
+          "summary": "3 files and 406 tests passed, including single and concurrent real-socket fresh-adapter shutdown, one control-plus-stream handshake for burst shutdown, three deferred local provider-selection teardown paths, hook-independent provider authority, and SSH barrier bypass."
         }
       ],
       "runtimeBudget": {
@@ -2236,7 +2244,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "The new startup barrier and connection guard add no polling, timers, subprocesses, session inventories, or provider fanout; runtime exact-stop's existing post-stop verification inventory is unchanged. Each path awaits the existing startup promise once; DaemonClient.ensureConnected is an O(1) no-op when connected and deduplicates concurrent connection attempts when disconnected. Tests deterministically count zero fallback shutdowns and exactly one target shutdown per entry point."
+        "evidence": "The provider-authority barrier and connection guard add no polling, timers, subprocesses, session inventories, or provider fanout; runtime exact-stop's existing post-stop verification inventory is unchanged. Shutdown does not wait for optional hook startup once daemon authority settles. Each path awaits one bounded provider promise; DaemonClient.ensureConnected is an O(1) no-op when connected and deduplicates concurrent connection attempts when disconnected. Tests deterministically count zero fallback shutdowns, exactly one target shutdown per entry point, and exactly one control-plus-stream handshake for concurrent fresh-adapter shutdowns."
       },
       "promotionCriteria": [
         "Run the focused gate for at least 100 consecutive passes or 14 days across required CI platforms.",

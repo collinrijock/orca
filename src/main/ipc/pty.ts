@@ -1513,6 +1513,7 @@ export function registerPtyHandlers(
   store?: Store,
   options?: {
     awaitLocalPtyStartup?: () => Promise<void>
+    awaitLocalPtyProviderStartup?: () => Promise<void>
     // Why: returns true (once, consuming the flag) for the crash-recovery reload
     // so its did-finish-load skips the orphan sweep and keeps live PTYs (#5787).
     isRecoveryReloadInFlight?: (webContentsId: number) => boolean
@@ -1534,6 +1535,15 @@ export function registerPtyHandlers(
     // first paint. Local spawns must wait before resolving getProvider(), while
     // SSH/headless paths do not use the desktop daemon.
     return options?.awaitLocalPtyStartup?.()
+  }
+
+  const getLocalPtyProviderStartupPromise = (
+    connectionId?: string | null
+  ): Promise<void> | undefined => {
+    if (connectionId) {
+      return undefined
+    }
+    return options?.awaitLocalPtyProviderStartup?.() ?? options?.awaitLocalPtyStartup?.()
   }
 
   // Remove any previously registered handlers so we can re-register them
@@ -3444,7 +3454,7 @@ export function registerPtyHandlers(
           })
         return true
       }
-      const startupPromise = getLocalPtyStartupPromise(connectionId)
+      const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
       if (startupPromise) {
         // Why: provider selection must happen after the daemon swap; selecting
         // the fallback first can report success while orphaning a daemon PTY.
@@ -3462,7 +3472,7 @@ export function registerPtyHandlers(
       let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
       const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
       connectionId ??= parsedSshId?.connectionId
-      const startupPromise = getLocalPtyStartupPromise(connectionId)
+      const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
       if (startupPromise) {
         // Why: exact-stop must resolve the provider after daemon startup just
         // like renderer kills, or the fallback can falsely confirm teardown.
@@ -5119,7 +5129,7 @@ export function registerPtyHandlers(
     const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
     // Why: select the local provider only after daemon startup; fallback shutdown
     // can otherwise falsely succeed and orphan a restored daemon PTY (#7742).
-    const startupPromise = getLocalPtyStartupPromise(connectionId)
+    const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
     if (startupPromise) {
       await startupPromise
     }
