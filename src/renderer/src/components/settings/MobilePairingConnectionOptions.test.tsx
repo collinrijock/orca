@@ -65,8 +65,11 @@ describe('MobilePairingConnectionOptions', () => {
     const user = userEvent.setup()
     render(<MobilePairingConnectionOptions value="local-only" onChange={vi.fn()} />)
 
-    expect(screen.getByRole('switch', { name: /connect with Orca Relay/i })).toBeDisabled()
-    expect(screen.getByRole('switch', { name: /connect with Orca Relay/i })).not.toBeChecked()
+    expect(screen.getByRole('switch', { name: /include orca relay/i })).toBeDisabled()
+    expect(screen.getByRole('switch', { name: /include orca relay/i })).not.toBeChecked()
+    expect(
+      screen.getByText(/sign in on this desktop to include relay as a fallback/i)
+    ).toBeVisible()
     await user.click(screen.getByRole('button', { name: 'Sign in' }))
     expect(connect).toHaveBeenCalledOnce()
   })
@@ -87,8 +90,8 @@ describe('MobilePairingConnectionOptions', () => {
     render(<MobilePairingConnectionOptions value="automatic" onChange={onChange} />)
 
     await waitFor(() => expect(screen.getByText('Ready')).toBeVisible())
-    expect(screen.getByRole('switch', { name: /connect with Orca Relay/i })).toBeChecked()
-    await user.click(screen.getByRole('switch', { name: /connect with Orca Relay/i }))
+    expect(screen.getByRole('switch', { name: /include orca relay/i })).toBeChecked()
+    await user.click(screen.getByRole('switch', { name: /include orca relay/i }))
     expect(onChange).toHaveBeenCalledWith('local-only')
     statusListener?.('standby')
     await waitFor(() => expect(screen.getByText('Available')).toBeVisible())
@@ -126,13 +129,13 @@ describe('MobilePairingConnectionOptions', () => {
     const props = { compact: true, onChange: vi.fn() }
     const { rerender } = render(<MobilePairingConnectionOptions {...props} value="automatic" />)
 
-    expect(screen.getByRole('switch', { name: /connect with Orca Relay/i })).toBeChecked()
-    expect(screen.getByText(/direct connection when available/i)).toBeVisible()
+    expect(screen.getByRole('switch', { name: /include orca relay/i })).toBeChecked()
+    expect(screen.getByText(/fall back through encrypted relay/i)).toBeVisible()
     expect(screen.queryByText('Ready')).toBeNull()
 
     rerender(<MobilePairingConnectionOptions {...props} value="local-only" />)
-    expect(screen.getByRole('switch', { name: /connect with Orca Relay/i })).not.toBeChecked()
-    expect(screen.getByText(/direct connection when available/i)).toBeVisible()
+    expect(screen.getByRole('switch', { name: /include orca relay/i })).not.toBeChecked()
+    expect(screen.getByText(/fall back through encrypted relay/i)).toBeVisible()
     expect(screen.queryByText(/without connecting this phone through Orca Relay/i)).toBeNull()
   })
 })

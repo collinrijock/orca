@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest'
 
 import React from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MobilePairingSetupSection } from './MobilePairingSetupSection'
@@ -23,7 +23,7 @@ function renderSection(
   const onGenerateQr = vi.fn()
   const props: React.ComponentProps<typeof MobilePairingSetupSection> = {
     connectionMode: 'local-only',
-    relayConnectionControl: null,
+    relayConnectionControl: <div data-testid="relay-control">relay</div>,
     networkInterfaces: [LAN, TAILNET],
     selectedAddress: TAILNET.address,
     onSelectedAddressChange,
@@ -44,17 +44,30 @@ function renderSection(
 }
 
 describe('MobilePairingSetupSection', () => {
-  it('keeps local settings visible for local-only pairing', () => {
-    renderSection()
-    expect(screen.getByRole('combobox')).toHaveTextContent('100.64.1.20 (tailscale0)')
-    expect(screen.getByText(/connects only through the local network address/i)).toBeVisible()
+  beforeEach(() => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        shell: { openUrl: vi.fn().mockResolvedValue(undefined) }
+      }
+    })
   })
 
-  it('keeps local settings visible for automatic direct-first pairing', () => {
+  it('explains the direct path, Relay fallback, and generate steps in order', () => {
+    renderSection()
+    expect(screen.getByText('1. Direct address')).toBeVisible()
+    expect(screen.getByText('2. Optional Relay fallback')).toBeVisible()
+    expect(screen.getByText('3. Generate pairing code')).toBeVisible()
+    expect(screen.getByTestId('relay-control')).toBeVisible()
+    expect(screen.getByRole('combobox')).toHaveTextContent('100.64.1.20 (tailscale0)')
+    expect(screen.getByText(/connects only through the direct address above/i)).toBeVisible()
+  })
+
+  it('describes automatic pairing as direct-first with Relay fallback', () => {
     renderSection({ connectionMode: 'automatic' })
     expect(screen.getByRole('combobox')).toBeVisible()
     expect(
-      screen.getByText(/includes direct access and encrypted Orca Relay fallback/i)
+      screen.getByText(/includes the direct address above, plus encrypted Orca Relay/i)
     ).toBeVisible()
   })
 
@@ -63,6 +76,12 @@ describe('MobilePairingSetupSection', () => {
     await user.click(screen.getByRole('combobox'))
     await user.click(screen.getByRole('option', { name: '192.168.1.24 (en0)' }))
     expect(onSelectedAddressChange).toHaveBeenCalledWith('192.168.1.24')
+  })
+
+  it('opens Tailscale download from the direct-address hint', async () => {
+    const { user } = renderSection()
+    await user.click(screen.getByRole('button', { name: /Get Tailscale/i }))
+    expect(window.api.shell.openUrl).toHaveBeenCalledWith('https://tailscale.com/download')
   })
 
   it('generates a pairing code with the selected mode', async () => {

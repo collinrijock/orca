@@ -64,7 +64,7 @@ function ConnectionModeSwitch({
           <span>
             {translate(
               'auto.components.settings.MobilePairingConnectionOptions.anywhere',
-              'Connect with Orca Relay'
+              'Include Orca Relay'
             )}
           </span>
         </span>
@@ -75,11 +75,11 @@ function ConnectionModeSwitch({
             {signedIn
               ? translate(
                   'auto.components.settings.MobilePairingConnectionOptions.automaticDescription',
-                  'Orca uses a direct connection when available and Relay otherwise.'
+                  'If the phone cannot reach the direct address, fall back through encrypted Relay from any network.'
                 )
               : translate(
                   'auto.components.settings.MobilePairingConnectionOptions.signInDescription',
-                  'Sign in on this desktop to use Orca Relay.'
+                  'Sign in on this desktop to include Relay as a fallback.'
                 )}
           </span>
           <MobileRelayBetaAvailability />
@@ -98,7 +98,7 @@ function ConnectionModeSwitch({
             disabled={!signedIn}
             ariaLabel={translate(
               'auto.components.settings.MobilePairingConnectionOptions.anywhere',
-              'Connect with Orca Relay'
+              'Include Orca Relay'
             )}
             onChange={() => onChange(value === 'automatic' ? 'local-only' : 'automatic')}
           />

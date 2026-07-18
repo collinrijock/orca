@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 import { ExternalLink, Loader2, QrCode, RefreshCw } from 'lucide-react'
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { translate } from '@/i18n/i18n'
@@ -36,55 +35,31 @@ export function MobilePairingSetupSection({
   onGenerateQr
 }: MobilePairingSetupSectionProps): React.JSX.Element {
   return (
-    <section>
-      <h3 className="text-sm font-medium">
-        {translate('auto.components.settings.MobilePairingSetupSection.title', 'Pair a phone')}
-      </h3>
-      <p className="mt-1 text-xs text-muted-foreground">
-        {connectionMode === 'automatic'
-          ? translate(
-              'auto.components.settings.MobilePairingSetupSection.automaticDescription',
-              'The pairing code includes direct access and encrypted Orca Relay fallback.'
-            )
-          : translate(
-              'auto.components.settings.MobilePairingSetupSection.localDescription',
-              'The pairing code connects only through the local network address below.'
-            )}
-      </p>
-      <div className="mt-2">{relayConnectionControl}</div>
-      <Button
-        onClick={onGenerateQr}
-        disabled={loading || !selectedAddress}
-        size="sm"
-        className="mt-3 gap-1.5"
-      >
-        {loading ? (
-          <Loader2 className="size-3.5 animate-spin" />
-        ) : hasQrCode ? (
-          <RefreshCw className="size-3.5" />
-        ) : (
-          <QrCode className="size-3.5" />
-        )}
-        {hasQrCode
-          ? translate('auto.components.settings.MobilePairingSetupSection.regenerate', 'Regenerate')
-          : translate(
-              'auto.components.settings.MobilePairingSetupSection.generate',
-              'Generate QR Code'
-            )}
-      </Button>
+    <section className="space-y-5">
+      <div className="space-y-1">
+        <h3 className="text-sm font-medium">
+          {translate('auto.components.settings.MobilePairingSetupSection.title', 'Pair a phone')}
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.MobilePairingSetupSection.overview',
+            'Your phone needs a path to this computer. Pick a direct address first (same Wi‑Fi or Tailscale). Optionally add Orca Relay as a fallback when that address is unreachable.'
+          )}
+        </p>
+      </div>
 
-      <div className="mt-4 space-y-3 border-t border-border/60 pt-4">
+      <div className="space-y-3">
         <div className="space-y-1">
           <h4 className="text-xs font-medium">
             {translate(
-              'auto.components.settings.MobilePairingSetupSection.localSettings',
-              'Local connection settings'
+              'auto.components.settings.MobilePairingSetupSection.directTitle',
+              '1. Direct address'
             )}
           </h4>
           <p className="text-xs text-muted-foreground">
             {translate(
-              'auto.components.settings.MobilePairingSetupSection.localAddressDescription',
-              'Choose the LAN or private-network address that Orca Mobile can use to reach this computer directly.'
+              'auto.components.settings.MobilePairingSetupSection.directDescription',
+              'On the same Wi‑Fi, pick a LAN address. Away from this network, install Tailscale on both devices, join the same tailnet, then pick the 100.x address.'
             )}
           </p>
         </div>
@@ -120,37 +95,91 @@ export function MobilePairingSetupSection({
             </TooltipContent>
           </Tooltip>
         </div>
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.MobilePairingSetupSection.tailscaleHint',
+            'No Tailscale yet?'
+          )}{' '}
+          <button
+            type="button"
+            onClick={() => void window.api.shell.openUrl(TAILSCALE_DOWNLOAD_URL)}
+            className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-2 hover:underline"
+          >
+            {translate(
+              'auto.components.settings.MobilePairingSetupSection.getTailscale',
+              'Get Tailscale'
+            )}
+            <ExternalLink className="size-3" />
+          </button>
+          {translate(
+            'auto.components.settings.MobilePairingSetupSection.tailscaleHintSuffix',
+            ' — then refresh and select its 100.x.y.z address.'
+          )}
+        </p>
       </div>
 
-      <Accordion type="single" collapsible className="mt-2">
-        <AccordionItem value="tailnet-guide" className="border-b-0">
-          <AccordionTrigger className="py-2 text-xs">
+      <div className="space-y-2 border-t border-border/60 pt-4">
+        <div className="space-y-1">
+          <h4 className="text-xs font-medium">
             {translate(
-              'auto.components.settings.MobilePairingSetupSection.tailnet',
-              'Connect with your own tailnet'
+              'auto.components.settings.MobilePairingSetupSection.relayTitle',
+              '2. Optional Relay fallback'
             )}
-          </AccordionTrigger>
-          <AccordionContent className="space-y-3 text-xs text-muted-foreground">
-            <p>
-              {translate(
-                'auto.components.settings.MobilePairingSetupSection.tailnetDescription',
-                'Install Tailscale on this computer and your phone, sign in to the same tailnet, then select its 100.x.y.z address above.'
+          </h4>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.MobilePairingSetupSection.relaySectionDescription',
+              'Use this when you are not on the same network and do not want to set up Tailscale. The phone still prefers the direct address above when it works.'
+            )}
+          </p>
+        </div>
+        {relayConnectionControl}
+      </div>
+
+      <div className="space-y-2 border-t border-border/60 pt-4">
+        <div className="space-y-1">
+          <h4 className="text-xs font-medium">
+            {translate(
+              'auto.components.settings.MobilePairingSetupSection.generateTitle',
+              '3. Generate pairing code'
+            )}
+          </h4>
+          <p className="text-xs text-muted-foreground">
+            {connectionMode === 'automatic'
+              ? translate(
+                  'auto.components.settings.MobilePairingSetupSection.generateAutomaticDescription',
+                  'The code includes the direct address above, plus encrypted Orca Relay as a fallback.'
+                )
+              : translate(
+                  'auto.components.settings.MobilePairingSetupSection.generateLocalDescription',
+                  'The code connects only through the direct address above — no Relay.'
+                )}
+          </p>
+        </div>
+        <Button
+          onClick={onGenerateQr}
+          disabled={loading || !selectedAddress}
+          size="sm"
+          className="gap-1.5"
+        >
+          {loading ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : hasQrCode ? (
+            <RefreshCw className="size-3.5" />
+          ) : (
+            <QrCode className="size-3.5" />
+          )}
+          {hasQrCode
+            ? translate(
+                'auto.components.settings.MobilePairingSetupSection.regenerate',
+                'Regenerate'
+              )
+            : translate(
+                'auto.components.settings.MobilePairingSetupSection.generate',
+                'Generate QR Code'
               )}
-            </p>
-            <button
-              type="button"
-              onClick={() => void window.api.shell.openUrl(TAILSCALE_DOWNLOAD_URL)}
-              className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-2 hover:underline"
-            >
-              {translate(
-                'auto.components.settings.MobilePairingSetupSection.getTailscale',
-                'Get Tailscale'
-              )}
-              <ExternalLink className="size-3" />
-            </button>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
+        </Button>
+      </div>
     </section>
   )
 }
