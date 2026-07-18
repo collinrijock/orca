@@ -87,6 +87,18 @@ describe('isMarkdownPreviewAddReviewNoteShortcut', () => {
     expect(isMarkdownPreviewAddReviewNoteShortcut(defaultEvent, 'darwin')).toBe(true)
     expect(isMarkdownPreviewAddReviewNoteShortcut(defaultEvent, 'linux')).toBe(false)
     expect(
+      isMarkdownPreviewAddReviewNoteShortcut(
+        { ...defaultEvent, metaKey: false, ctrlKey: true },
+        'linux'
+      )
+    ).toBe(true)
+    expect(
+      isMarkdownPreviewAddReviewNoteShortcut(
+        { ...defaultEvent, metaKey: false, ctrlKey: true },
+        'win32'
+      )
+    ).toBe(true)
+    expect(
       isMarkdownPreviewAddReviewNoteShortcut(defaultEvent, 'darwin', {
         'editor.addReviewNote': ['Mod+Shift+K']
       })

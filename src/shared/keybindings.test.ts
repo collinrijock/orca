@@ -226,6 +226,30 @@ describe('keybindings', () => {
     ])
     expect(formatKeybindingList(['Mod+Shift+A'], 'darwin')).toBe('⌘⇧A')
     expect(formatKeybindingList(['Mod+Shift+A'], 'linux')).toBe('Ctrl+Shift+A')
+
+    const macChord = {
+      key: 'a',
+      code: 'KeyA',
+      meta: true,
+      control: false,
+      alt: false,
+      shift: true
+    }
+    const ctrlChord = { ...macChord, meta: false, control: true }
+    expect(keybindingMatchesAction('editor.addReviewNote', macChord, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('editor.addReviewNote', ctrlChord, 'linux')).toBe(true)
+    expect(keybindingMatchesAction('editor.addReviewNote', ctrlChord, 'win32')).toBe(true)
+
+    const oldCtrlAltChord = {
+      key: 'n',
+      code: 'KeyN',
+      meta: false,
+      control: true,
+      alt: true,
+      shift: false
+    }
+    expect(keybindingMatchesAction('editor.addReviewNote', oldCtrlAltChord, 'linux')).toBe(false)
+    expect(keybindingMatchesAction('editor.addReviewNote', oldCtrlAltChord, 'win32')).toBe(false)
   })
 
   it('defines platform-native replace-in-editor shortcuts', () => {
