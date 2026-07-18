@@ -9797,6 +9797,63 @@ describe('Store', () => {
   })
 })
 
+describe('Store.migrateTabSwitchKeybindings', () => {
+  // Freezes the install cohort for the tab-switch convention swap on first load.
+  // Keys on `fileExistedOnLoad` (not field presence) so the verdict is stable
+  // even after a fresh install writes its own data file on later launches.
+
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+  })
+
+  afterEach(() => {
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('marks a truly fresh install done so it adopts the new defaults', async () => {
+    const store = await createStore()
+    expect(store.getSettings().tabSwitchKeybindingSeed).toBe('done')
+  })
+
+  it('marks a pre-existing install pending so the legacy chords get seeded', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [makeRepo()],
+      worktreeMeta: {},
+      settings: { theme: 'dark' },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getSettings().tabSwitchKeybindingSeed).toBe('pending')
+    expect(store.getSettings().theme).toBe('dark')
+  })
+
+  it('treats a corrupt data file as a pre-existing install', async () => {
+    mkdirSync(testState.dir, { recursive: true })
+    writeFileSync(dataFile(), '{{{corrupt json', 'utf-8')
+    const store = await createStore()
+    expect(store.getSettings().tabSwitchKeybindingSeed).toBe('pending')
+  })
+
+  it('preserves an already-frozen cohort on subsequent launches', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { tabSwitchKeybindingSeed: 'done' },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    // Existing file but cohort already resolved to 'done' — must not flip to
+    // 'pending' just because the data file happens to exist.
+    expect(store.getSettings().tabSwitchKeybindingSeed).toBe('done')
+  })
+})
+
 describe('Store.migrateWorktreeIdentity', () => {
   const OLD = 'repo1::/ws/cunner'
   const NEW = 'repo1::/ws/worktree-creation-spinner'

@@ -371,8 +371,9 @@ describe('NativeChatComposer', () => {
       />
     )
 
+    // Why: Codex model is agent-picker mid-session — setOption rejects; UI uses invokeAction.
     await act(async () => {
-      await mocks.fieldProps?.sessionOptionsSurface?.setOption('model', '')
+      await mocks.fieldProps?.sessionOptionsSurface?.invokeAction('model')
     })
 
     expect(mocks.sendNativeChatMessageVerified).toHaveBeenCalledWith(

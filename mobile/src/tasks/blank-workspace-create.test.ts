@@ -1,10 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { createBlankWorkspace } from './blank-workspace-create'
-
-vi.mock('expo-crypto', () => ({
-  randomUUID: () => '00000000-0000-4000-8000-000000000001'
-}))
 
 type Call = { method: string; params: unknown }
 
@@ -38,7 +34,8 @@ describe('createBlankWorkspace', () => {
       startupCommand: undefined,
       createdWithAgentId: undefined,
       comment: undefined,
-      setupDecision: 'inherit'
+      setupDecision: 'inherit',
+      supportsIdempotentCutoverRetry: true
     })
 
     expect(result).toEqual({ worktreeId: 'wt-1', name: 'octopus' })
@@ -50,7 +47,9 @@ describe('createBlankWorkspace', () => {
         startupCommand: undefined,
         setupDecision: 'inherit',
         name: 'octopus',
-        clientMutationId: '00000000-0000-4000-8000-000000000001'
+        // Idempotency key so a create interrupted by a connection migration can be
+        // safely retried without the host spawning a duplicate worktree.
+        clientMutationId: expect.any(String)
       }
     })
     const params = calls[0]?.params as Record<string, unknown>
@@ -69,7 +68,8 @@ describe('createBlankWorkspace', () => {
       startupCommand: 'claude',
       createdWithAgentId: 'claude',
       comment: 'spike',
-      setupDecision: 'run'
+      setupDecision: 'run',
+      supportsIdempotentCutoverRetry: true
     })
 
     expect(calls[0]?.params).toMatchObject({
@@ -98,7 +98,8 @@ describe('createBlankWorkspace', () => {
       startupCommand: undefined,
       createdWithAgentId: undefined,
       comment: undefined,
-      setupDecision: 'inherit'
+      setupDecision: 'inherit',
+      supportsIdempotentCutoverRetry: true
     })
 
     expect(result).toEqual({ worktreeId: 'wt-3', name: 'octopus-2' })
@@ -123,7 +124,8 @@ describe('createBlankWorkspace', () => {
       startupCommand: undefined,
       createdWithAgentId: undefined,
       comment: undefined,
-      setupDecision: 'inherit'
+      setupDecision: 'inherit',
+      supportsIdempotentCutoverRetry: true
     })
 
     expect(result).toEqual({ worktreeId: 'wt-4', name: 'octopus-2' })
@@ -141,7 +143,8 @@ describe('createBlankWorkspace', () => {
       startupCommand: undefined,
       createdWithAgentId: undefined,
       comment: undefined,
-      setupDecision: 'skip'
+      setupDecision: 'skip',
+      supportsIdempotentCutoverRetry: true
     })
 
     expect(result).toEqual({ error: 'SSH connection is not available' })

@@ -21,6 +21,10 @@ import type {
 } from '../shared/local-log-tail-types'
 import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type { AppIdentity } from '../shared/app-identity'
+import type {
+  WriteTerminalRenderDesyncEvidenceArgs,
+  WriteTerminalRenderDesyncEvidenceResult
+} from '../shared/terminal-render-desync-evidence'
 import type { MobileRelayStatus } from '../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-connection-mode'
 import type {
@@ -428,7 +432,11 @@ import type {
   AiVaultSubagentListArgs,
   AiVaultSubagentListResult
 } from '../shared/ai-vault-types'
-import type { AgentType, NativeChatMessage } from '../shared/native-chat-types'
+import type {
+  AgentType,
+  NativeChatMessage,
+  NativeChatTurnLifecycle
+} from '../shared/native-chat-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import type { AppStarSource } from '../shared/gh-star-source'
@@ -837,16 +845,34 @@ export type AiVaultApi = {
 // notFound marks a miss caused by the transcript not existing on disk yet
 // (retry-worthy), as opposed to a real read/parse error (#8401).
 export type NativeChatReadSessionResult =
-  | { messages: NativeChatMessage[] }
+  | {
+      messages: NativeChatMessage[]
+      lifecycle?: NativeChatTurnLifecycle
+    }
   | { error: string; notFound?: true }
 
 /** Messages appended to a live-tailed transcript since the previous emit. */
 export type NativeChatAppendedMessages = NativeChatMessage[]
 
 export type NativeChatSubscriptionFrame =
-  | { type: 'snapshot'; messages: NativeChatMessage[]; hasMore: boolean; error?: string }
-  | { type: 'replacement'; messages: NativeChatMessage[]; hasMore: boolean }
-  | { type: 'appended'; messages: NativeChatMessage[] }
+  | {
+      type: 'snapshot'
+      messages: NativeChatMessage[]
+      hasMore: boolean
+      error?: string
+      lifecycle?: NativeChatTurnLifecycle
+    }
+  | {
+      type: 'replacement'
+      messages: NativeChatMessage[]
+      hasMore: boolean
+      lifecycle?: NativeChatTurnLifecycle
+    }
+  | {
+      type: 'appended'
+      messages: NativeChatMessage[]
+      lifecycle?: NativeChatTurnLifecycle
+    }
 
 /** Wire payload for the `nativeChat:appended` push channel. */
 export type NativeChatAppendedPayload = {
@@ -926,6 +952,10 @@ export type AppApi = {
   /** Opens a native directory picker and authorizes the selected directory
    *  for Floating Workspace markdown file creation. */
   pickFloatingWorkspaceDirectory: () => Promise<string | null>
+  /** Persists flag-gated terminal render evidence under app-owned userData. */
+  writeTerminalRenderDesyncEvidence: (
+    args: WriteTerminalRenderDesyncEvidenceArgs
+  ) => Promise<WriteTerminalRenderDesyncEvidenceResult>
 }
 
 export type PreloadApi = {
@@ -1303,7 +1333,7 @@ export type PreloadApi = {
       isAlternateScreen?: boolean
       replay?: string
       sessionExpired?: boolean
-      coldRestore?: { scrollback: string; cwd: string }
+      coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
       startupCwdFallback?: { kind: 'worktree'; cwd: string }
     }>
     write: (id: string, data: string) => void

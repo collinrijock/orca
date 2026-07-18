@@ -65,7 +65,6 @@ export const WorktreeCreate = z
       .unknown()
       .transform((v) => (typeof v === 'string' ? v : ''))
       .pipe(z.string().min(1, 'Missing repo selector')),
-    clientMutationId: z.string().uuid().optional(),
     name: OptionalString,
     baseBranch: OptionalString,
     compareBaseRef: OptionalString,
@@ -144,6 +143,9 @@ export const WorktreeCreate = z
       .unknown()
       .transform((value) => (isTuiAgent(value) ? value : undefined))
       .optional(),
+    // Why: mobile retries a create interrupted by a connection migration with the
+    // same key so the host dedupes instead of spawning a duplicate worktree.
+    clientMutationId: z.string().min(1).max(128).optional(),
     automationProvenanceRequest: AutomationWorkspaceProvenanceRequest.optional()
   })
   .superRefine((params, ctx) => {
