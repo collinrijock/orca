@@ -1,14 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { existsSyncMock, userInfoMock } = vi.hoisted(() => ({
+const { existsSyncMock, userInfoMock, spawnSyncMock } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
-  userInfoMock: vi.fn()
+  userInfoMock: vi.fn(),
+  spawnSyncMock: vi.fn()
 }))
 
 vi.mock('node:fs', () => ({ existsSync: existsSyncMock }))
 vi.mock('node:os', () => ({ userInfo: userInfoMock }))
+vi.mock('node:child_process', () => ({ spawnSync: spawnSyncMock }))
 
-import { wrapShellSpawnForMacosTccAttribution } from './macos-tcc-login-shell'
+import {
+  resetMacosLoginShellPreflightForTests,
+  wrapShellSpawnForMacosTccAttribution
+} from './macos-tcc-login-shell'
 
 describe('wrapShellSpawnForMacosTccAttribution', () => {
   let origPlatform: PropertyDescriptor | undefined
@@ -24,6 +29,8 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
     existsSyncMock.mockReturnValue(true)
     userInfoMock.mockReturnValue({ username: 'ada' })
+    spawnSyncMock.mockReturnValue({ status: 0, stdout: 'ORCA_LOGIN_PREFLIGHT_OK' })
+    resetMacosLoginShellPreflightForTests()
   })
 
   afterEach(() => {
@@ -44,6 +51,44 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
       file: '/usr/bin/login',
       args: ['-flpq', 'ada', '/usr/bin/env', 'SHELL=/bin/zsh', '/bin/zsh', '-l']
     })
+    expect(spawnSyncMock).toHaveBeenCalledWith(
+      '/usr/bin/login',
+      ['-flpq', 'ada', '/usr/bin/printf', 'ORCA_LOGIN_PREFLIGHT_OK'],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 2_000 }
+    )
+  })
+
+  it('spawns the shell directly when login PAM policy rejects the current user', () => {
+    setPlatform('darwin')
+    spawnSyncMock.mockReturnValue({ status: 0, stdout: 'Login incorrect\nlogin: ' })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l'])).toEqual({
+      file: '/bin/zsh',
+      args: ['-l']
+    })
+    expect(console.warn).toHaveBeenCalledWith(
+      '[pty] macOS login(1) preflight failed; spawning shells directly'
+    )
+  })
+
+  it('caches a failed login preflight for later terminal spawns', () => {
+    setPlatform('darwin')
+    spawnSyncMock.mockReturnValue({ status: null, error: new Error('timed out') })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/bin/zsh')
+    expect(wrapShellSpawnForMacosTccAttribution('/bin/bash', ['-l']).file).toBe('/bin/bash')
+    expect(spawnSyncMock).toHaveBeenCalledTimes(1)
+    expect(console.warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('caches a successful login preflight for later terminal spawns', () => {
+    setPlatform('darwin')
+
+    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/usr/bin/login')
+    expect(wrapShellSpawnForMacosTccAttribution('/bin/bash', ['-l']).file).toBe('/usr/bin/login')
+    expect(spawnSyncMock).toHaveBeenCalledTimes(1)
   })
 
   it('keeps bash rcfile args intact after the shell path', () => {
@@ -152,5 +197,6 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
       file: '/bin/zsh',
       args: ['-l']
     })
+    expect(spawnSyncMock).not.toHaveBeenCalled()
   })
 })
