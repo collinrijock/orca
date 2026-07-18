@@ -75,9 +75,9 @@ const SidebarNav = React.memo(function SidebarNav() {
               onClick={openAutomationsPage}
               aria-current={automationsActive ? 'page' : undefined}
               className={cn(
-                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+                'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
                 automationsActive
-                  ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+                  ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground shadow-[inset_2px_0_0_var(--sidebar-primary)]'
                   : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
               )}
             >
@@ -102,9 +102,9 @@ const SidebarNav = React.memo(function SidebarNav() {
           onClick={openActivityPage}
           aria-current={activityActive ? 'page' : undefined}
           className={cn(
-            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+            'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
             activityActive
-              ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+              ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground shadow-[inset_2px_0_0_var(--sidebar-primary)]'
               : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
           )}
         >
@@ -136,9 +136,9 @@ const SidebarNav = React.memo(function SidebarNav() {
               }}
               aria-current={mobileActive ? 'page' : undefined}
               className={cn(
-                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+                'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
                 mobileActive
-                  ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+                  ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground shadow-[inset_2px_0_0_var(--sidebar-primary)]'
                   : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
               )}
             >
@@ -169,7 +169,7 @@ const SidebarNav = React.memo(function SidebarNav() {
           'auto.components.sidebar.SidebarNav.0c3395fd32',
           'Search worktrees and browser tabs'
         )}
-        className="group relative flex h-7 w-full items-center rounded-md border border-worktree-sidebar-border/70 bg-worktree-sidebar-foreground/5 pl-7 pr-1.5 text-left text-[12px] font-medium tracking-tight text-worktree-sidebar-foreground/45 transition-colors hover:border-worktree-sidebar-border hover:bg-worktree-sidebar-foreground/8 hover:text-worktree-sidebar-foreground/60 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50"
+        className="group relative flex h-7 w-full items-center rounded-sm border border-worktree-sidebar-border/70 bg-worktree-sidebar-foreground/5 pl-7 pr-1.5 text-left text-[12px] font-medium tracking-tight text-worktree-sidebar-foreground/45 transition-colors hover:border-worktree-sidebar-border hover:bg-worktree-sidebar-foreground/8 hover:text-worktree-sidebar-foreground/60 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50"
       >
         <Search
           className="pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-worktree-sidebar-foreground/30"

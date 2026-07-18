@@ -19,16 +19,15 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const newWorktreeShortcutLabel = useShortcutLabel('workspace.create')
   const groupBy = useAppStore((s) => s.groupBy)
   const canCreateWorkspace = useAppStore((s) => s.repos.length > 0)
-  const sidebarTitle = groupBy === 'repo' ? 'Projects' : 'Workspaces'
 
   return (
-    <div className="mt-2 flex h-8 items-center justify-between px-2 gap-2">
+    <div className="mt-2 flex h-7 items-center justify-between gap-2 border-t border-worktree-sidebar-border/70 px-2 pt-1">
       <div className="flex min-w-0 items-center gap-1">
         <span
-          className="pl-2 pr-0.5 text-xs font-semibold text-muted-foreground/80 select-none"
+          className="select-none pl-2 pr-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80"
           data-sidebar-section-title={groupBy === 'repo' ? 'projects' : 'workspaces'}
         >
-          {sidebarTitle}
+          {translate('auto.components.sidebar.SidebarNav.9c95e1ce91', 'Agents')}
         </span>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">

@@ -19,6 +19,7 @@ import {
   hasGitHubBackedProject,
   type PreflightIssue
 } from './landing-preflight-issues'
+import { Button } from './ui/button'
 
 type ShortcutItem = {
   id: string
@@ -101,25 +102,21 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
     <div ref={wrapperRef} className="relative inline-block">
       <button
         className={cn(
-          'inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-[13px] font-medium transition-all duration-300',
+          'inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
           state === 'loading' && 'pointer-events-none opacity-0',
-          state !== 'starred' &&
-            'cursor-pointer border-amber-500/60 text-amber-700 hover:border-amber-500/80 hover:bg-amber-400/10 dark:border-amber-400/30 dark:text-amber-300/90 dark:hover:border-amber-400/50 dark:hover:bg-amber-400/[0.08]',
-          state === 'starred' &&
-            'cursor-pointer border-amber-500/50 bg-amber-400/10 text-amber-700 dark:border-amber-400/25 dark:bg-amber-400/[0.06] dark:text-amber-400/60'
+          state !== 'loading' && 'cursor-pointer',
+          state === 'starred' && 'bg-muted text-foreground'
         )}
         onClick={handleClick}
         disabled={state === 'loading'}
       >
         {state === 'web-fallback' ? (
-          <ExternalLink className="size-3.5 text-amber-600 transition-all duration-300 dark:text-amber-400/80" />
+          <ExternalLink className="size-3.5" />
         ) : (
           <Star
             className={cn(
-              'size-3.5 transition-all duration-300',
-              state === 'starred'
-                ? 'fill-amber-500/70 text-amber-500/70 dark:fill-amber-400/60 dark:text-amber-400/60'
-                : 'text-amber-600 dark:text-amber-400/80'
+              'size-3.5',
+              state === 'starred' ? 'fill-current text-foreground' : 'text-muted-foreground'
             )}
           />
         )}
@@ -232,7 +229,7 @@ export default function Landing(): React.JSX.Element {
   const openModal = useAppStore((s) => s.openModal)
 
   const createTargetLabel =
-    repos.length > 0 && repos.every((repo) => isGitRepoKind(repo)) ? 'Worktree' : 'Workspace'
+    repos.length > 0 && repos.every((repo) => isGitRepoKind(repo)) ? 'workspace' : 'agent workspace'
   const canCreateWorktree = repos.length > 0
   const hasGitHubProject = useMemo(() => hasGitHubBackedProject(repos), [repos])
   const showGitHubSupportFooter = repos.length === 0 || hasGitHubProject
@@ -306,84 +303,109 @@ export default function Landing(): React.JSX.Element {
       {
         id: 'create',
         shortcut: createWorktreeShortcut,
-        action: `Create ${createTargetLabel.toLowerCase()}`
+        action: `New ${createTargetLabel}`
       },
-      { id: 'up', shortcut: previousWorktreeShortcut, action: 'Move up workspace' },
-      { id: 'down', shortcut: nextWorktreeShortcut, action: 'Move down workspace' }
+      { id: 'up', shortcut: previousWorktreeShortcut, action: 'Previous workspace' },
+      { id: 'down', shortcut: nextWorktreeShortcut, action: 'Next workspace' }
     ]
   }, [createTargetLabel, createWorktreeShortcut, nextWorktreeShortcut, previousWorktreeShortcut])
 
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-background">
-      <div className="w-full max-w-lg px-6">
-        <div className="flex flex-col items-center gap-4 py-8">
-          <div
-            className="flex items-center justify-center size-20 rounded-2xl border border-border/80 shadow-lg shadow-black/40"
-            style={{ backgroundColor: '#12181e' }}
-          >
-            <img
-              src={logo}
-              alt={translate('auto.components.Landing.520304a067', 'Orca logo')}
-              className="size-12"
-            />
+      <main className="w-full max-w-md px-6 py-10">
+        <div className="flex flex-col items-start">
+          <div className="mb-7 flex items-center gap-2.5">
+            <div
+              className="flex size-7 items-center justify-center rounded-sm border border-white/10"
+              style={{ backgroundColor: '#12181e' }}
+            >
+              <img
+                src={logo}
+                alt={translate('auto.components.Landing.520304a067', 'Orca logo')}
+                className="size-4"
+              />
+            </div>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              {translate('auto.components.sidebar.SidebarNav.9c95e1ce91', 'Agents')}
+            </span>
           </div>
-          <h1 className="text-4xl font-bold text-foreground tracking-tight">
-            {translate('auto.components.Landing.6ca6ff404e', 'ORCA')}
+
+          <h1 className="text-2xl font-semibold tracking-[-0.025em] text-foreground">
+            {translate('auto.components.Landing.6ca6ff404e', 'Build with agents')}
           </h1>
-
-          {preflightIssues.length > 0 && <PreflightBanner issues={preflightIssues} repos={repos} />}
-
-          <p className="text-sm text-muted-foreground text-center">
+          <p className="mt-2 max-w-sm text-[13px] leading-5 text-muted-foreground">
             {canCreateWorktree
               ? translate(
                   'auto.components.Landing.9c00bd4adf',
-                  'Select a workspace from the sidebar to begin.'
+                  'Choose an agent workspace from the sidebar, or start a new one.'
                 )
-              : translate('auto.components.Landing.cd21242762', 'Add a project to get started.')}
+              : translate(
+                  'auto.components.Landing.cd21242762',
+                  'Add a project to start an agent in an isolated workspace.'
+                )}
           </p>
 
-          <div className="flex items-center justify-center gap-2.5 flex-wrap">
-            <button
-              className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md cursor-pointer hover:bg-accent transition-colors"
-              onClick={() => openModal('add-repo')}
-            >
-              <FolderPlus className="size-3.5" />
-              {translate('auto.components.Landing.f9eaa9e12d', 'Add Project')}
-            </button>
+          {preflightIssues.length > 0 && (
+            <div className="mt-5 w-full">
+              <PreflightBanner issues={preflightIssues} repos={repos} />
+            </div>
+          )}
 
-            <button
-              className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed enabled:cursor-pointer enabled:hover:bg-accent"
-              disabled={!canCreateWorktree}
-              title={
-                !canCreateWorktree
-                  ? translate('auto.components.Landing.f05d237049', 'Add a project first')
-                  : undefined
-              }
-              onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
-            >
-              <GitBranchPlus className="size-3.5" />
-              {translate('auto.components.Landing.76a95f7f47', 'Create')}{' '}
-              {createTargetLabel.toLowerCase()}
-            </button>
+          <div className="mt-6 flex flex-wrap items-center gap-2">
+            {canCreateWorktree ? (
+              <>
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    openModal('new-workspace-composer', { telemetrySource: 'unknown' })
+                  }
+                >
+                  <GitBranchPlus className="size-3.5" />
+                  {translate('auto.components.Landing.76a95f7f47', 'New agent workspace')}
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => openModal('add-repo')}>
+                  <FolderPlus className="size-3.5" />
+                  {translate('auto.components.Landing.f9eaa9e12d', 'Add project')}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button size="sm" onClick={() => openModal('add-repo')}>
+                  <FolderPlus className="size-3.5" />
+                  {translate('auto.components.Landing.f9eaa9e12d', 'Add project')}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled
+                  title={translate('auto.components.Landing.f05d237049', 'Add a project first')}
+                >
+                  <GitBranchPlus className="size-3.5" />
+                  {translate('auto.components.Landing.76a95f7f47', 'New agent workspace')}
+                </Button>
+              </>
+            )}
           </div>
 
-          <div className="mt-6 w-full max-w-xs space-y-2">
-            {shortcuts.map((shortcut) => (
-              <div key={shortcut.id} className="grid grid-cols-[1fr_auto] items-center gap-3">
-                <span className="text-sm text-muted-foreground">{shortcut.action}</span>
-                <ShortcutKeyCombo
-                  keys={shortcut.shortcut.keys}
-                  doubleTap={shortcut.shortcut.doubleTap}
-                  separatorClassName="mx-0.5 text-[10px] text-muted-foreground"
-                />
-              </div>
-            ))}
+          <div className="mt-10 w-full border-t border-border pt-4">
+            <div className="space-y-2">
+              {shortcuts.map((shortcut) => (
+                <div key={shortcut.id} className="grid grid-cols-[1fr_auto] items-center gap-3">
+                  <span className="text-[13px] text-muted-foreground">{shortcut.action}</span>
+                  <ShortcutKeyCombo
+                    keys={shortcut.shortcut.keys}
+                    doubleTap={shortcut.shortcut.doubleTap}
+                    separatorClassName="mx-0.5 text-[10px] text-muted-foreground"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      </main>
 
       {showGitHubSupportFooter && (
-        <div className="absolute bottom-6 left-0 right-0 flex justify-center">
+        <div className="absolute bottom-5 right-5">
           <GitHubStarButton hasRepos={repos.length > 0} />
         </div>
       )}
