@@ -367,7 +367,10 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
     expect(transport.getPtyId()).toContain('terminal-2')
     expect(onPtySpawn).not.toHaveBeenCalled()
-    expect(onPtyRebind).toHaveBeenCalledWith(expect.stringContaining('terminal-2'))
+    expect(onPtyRebind).toHaveBeenCalledWith(
+      expect.stringContaining('terminal-2'),
+      expect.stringContaining('terminal-1')
+    )
   })
 
   it('retires the mirror when the host no longer publishes the surface after a transport close', async () => {
@@ -462,7 +465,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
   })
 
-  it('keeps the regular TUI surface and draft through stale-handle reconnect', async () => {
+  it('keeps the regular TUI and draft through inventory failure and stale-handle reconnect', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onError = vi.fn()
     const onPtyExit = vi.fn()
@@ -501,10 +504,13 @@ describe('createRemoteRuntimePtyTransport', () => {
     runtimeCall.mockImplementation(async (args: { method: string }) => {
       if (args.method === 'session.tabs.list') {
         hostListCalls += 1
+        if (hostListCalls === 1) {
+          throw new Error('runtime reconnect in progress')
+        }
         const terminal =
-          hostListCalls === 1
+          hostListCalls === 2
             ? 'terminal-stale'
-            : hostListCalls === 2
+            : hostListCalls === 3
               ? null
               : 'terminal-reconnected'
         return {
@@ -542,8 +548,9 @@ describe('createRemoteRuntimePtyTransport', () => {
     await vi.waitFor(() => expect(hostListCalls).toBeGreaterThanOrEqual(1))
     expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-stale' })
     expect(onPtyExit).not.toHaveBeenCalled()
-    await vi.waitFor(() =>
-      expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-reconnected' })
+    await vi.waitFor(
+      () => expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-reconnected' }),
+      { timeout: 2_000 }
     )
     const replacementStreamId = latestSubscribePayload().streamId
     emitSnapshot(replacementStreamId, draft)
@@ -552,13 +559,16 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(onPtyExit).not.toHaveBeenCalled()
     expect(onPtySpawn).not.toHaveBeenCalled()
     expect(onPtyRebind).toHaveBeenCalledOnce()
-    expect(onPtyRebind).toHaveBeenCalledWith('remote:env-1@@terminal-reconnected')
+    expect(onPtyRebind).toHaveBeenCalledWith(
+      'remote:env-1@@terminal-reconnected',
+      'remote:env-1@@terminal-stale'
+    )
     expect(onExit).not.toHaveBeenCalled()
     expect(onDisconnect).not.toHaveBeenCalled()
     expect(transport.getPtyId()).toBe('remote:env-1@@terminal-reconnected')
     expect(transport.isConnected()).toBe(true)
     expect(renderedScreen.at(-1)).toBe(draft)
-    expect(hostListCalls).toBe(3)
+    expect(hostListCalls).toBe(4)
     const subscribedTerminals = subscriptionSendBinary.mock.calls
       .map((call) => decodeTerminalStreamFrame(call[0]))
       .flatMap((frame) => {
@@ -569,6 +579,89 @@ describe('createRemoteRuntimePtyTransport', () => {
         return payload ? [payload.terminal] : []
       })
     expect(subscribedTerminals).toEqual(['terminal-stale', 'terminal-reconnected'])
+  })
+
+  it('keeps the mirror mounted when bounded replacement polling has no removal evidence', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const onError = vi.fn()
+      const onPtyExit = vi.fn()
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'web-terminal-tab-1',
+        leafId: 'pane:1',
+        onPtyExit
+      })
+
+      transport.attach({
+        existingPtyId: 'remote:env-1@@terminal-stale',
+        cols: 80,
+        rows: 24,
+        callbacks: { onError }
+      })
+      await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+
+      let hostListCalls = 0
+      runtimeCall.mockImplementation(async (args: { method: string }) => {
+        if (args.method !== 'session.tabs.list') {
+          return { ok: true, result: {} }
+        }
+        hostListCalls += 1
+        return {
+          ok: true,
+          result: {
+            worktree: 'wt-1',
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: hostListCalls + 1,
+            activeGroupId: null,
+            activeTabId: 'tab-1::pane:1',
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: 'tab-1::pane:1',
+                parentTabId: 'tab-1',
+                leafId: 'pane:1',
+                title: 'Claude Code',
+                isActive: true,
+                status: 'ready',
+                terminal: 'terminal-stale'
+              }
+            ]
+          }
+        }
+      })
+
+      subscriptionCallbacks?.onResponse({
+        ok: true,
+        result: {
+          type: 'error',
+          streamId: latestSubscribePayload().streamId,
+          message: 'terminal_handle_stale'
+        }
+      })
+      await vi.advanceTimersByTimeAsync(16_000)
+
+      expect(hostListCalls).toBeGreaterThan(1)
+      expect(hostListCalls).toBeLessThan(25)
+      expect(onError).not.toHaveBeenCalled()
+      expect(onPtyExit).not.toHaveBeenCalled()
+      expect(transport.getPtyId()).toBe('remote:env-1@@terminal-stale')
+      expect(transport.isConnected()).toBe(true)
+      const subscribedTerminals = subscriptionSendBinary.mock.calls
+        .map((call) => decodeTerminalStreamFrame(call[0]))
+        .flatMap((frame) => {
+          if (frame?.opcode !== TerminalStreamOpcode.Subscribe) {
+            return []
+          }
+          const payload = decodeTerminalStreamJson<{ terminal: string }>(frame.payload)
+          return payload ? [payload.terminal] : []
+        })
+      expect(subscribedTerminals).toEqual(['terminal-stale'])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('coalesces concurrent stale errors for the handle that was replaced', async () => {

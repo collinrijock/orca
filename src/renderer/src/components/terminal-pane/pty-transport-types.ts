@@ -158,7 +158,7 @@ export type IpcPtyTransportOptions = {
   onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void
   /** Rebind an existing pane after its provider replaces the PTY identity. */
-  onPtyRebind?: (ptyId: string) => void
+  onPtyRebind?: (ptyId: string, replacedPtyId: string) => void
   onBell?: () => void
   onAgentBecameIdle?: (title: string) => void
   onAgentBecameWorking?: () => void

@@ -2542,17 +2542,21 @@ describe('connectPanePty', () => {
 
     connectPanePty(createPane(1) as never, manager as never, deps as never)
     const onPtyRebind = createdTransportOptions[0]?.onPtyRebind as
-      | ((ptyId: string) => void)
+      | ((ptyId: string, replacedPtyId: string) => void)
       | undefined
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
     expect(onPtyRebind).toBeTypeOf('function')
     expect(onPtyExit).toBeTypeOf('function')
 
-    onPtyRebind?.('terminal-reconnected')
+    onPtyRebind?.('terminal-reconnected', 'terminal-old')
     onPtyExit?.('terminal-reconnected')
 
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'terminal-reconnected')
-    expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'terminal-reconnected')
+    expect(deps.updateTabPtyId).toHaveBeenCalledWith(
+      'tab-1',
+      'terminal-reconnected',
+      'terminal-old'
+    )
     expect(deps.onPtyExitRef.current).toHaveBeenCalledWith('terminal-reconnected')
     expect(manager.closePane).not.toHaveBeenCalled()
   })

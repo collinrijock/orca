@@ -205,47 +205,51 @@ export function createRemoteRuntimePtyTransport(
     return null
   }
 
-  async function listHostSessionHandle(hostTabId: string): Promise<string | null> {
-    if (!worktreeId) {
-      return null
-    }
-    const listed = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', {
-      worktree: toRuntimeWorktreeSelector(worktreeId)
-    })
-    return findReadyHostSessionHandle(listed, hostTabId)
-  }
-
-  async function waitForReplacementHostSessionHandle(
+  async function waitForResubscribeHostSessionHandle(
     hostTabId: string,
-    previousHandle: string
-  ): Promise<string | null> {
+    previousHandle: string,
+    requireReplacement: boolean
+  ): Promise<string | null | undefined> {
     if (!worktreeId) {
       return null
     }
     const worktree = toRuntimeWorktreeSelector(worktreeId)
     const startedAt = Date.now()
     let pollMs = HOST_SESSION_ATTACH_POLL_MS
+    let lastListError: unknown = null
     while (!destroyed && connected && handle === previousHandle) {
-      const listed = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', {
-        worktree
-      })
-      const nextHandle = findReadyHostSessionHandle(listed, hostTabId)
-      if (nextHandle && nextHandle !== previousHandle) {
-        return nextHandle
-      }
-      if (!hasHostSessionTerminalSurface(listed, hostTabId)) {
-        return null
+      try {
+        const listed = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', {
+          worktree
+        })
+        lastListError = null
+        const nextHandle = findReadyHostSessionHandle(listed, hostTabId)
+        if (nextHandle && (!requireReplacement || nextHandle !== previousHandle)) {
+          return nextHandle
+        }
+        if (!hasHostSessionTerminalSurface(listed, hostTabId)) {
+          return null
+        }
+      } catch (error) {
+        // Why: the session inventory can race the same runtime reconnect that
+        // invalidated the handle. Unknown liveness must not retire the pane.
+        lastListError = error
       }
       const remainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)
       if (remainingMs <= 0) {
-        return null
+        if (lastListError) {
+          throw lastListError
+        }
+        // Why: a bounded wait without removal evidence is unknown liveness;
+        // keep the mounted pane for an external snapshot to reattach later.
+        return undefined
       }
       // Why: a stale response can precede publication of its replacement.
       // Bounded backoff avoids retrying the known-stale handle in a hot loop.
       await new Promise((resolve) => setTimeout(resolve, Math.min(pollMs, remainingMs)))
       pollMs = Math.min(pollMs * 2, HOST_SESSION_REPLACEMENT_POLL_MAX_MS)
     }
-    return null
+    return undefined
   }
 
   async function attachHostSessionMirror(
@@ -490,10 +494,15 @@ export function createRemoteRuntimePtyTransport(
   ): Promise<void> {
     if (tabId && isWebTerminalSurfaceTabId(tabId)) {
       const hostTabId = toHostSessionTabId(tabId)
-      const nextHandle = requireReplacement
-        ? await waitForReplacementHostSessionHandle(hostTabId, previousHandle)
-        : await listHostSessionHandle(hostTabId)
+      const nextHandle = await waitForResubscribeHostSessionHandle(
+        hostTabId,
+        previousHandle,
+        requireReplacement
+      )
       if (destroyed || !connected || handle !== previousHandle) {
+        return
+      }
+      if (nextHandle === undefined) {
         return
       }
       if (!nextHandle) {
@@ -503,11 +512,14 @@ export function createRemoteRuntimePtyTransport(
         return
       }
       if (nextHandle !== previousHandle) {
+        const replacedPtyId = remotePtyId
         handle = nextHandle
         remotePtyId = toRemoteRuntimePtyId(nextHandle, currentRuntimeEnvironmentId)
         // Why: the host replaced an existing mirror identity; rebinding must not
         // apply fresh-spawn exit/agent seeding semantics to the mounted pane.
-        onPtyRebind?.(remotePtyId)
+        if (replacedPtyId) {
+          onPtyRebind?.(remotePtyId, replacedPtyId)
+        }
       }
     }
     await subscribeToHandle()

@@ -2737,6 +2737,7 @@ export function connectPanePty(
     options: {
       seedInitialAgentStatus?: boolean
       updateTabPtyId?: 'always' | 'if-missing'
+      replacePtyId?: string
       sampleVisibleForegroundAgent?: boolean
     } = {}
   ): void => {
@@ -2754,7 +2755,11 @@ export function connectPanePty(
     deps.syncPanePtyLayoutBinding(pane.id, ptyId)
     const tabPtyIds = useAppStore.getState().ptyIdsByTabId?.[deps.tabId] ?? []
     if (options.updateTabPtyId !== 'if-missing' || !tabPtyIds.includes(ptyId)) {
-      deps.updateTabPtyId(deps.tabId, ptyId)
+      if (options.replacePtyId) {
+        deps.updateTabPtyId(deps.tabId, ptyId, options.replacePtyId)
+      } else {
+        deps.updateTabPtyId(deps.tabId, ptyId)
+      }
     }
     if (options.seedInitialAgentStatus) {
       applyInitialAgentStatus()
@@ -2795,10 +2800,10 @@ export function connectPanePty(
     // once the PTY exists, then let real hook events refine or complete it.
     bindActivePanePty(ptyId, { seedInitialAgentStatus: true })
   }
-  const onPtyRebind = (ptyId: string): void => {
+  const onPtyRebind = (ptyId: string, replacedPtyId: string): void => {
     // Why: provider handle rotation keeps the existing pane/session generation;
-    // treating it as a fresh spawn can strand a later real exit as a newborn.
-    bindActivePanePty(ptyId)
+    // replace its stale store identity without fresh-spawn exit semantics.
+    bindActivePanePty(ptyId, { replacePtyId: replacedPtyId })
   }
   // ─── Attention signal: BEL ────────────────────────────────────────────
   //
