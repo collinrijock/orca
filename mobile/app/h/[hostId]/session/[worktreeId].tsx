@@ -77,11 +77,7 @@ import { SessionDockColumn } from '../../../../src/session/SessionDockColumn'
 import { MobileSessionHeaderIconButton } from '../../../../src/session/MobileSessionHeaderIconButton'
 import { MobileSessionHeaderMoreActionsSheet } from '../../../../src/session/MobileSessionHeaderMoreActionsSheet'
 import { QuickCommandsSheet } from '../../../../src/session/QuickCommandsSheet'
-import {
-  flattenQuickCommandText,
-  isAgentQuickCommand
-} from '../../../../src/terminal/quick-commands'
-import { mobileTuiAgentSupportsPromptCommand } from '../../../../src/tasks/mobile-tui-agents'
+import { buildMobileQuickCommandLaunch } from '../../../../src/terminal/quick-commands'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../../../../src/agent-history/agent-history-capability'
 import type { ConnectionState, RpcFailure, RpcSuccess } from '../../../../src/transport/types'
 import { headlessActivationNeedsHostRenderer } from '../../../../src/worktree/worktree-activation-result'
@@ -3950,8 +3946,10 @@ export default function SessionScreen() {
     options?: {
       initialPrompt?: string
       onPromptSent?: () => void
-      // Whether the delivered text is submitted (Enter) or only inserted.
-      // Defaults to true (diff-notes delivery + quick-command "run").
+      startupCommand?: string
+      agentPrompt?: string
+      // Whether post-create text is submitted (Enter) or only inserted.
+      // Defaults to true for diff-note delivery.
       enter?: boolean
       successToast?: string
       errorToast?: string
@@ -3978,6 +3976,8 @@ export default function SessionScreen() {
         worktree: `id:${worktreeId}`,
         afterTabId: activeSessionTabId ?? undefined,
         clientMutationId,
+        ...(options?.startupCommand ? { command: options.startupCommand } : {}),
+        ...(options?.agentPrompt ? { agentPrompt: options.agentPrompt } : {}),
         ...(agent ? { agent } : {})
       })
       if (response.ok) {
@@ -4059,12 +4059,14 @@ export default function SessionScreen() {
               .catch((err) => {
                 triggerError()
                 showToast(
-                  err instanceof Error
-                    ? err.message
-                    : (options.errorToast ?? "Couldn't send notes"),
+                  options.errorToast ??
+                    (err instanceof Error ? err.message : "Couldn't send notes"),
                   1800
                 )
               })
+          } else if (options?.successToast) {
+            triggerSuccess()
+            showToast(options.successToast)
           }
         } else {
           // Why: a prior pending handle must not outlive a create that returned
@@ -4075,10 +4077,20 @@ export default function SessionScreen() {
         }
         scheduleDelayedAction(() => void fetchSessionTabs(), 500)
       } else {
-        setCreateError('Failed to create terminal')
+        const message = options?.errorToast ?? 'Failed to create terminal'
+        setCreateError(message)
+        if (options?.errorToast) {
+          triggerError()
+          showToast(message, 1800)
+        }
       }
     } catch {
-      setCreateError('Failed to create terminal')
+      const message = options?.errorToast ?? 'Failed to create terminal'
+      setCreateError(message)
+      if (options?.errorToast) {
+        triggerError()
+        showToast(message, 1800)
+      }
     } finally {
       creatingTerminalRef.current = false
       setCreating(false)
@@ -4086,29 +4098,16 @@ export default function SessionScreen() {
   }
 
   // Quick commands spawn a fresh terminal tab, mirroring desktop's
-  // run-quick-command-in-new-tab: agent prompts launch the agent then deliver
-  // the prompt; terminal commands run the (Enter-appended) command text.
+  // run-quick-command-in-new-tab: agent prompts and runnable terminal commands
+  // use the host's shell-ready startup path; insert-only commands stay drafts.
   function launchQuickCommand(command: TerminalQuickCommand) {
+    const launch = buildMobileQuickCommandLaunch(command)
+    if (!launch) {
+      return
+    }
     const label = command.label.trim() || 'Quick command'
-    if (isAgentQuickCommand(command)) {
-      if (!command.prompt.trim() || !mobileTuiAgentSupportsPromptCommand(command.agent)) {
-        return
-      }
-      void handleCreateTerminal(command.agent, {
-        initialPrompt: command.prompt,
-        enter: true,
-        successToast: `Ran ${label}`,
-        errorToast: `Couldn't run ${label}`
-      })
-      return
-    }
-    const body = flattenQuickCommandText(command.command)
-    if (!body.trim()) {
-      return
-    }
-    void handleCreateTerminal(undefined, {
-      initialPrompt: body,
-      enter: command.appendEnter !== false,
+    void handleCreateTerminal(launch.agent, {
+      ...launch.options,
       successToast: `Ran ${label}`,
       errorToast: `Couldn't run ${label}`
     })

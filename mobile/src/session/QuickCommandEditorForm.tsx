@@ -3,7 +3,12 @@ import { View, Text, Pressable, TextInput, StyleSheet, Switch } from 'react-nati
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
-import { getQuickCommandAgentLabel } from '../terminal/quick-commands'
+import {
+  getQuickCommandAgentLabel,
+  MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH,
+  MAX_QUICK_COMMAND_LABEL_LENGTH,
+  MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH
+} from '../terminal/quick-commands'
 import type { QuickCommandDraft } from './quick-command-draft'
 import { isQuickCommandDraftValid } from './quick-command-draft'
 
@@ -84,6 +89,7 @@ export function QuickCommandEditorForm({
           placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
           autoCorrect={false}
+          maxLength={MAX_QUICK_COMMAND_LABEL_LENGTH}
         />
       </View>
 
@@ -124,6 +130,9 @@ export function QuickCommandEditorForm({
           autoCapitalize="none"
           autoCorrect={false}
           multiline
+          maxLength={
+            isAgent ? MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH : MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH
+          }
         />
         {isAgent ? (
           <Text style={styles.hint}>Supports skills, file paths, and built-in commands.</Text>

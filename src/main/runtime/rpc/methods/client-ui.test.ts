@@ -135,6 +135,48 @@ describe('client UI RPC methods', () => {
     })
   })
 
+  it('loads and normalizes quick commands through the targeted payload', async () => {
+    const commands = [
+      {
+        id: 'review',
+        label: 'Review',
+        action: 'agent-prompt' as const,
+        agent: 'codex' as const,
+        prompt: 'Review this diff',
+        scope: { type: 'global' as const }
+      }
+    ]
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getClientTerminalQuickCommands: vi.fn(() => commands),
+      updateClientTerminalQuickCommands: vi.fn(() => commands)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const getResponse = await dispatcher.dispatch(makeRequest('settings.getTerminalQuickCommands'))
+    const updateResponse = await dispatcher.dispatch(
+      makeRequest('settings.updateTerminalQuickCommands', {
+        terminalQuickCommands: [
+          {
+            id: ' review ',
+            label: ' Review ',
+            action: 'agent-prompt',
+            agent: 'codex',
+            prompt: 'Review this diff\n',
+            scope: { type: 'global' }
+          }
+        ]
+      })
+    )
+
+    expect(getResponse).toMatchObject({ ok: true, result: { terminalQuickCommands: commands } })
+    expect(runtime.updateClientTerminalQuickCommands).toHaveBeenCalledWith(commands)
+    expect(updateResponse).toMatchObject({
+      ok: true,
+      result: { terminalQuickCommands: commands }
+    })
+  })
+
   it('caps oversized bot-author override payloads', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

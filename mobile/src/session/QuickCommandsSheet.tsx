@@ -35,7 +35,10 @@ export function QuickCommandsSheet({
   repoName,
   onLaunch
 }: Props) {
-  const { commands, loading, error, persist } = useQuickCommands({ client, enabled: visible })
+  const { commands, loading, ready, error, persist } = useQuickCommands({
+    client,
+    enabled: visible
+  })
   const [view, setView] = useState<SheetView>('list')
   const [query, setQuery] = useState('')
   const [draft, setDraft] = useState<QuickCommandDraft | null>(null)
@@ -51,18 +54,23 @@ export function QuickCommandsSheet({
     }
   }
 
+  // Why: prompt bodies can total ~240 KB. Lowercase them once per settings
+  // update instead of allocating the same search text on every keystroke.
+  const searchableCommands = useMemo(() => {
+    return commands
+      .filter((command) => quickCommandMatchesRepo(command, repoId))
+      .map((command) => ({
+        command,
+        searchText: `${command.label} ${getQuickCommandPreview(command)}`.toLowerCase()
+      }))
+  }, [commands, repoId])
+
   const visibleCommands = useMemo(() => {
     const trimmed = query.trim().toLowerCase()
-    return commands.filter((command) => {
-      if (!quickCommandMatchesRepo(command, repoId)) {
-        return false
-      }
-      if (!trimmed) {
-        return true
-      }
-      return `${command.label} ${getQuickCommandPreview(command)}`.toLowerCase().includes(trimmed)
-    })
-  }, [commands, query, repoId])
+    return searchableCommands
+      .filter((entry) => !trimmed || entry.searchText.includes(trimmed))
+      .map((entry) => entry.command)
+  }, [query, searchableCommands])
 
   const repoCommands = visibleCommands.filter((command) => command.scope?.type === 'repo')
   const globalCommands = visibleCommands.filter((command) => command.scope?.type !== 'repo')
@@ -82,7 +90,7 @@ export function QuickCommandsSheet({
   }
 
   const handleDelete = (command: TerminalQuickCommand) => {
-    void persist(commands.filter((entry) => entry.id !== command.id))
+    void persist((current) => current.filter((entry) => entry.id !== command.id))
   }
 
   const handleSave = async () => {
@@ -93,12 +101,13 @@ export function QuickCommandsSheet({
     if (!built) {
       return
     }
-    const exists = commands.some((entry) => entry.id === built.id)
-    const next = exists
-      ? commands.map((entry) => (entry.id === built.id ? built : entry))
-      : [...commands, built]
     setSaving(true)
-    const ok = await persist(next)
+    const ok = await persist((current) => {
+      const exists = current.some((entry) => entry.id === built.id)
+      return exists
+        ? current.map((entry) => (entry.id === built.id ? built : entry))
+        : [...current, built]
+    })
     setSaving(false)
     if (ok) {
       setView('list')
@@ -145,9 +154,10 @@ export function QuickCommandsSheet({
         <QuickCommandsList
           repoCommands={repoCommands}
           globalCommands={globalCommands}
-          totalCount={commands.length}
+          totalCount={searchableCommands.length}
           query={query}
           loading={loading}
+          disabled={!ready}
           error={error}
           onQueryChange={setQuery}
           onLaunch={handleLaunch}
@@ -161,7 +171,7 @@ export function QuickCommandsSheet({
         <QuickCommandEditorForm
           draft={draft}
           mode={draft.id ? 'edit' : 'add'}
-          saving={saving}
+          saving={saving || !ready}
           error={error}
           repoId={repoId}
           repoName={repoName}

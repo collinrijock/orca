@@ -160,28 +160,22 @@ export function handleRequest(
           settings: {
             defaultTuiAgent: 'codex',
             disabledTuiAgents: [],
-            agentCmdOverrides: {},
-            terminalQuickCommands: fakeQuickCommands
+            agentCmdOverrides: {}
           }
         })
       )
       break
 
-    case 'settings.update': {
+    case 'settings.getTerminalQuickCommands':
+      respond(success(request.id, { terminalQuickCommands: fakeQuickCommands }))
+      break
+
+    case 'settings.updateTerminalQuickCommands': {
       const updates = (request.params ?? {}) as { terminalQuickCommands?: unknown }
       if (Array.isArray(updates.terminalQuickCommands)) {
         fakeQuickCommands = updates.terminalQuickCommands
       }
-      respond(
-        success(request.id, {
-          settings: {
-            defaultTuiAgent: 'codex',
-            disabledTuiAgents: [],
-            agentCmdOverrides: {},
-            terminalQuickCommands: fakeQuickCommands
-          }
-        })
-      )
+      respond(success(request.id, { terminalQuickCommands: fakeQuickCommands }))
       break
     }
 

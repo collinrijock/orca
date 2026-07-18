@@ -60,6 +60,34 @@ export function isQuickCommandComplete(command: TerminalQuickCommand): boolean {
   return command.command.trim().length > 0
 }
 
+export type MobileQuickCommandLaunch = {
+  agent?: TuiAgent
+  options: {
+    agentPrompt?: string
+    startupCommand?: string
+    initialPrompt?: string
+    enter?: boolean
+  }
+}
+
+export function buildMobileQuickCommandLaunch(
+  command: TerminalQuickCommand
+): MobileQuickCommandLaunch | null {
+  if (isAgentQuickCommand(command)) {
+    if (!command.prompt.trim() || !mobileTuiAgentSupportsPromptCommand(command.agent)) {
+      return null
+    }
+    return { agent: command.agent, options: { agentPrompt: command.prompt } }
+  }
+  const body = flattenQuickCommandText(command.command)
+  if (!body.trim()) {
+    return null
+  }
+  return command.appendEnter === false
+    ? { options: { initialPrompt: body, enter: false } }
+    : { options: { startupCommand: body } }
+}
+
 export function getQuickCommandAgentLabel(agent: TuiAgent): string {
   return MOBILE_TUI_AGENT_LABELS[agent] ?? agent
 }

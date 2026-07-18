@@ -123,6 +123,13 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
       message: 'Unknown agent preset'
     })
     .optional(),
+  // Why: agent prompts must be quoted and injected for the host shell (native,
+  // WSL, or SSH) instead of pasted from the mobile client before the TUI is ready.
+  agentPrompt: z
+    .string()
+    .max(6000)
+    .refine((value) => value.trim().length > 0, { message: 'Agent prompt cannot be empty' })
+    .optional(),
   // Why: `agent` is the legacy preset field; `launchAgent` is the launch-plan
   // identity used when preserving resume config across runtime boundaries.
   launchAgent: z
@@ -135,6 +142,21 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
   // Why: idempotency key so a retried create (double-tap, reconnect replay)
   // returns the in-flight operation instead of spawning a duplicate terminal.
   clientMutationId: z.string().min(1).max(128).optional()
+}).superRefine((value, context) => {
+  if (value.agentPrompt !== undefined && value.agent === undefined) {
+    context.addIssue({
+      code: 'custom',
+      path: ['agentPrompt'],
+      message: 'Agent prompt requires an agent preset'
+    })
+  }
+  if (value.agentPrompt !== undefined && value.command !== undefined) {
+    context.addIssue({
+      code: 'custom',
+      path: ['agentPrompt'],
+      message: 'Agent prompt cannot be combined with a startup command'
+    })
+  }
 })
 
 const MoveTabBase = {

@@ -1495,6 +1495,16 @@ describe('OrcaRuntimeService.dedupeWorktreeCreate', () => {
 
 describe('OrcaRuntimeService', () => {
   it('projects runtime-backed settings to paired clients', () => {
+    const terminalQuickCommands = [
+      {
+        id: 'review',
+        label: 'Review',
+        action: 'agent-prompt' as const,
+        agent: 'codex' as const,
+        prompt: 'Review this diff',
+        scope: { type: 'global' as const }
+      }
+    ]
     const runtime = new OrcaRuntimeService({
       ...store,
       getSettings: () => ({
@@ -1502,7 +1512,8 @@ describe('OrcaRuntimeService', () => {
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
         minimaxGroupId: 'group-42',
-        minimaxUsageModels: 'general,abab6.5'
+        minimaxUsageModels: 'general,abab6.5',
+        terminalQuickCommands
       })
     } as never)
 
@@ -1512,6 +1523,37 @@ describe('OrcaRuntimeService', () => {
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5'
     })
+    expect(runtime.getClientSettings()).not.toHaveProperty('terminalQuickCommands')
+    expect(runtime.getClientTerminalQuickCommands()).toEqual(terminalQuickCommands)
+  })
+
+  it('updates quick commands without widening general paired settings payloads', () => {
+    let settings = { ...store.getSettings(), terminalQuickCommands: [] }
+    const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
+      settings = { ...settings, ...updates }
+    })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => settings,
+      updateSettings
+    } as never)
+    const commands = [
+      {
+        id: 'status',
+        label: 'Status',
+        action: 'terminal-command' as const,
+        command: 'git status',
+        appendEnter: true,
+        scope: { type: 'global' as const }
+      }
+    ]
+
+    expect(runtime.updateClientTerminalQuickCommands(commands)).toEqual(commands)
+    expect(updateSettings).toHaveBeenCalledWith(
+      { terminalQuickCommands: commands },
+      { notifyListeners: true }
+    )
+    expect(runtime.getClientSettings()).not.toHaveProperty('terminalQuickCommands')
   })
 
   it('accepts runtime-backed setting updates from paired clients', () => {
@@ -21095,6 +21137,66 @@ describe('OrcaRuntimeService', () => {
         worktreeId: TEST_WORKTREE_ID
       })
     )
+  })
+
+  it('injects mobile quick-command prompts into the host-built agent startup command', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent-prompt' })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: { codex: 'codex' },
+        agentDefaultArgs: {}
+      })
+    } as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      agent: 'codex',
+      agentPrompt: 'Review this diff'
+    })
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.stringMatching(/^codex .*'Review this diff'$/),
+        launchAgent: 'codex',
+        cwd: TEST_WORKTREE_PATH
+      })
+    )
+  })
+
+  it('rejects startup prompts for agents that require post-ready stdin', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent-prompt' })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {}
+      })
+    } as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    await expect(
+      runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        agent: 'aider',
+        agentPrompt: 'Review this diff'
+      })
+    ).rejects.toThrow('does not support startup prompt quick commands')
+    expect(spawn).not.toHaveBeenCalled()
   })
 
   it('uses POSIX quoting for mobile agent launch commands in WSL project runtimes', async () => {

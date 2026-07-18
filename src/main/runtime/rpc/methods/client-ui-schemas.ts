@@ -164,14 +164,16 @@ export const SettingsUpdate = z
     prBotAuthorOverrides: z
       .unknown()
       .transform((value) => normalizePRBotAuthorOverrides(value))
-      .optional(),
-    terminalQuickCommands: z
-      .unknown()
-      .transform((value) => normalizeTerminalQuickCommands(value))
       .optional()
   })
   .strict()
   .default({})
+
+export const TerminalQuickCommandsUpdate = z
+  .object({
+    terminalQuickCommands: z.unknown().transform((value) => normalizeTerminalQuickCommands(value))
+  })
+  .strict()
 
 export const UiUpdate = z
   .object({

@@ -17,6 +17,7 @@ type ListProps = {
   totalCount: number
   query: string
   loading: boolean
+  disabled: boolean
   error: string | null
   onQueryChange: (value: string) => void
   onLaunch: (command: TerminalQuickCommand) => void
@@ -31,6 +32,7 @@ export function QuickCommandsList({
   totalCount,
   query,
   loading,
+  disabled,
   error,
   onQueryChange,
   onLaunch,
@@ -66,6 +68,10 @@ export function QuickCommandsList({
         <Text style={styles.empty}>No quick commands yet.</Text>
       ) : null}
 
+      {!loading && totalCount > 0 && !hasVisible ? (
+        <Text style={styles.empty}>No matching quick commands.</Text>
+      ) : null}
+
       {repoCommands.length > 0 ? (
         <QuickCommandGroup
           label="This project"
@@ -73,6 +79,7 @@ export function QuickCommandsList({
           onLaunch={onLaunch}
           onEdit={onEdit}
           onDelete={onDelete}
+          disabled={disabled}
         />
       ) : null}
 
@@ -83,11 +90,17 @@ export function QuickCommandsList({
           onLaunch={onLaunch}
           onEdit={onEdit}
           onDelete={onDelete}
+          disabled={disabled}
         />
       ) : null}
 
       <Pressable
-        style={({ pressed }) => [styles.addRow, pressed && styles.pressed]}
+        style={({ pressed }) => [
+          styles.addRow,
+          disabled && styles.disabled,
+          pressed && !disabled && styles.pressed
+        ]}
+        disabled={disabled}
         onPress={onAdd}
         accessibilityRole="button"
       >
@@ -103,13 +116,15 @@ function QuickCommandGroup({
   commands,
   onLaunch,
   onEdit,
-  onDelete
+  onDelete,
+  disabled
 }: {
   label: string
   commands: TerminalQuickCommand[]
   onLaunch: (command: TerminalQuickCommand) => void
   onEdit: (command: TerminalQuickCommand) => void
   onDelete: (command: TerminalQuickCommand) => void
+  disabled: boolean
 }) {
   return (
     <View>
@@ -123,6 +138,7 @@ function QuickCommandGroup({
             onLaunch={onLaunch}
             onEdit={onEdit}
             onDelete={onDelete}
+            disabled={disabled}
           />
         ))}
       </View>
@@ -135,19 +151,22 @@ function QuickCommandRow({
   first,
   onLaunch,
   onEdit,
-  onDelete
+  onDelete,
+  disabled
 }: {
   command: TerminalQuickCommand
   first: boolean
   onLaunch: (command: TerminalQuickCommand) => void
   onEdit: (command: TerminalQuickCommand) => void
   onDelete: (command: TerminalQuickCommand) => void
+  disabled: boolean
 }) {
   const isAgent = isAgentQuickCommand(command)
   return (
-    <View style={[styles.row, !first && styles.rowBorder]}>
+    <View style={[styles.row, !first && styles.rowBorder, disabled && styles.disabled]}>
       <Pressable
-        style={({ pressed }) => [styles.rowMain, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.rowMain, pressed && !disabled && styles.pressed]}
+        disabled={disabled}
         onPress={() => onLaunch(command)}
         accessibilityRole="button"
         accessibilityLabel={`Run ${command.label}`}
@@ -169,14 +188,16 @@ function QuickCommandRow({
         </View>
       </Pressable>
       <Pressable
-        style={({ pressed }) => [styles.rowAction, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.rowAction, pressed && !disabled && styles.pressed]}
+        disabled={disabled}
         onPress={() => onEdit(command)}
         accessibilityLabel={`Edit ${command.label}`}
       >
         <Pencil size={15} color={colors.textSecondary} />
       </Pressable>
       <Pressable
-        style={({ pressed }) => [styles.rowAction, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.rowAction, pressed && !disabled && styles.pressed]}
+        disabled={disabled}
         onPress={() => onDelete(command)}
         accessibilityLabel={`Delete ${command.label}`}
       >
@@ -220,6 +241,7 @@ export function QuickCommandAgentPicker({
 
 const styles = StyleSheet.create({
   pressed: { backgroundColor: colors.bgRaised },
+  disabled: { opacity: 0.45 },
   listBody: { gap: spacing.sm, paddingBottom: spacing.sm },
   search: {
     flexDirection: 'row',
