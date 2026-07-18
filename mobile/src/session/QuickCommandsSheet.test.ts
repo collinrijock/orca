@@ -64,10 +64,12 @@ describe('QuickCommandsSheet', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     mocks.persist.mockReset()
+    const originalConsoleError = console.error
     consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
       if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
         return
       }
+      originalConsoleError(...args)
     })
   })
 
