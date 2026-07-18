@@ -1818,9 +1818,9 @@
         "522df222b9": "旋转器",
         "e944c2de43": "Update Verification Blocked",
         "5b309b19f3": "Update Wasn't Installed",
-        "092f09fc14": "This download isn't signed by Orca, so we stopped it. Get the latest version from our official releases instead.",
-        "c9ff9b9ec2": "Open official releases",
-        "a05992a26b": "The signature check couldn't run — usually antivirus software blocking it. Retry, or download it manually; Windows verifies the installer when it runs.",
+        "092f09fc14": "The installer's publisher doesn't match Orca, so we stopped the update. Don't install this download; check official releases for a corrected version.",
+        "c9ff9b9ec2": "Check official releases",
+        "a05992a26b": "The signature check couldn't run — usually because antivirus software blocked it. Retry the download, or get the installer from our official releases.",
         "5194358929": "Hide details",
         "8bc9e17d8f": "Show details"
       },

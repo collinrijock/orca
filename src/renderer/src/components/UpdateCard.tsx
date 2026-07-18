@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: the update card owns the full updater lifecycle in one
    renderer surface. Keeping the state machine and its presentation variants together avoids
    scattering tightly coupled update behavior across multiple files. */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { useAppStore } from '../store'
 import { Card } from './ui/card'
@@ -394,13 +394,15 @@ export function UpdateCard() {
               title: translate('auto.components.UpdateCard.5b309b19f3', "Update Wasn't Installed"),
               summary: translate(
                 'auto.components.UpdateCard.092f09fc14',
-                "This download isn't signed by Orca, so we stopped it. Get the latest version from our official releases instead."
+                "The installer's publisher doesn't match Orca, so we stopped the update. Don't install this download; check official releases for a corrected version."
               ),
               detail: status.message,
-              releaseUrl: releaseUrlForVersion(cachedVersion),
+              // Why: linking the rejected version directly would invite users
+              // to bypass the publisher check by running the same installer.
+              releaseUrl: releaseUrlForVersion(null),
               manualLabel: translate(
                 'auto.components.UpdateCard.c9ff9b9ec2',
-                'Open official releases'
+                'Check official releases'
               )
             }
           : isSignatureCheckBlockedError
@@ -411,7 +413,7 @@ export function UpdateCard() {
                 ),
                 summary: translate(
                   'auto.components.UpdateCard.a05992a26b',
-                  "The signature check couldn't run — usually antivirus software blocking it. Retry, or download it manually; Windows verifies the installer when it runs."
+                  "The signature check couldn't run — usually because antivirus software blocked it. Retry the download, or get the installer from our official releases."
                 ),
                 detail: status.message,
                 releaseUrl: releaseUrlForVersion(cachedVersion),
@@ -985,6 +987,7 @@ function ErrorCardContent({
   // Why: the raw error is kept for support but starts collapsed so the card
   // leads with the plain-language summary, not a PowerShell/stack dump.
   const [showDetails, setShowDetails] = useState(false)
+  const detailId = useId()
   const isCompatibility = variant === 'http1Compatibility'
   const isSecurity = variant === 'security'
   const Icon = isCompatibility ? Network : isSecurity ? ShieldAlert : AlertCircle
@@ -1026,10 +1029,14 @@ function ErrorCardContent({
           block in place — the action buttons stay pinned below it. */}
       {detail ? (
         <div className="flex flex-col gap-2">
-          <button
-            className="flex items-center gap-1 self-start text-xs text-muted-foreground hover:text-foreground"
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="-ml-2 self-start text-muted-foreground hover:text-foreground"
             onClick={() => setShowDetails((prev) => !prev)}
             aria-expanded={showDetails}
+            aria-controls={detailId}
           >
             <ChevronRight
               className={`size-3.5 transition-transform ${showDetails ? 'rotate-90' : ''}`}
@@ -1037,9 +1044,9 @@ function ErrorCardContent({
             {showDetails
               ? translate('auto.components.UpdateCard.5194358929', 'Hide details')
               : translate('auto.components.UpdateCard.8bc9e17d8f', 'Show details')}
-          </button>
+          </Button>
           {showDetails ? (
-            <div className="rounded-md bg-muted/40 px-3 py-2">
+            <div id={detailId} className="rounded-md bg-muted/40 px-3 py-2">
               <p className="mb-1 text-[11px] font-medium uppercase text-muted-foreground">
                 {translate('auto.components.UpdateCard.3553a8672f', 'Last error')}
               </p>
