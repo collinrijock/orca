@@ -1199,6 +1199,11 @@ export class LocalPtyProvider implements IPtyProvider {
           contextPaths: ptyAgentForegroundContextPaths.get(id)
         }
       )
+      // Why: the scan can outlive PTY teardown or id reuse; stale results must
+      // not resurrect cache state for a process that no longer owns this id.
+      if (ptyProcesses.get(id) !== proc) {
+        return null
+      }
       // Why: a degraded/timed-out scan must not report the shell as the
       // foreground — the completion coordinator reads that as an exit and fires
       // a false "agent done" while the agent is still working. Prefer the last
@@ -1214,6 +1219,9 @@ export class LocalPtyProvider implements IPtyProvider {
       }
       return stable.processName
     } catch {
+      if (ptyProcesses.get(id) !== proc) {
+        return null
+      }
       // Why: an inspection error is itself a degraded read; fall back to the
       // last recognized agent rather than null (which also reads as an exit).
       return ptyLastRecognizedForeground.get(id) ?? null
