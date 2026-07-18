@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 const cleanupPaths: string[] = []
 const tripwireScriptPath = path.resolve('config/scripts/codex-primary-home-tripwire.mjs')
 const tripwireModuleUrl = pathToFileURL(tripwireScriptPath).href
+// Why: native Windows process startup can exceed two seconds under a loaded test worker.
+const STANDALONE_START_TIMEOUT_MS = 10_000
 
 afterEach(async () => {
   await Promise.all(
@@ -107,7 +109,7 @@ function waitForStdout(child: ReturnType<typeof spawn>, expectedText: string): P
   return new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(
       () => reject(new Error(`Timed out waiting for ${expectedText}`)),
-      2_000
+      STANDALONE_START_TIMEOUT_MS
     )
     let output = ''
     const stdout = child.stdout
