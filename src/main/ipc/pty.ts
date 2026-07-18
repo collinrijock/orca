@@ -3396,65 +3396,79 @@ export function registerPtyHandlers(
       }
     },
     kill: (ptyId) => {
-      let provider: IPtyProvider
       let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
       const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
       connectionId ??= parsedSshId?.connectionId
-      try {
-        provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
-      } catch {
-        if (connectionId) {
-          // Why: runtime/CLI close can target a detached SSH PTY after its
-          // provider was unregistered. Tombstone the lease so reconnect does
-          // not revive a terminal the user explicitly closed.
-          finishPtyShutdown(ptyId, connectionId, store)
-          runtime?.onPtyExit(ptyId, -1)
-          rememberSyntheticKillExit(ptyId)
-          sendPtyExitToRenderer({ id: ptyId, code: -1 })
-          return true
-        }
-        return false
-      }
-      // Why: shutdown() is async but the PtyController interface is sync. Defer
-      // cleanup until shutdown resolves so transient SSH/daemon failures don't
-      // hide a still-running remote process or local daemon session.
-      //
-      // Same synthetic-exit contract as the renderer pty:kill handler: when the
-      // provider emitted its own exit during shutdown, the exit listener already
-      // delivered runtime + renderer exits — synthesizing again would double-fire.
-      void shutdownProviderAndDetectExit(provider, ptyId, { immediate: false })
-        .then((providerExitObserved) => {
-          finishPtyShutdown(ptyId, connectionId, store)
-          if (!providerExitObserved) {
-            runtime?.onPtyExit(ptyId, -1)
-            rememberSyntheticKillExit(ptyId)
-            sendPtyExitToRenderer({ id: ptyId, code: -1 })
-          }
-        })
-        .catch((err) => {
-          if (isPtyAlreadyGoneError(err)) {
+      const killWithCurrentProvider = (): boolean => {
+        let provider: IPtyProvider
+        try {
+          provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
+        } catch {
+          if (connectionId) {
+            // Why: runtime/CLI close can target a detached SSH PTY after its
+            // provider was unregistered. Tombstone the lease so reconnect does
+            // not revive a terminal the user explicitly closed.
             finishPtyShutdown(ptyId, connectionId, store)
             runtime?.onPtyExit(ptyId, -1)
             rememberSyntheticKillExit(ptyId)
             sendPtyExitToRenderer({ id: ptyId, code: -1 })
-            return
+            return true
           }
+          return false
+        }
+        // Why: the controller is synchronous, but ownership must remain until
+        // asynchronous shutdown proves whether the provider emitted an exit.
+        void shutdownProviderAndDetectExit(provider, ptyId, { immediate: false })
+          .then((providerExitObserved) => {
+            finishPtyShutdown(ptyId, connectionId, store)
+            if (!providerExitObserved) {
+              runtime?.onPtyExit(ptyId, -1)
+              rememberSyntheticKillExit(ptyId)
+              sendPtyExitToRenderer({ id: ptyId, code: -1 })
+            }
+          })
+          .catch((err) => {
+            if (isPtyAlreadyGoneError(err)) {
+              finishPtyShutdown(ptyId, connectionId, store)
+              runtime?.onPtyExit(ptyId, -1)
+              rememberSyntheticKillExit(ptyId)
+              sendPtyExitToRenderer({ id: ptyId, code: -1 })
+              return
+            }
+            console.warn(
+              `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
+            )
+            // Why: close runtime tails without clearing provider ownership, so
+            // a retry can still target a PTY that survived the failed shutdown.
+            runtime?.onPtyExit(ptyId, -1)
+          })
+        return true
+      }
+      const startupPromise = getLocalPtyStartupPromise(connectionId)
+      if (startupPromise) {
+        // Why: provider selection must happen after the daemon swap; selecting
+        // the fallback first can report success while orphaning a daemon PTY.
+        void startupPromise.then(killWithCurrentProvider).catch((err) => {
           console.warn(
             `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
           )
-          // Why: callers of controller.kill must observe a kill→exit pair so
-          // runtime tail buffers close and agents stop treating the pane as
-          // live. Preserve provider/lease state so a retry can still target
-          // the remote PTY if it survived the transient failure.
           runtime?.onPtyExit(ptyId, -1)
         })
-      return true
+        return true
+      }
+      return killWithCurrentProvider()
     },
     stopAndWait: async (ptyId, opts) => {
-      let provider: IPtyProvider
       let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
       const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
       connectionId ??= parsedSshId?.connectionId
+      const startupPromise = getLocalPtyStartupPromise(connectionId)
+      if (startupPromise) {
+        // Why: exact-stop must resolve the provider after daemon startup just
+        // like renderer kills, or the fallback can falsely confirm teardown.
+        await startupPromise
+      }
+      let provider: IPtyProvider
       try {
         provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
       } catch {
@@ -5103,11 +5117,8 @@ export function registerPtyHandlers(
     const ownedConnectionId = ptyOwnership.get(args.id)
     const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
     const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
-    // Why: local kills must wait for the daemon provider swap like pty:spawn.
-    // A cold-start kill resolved against the pre-daemon LocalPtyProvider,
-    // whose shutdown silently no-ops on daemon session ids — the live session
-    // survived while the synthetic exit below cleared the renderer's binding,
-    // permanently orphaning the PTY (#7742).
+    // Why: select the local provider only after daemon startup; fallback shutdown
+    // can otherwise falsely succeed and orphan a restored daemon PTY (#7742).
     const startupPromise = getLocalPtyStartupPromise(connectionId)
     if (startupPromise) {
       await startupPromise

@@ -438,11 +438,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(lastSubprocess.forceKill).toHaveBeenCalled()
     })
 
-    // Why: shutdown() was the only session op that skipped ensureConnected().
-    // After a renderer/app restart the adapter's client connects lazily, so the
-    // first PTY op can be a kill (startup sleep sweeps, closing a restored tab);
-    // it must connect like spawn/attach instead of throwing "Not connected" and
-    // leaving the live daemon session running detached (#7742).
+    // Why: shutdown can be the first lazy-client operation after restart; it
+    // must connect before killing so a healthy session is not orphaned (#7742).
     it('kills a live session from a fresh adapter that has not connected yet', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
 
@@ -453,6 +450,26 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         freshAdapter.dispose()
       }
       expect(lastSubprocess.forceKill).toHaveBeenCalled()
+      await expect(adapter.listProcesses()).resolves.not.toContainEqual(
+        expect.objectContaining({ id })
+      )
+    })
+
+    it('coalesces the lazy connection when a fresh adapter shuts down concurrent sessions', async () => {
+      const ids = await Promise.all(
+        ['concurrent-kill-a', 'concurrent-kill-b'].map(async (sessionId) =>
+          adapter.spawn({ cols: 80, rows: 24, sessionId }).then((result) => result.id)
+        )
+      )
+      const freshAdapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+
+      try {
+        await Promise.all(ids.map((id) => freshAdapter.shutdown(id, { immediate: true })))
+      } finally {
+        freshAdapter.dispose()
+      }
+
+      await expect(adapter.listProcesses()).resolves.toEqual([])
     })
   })
 
