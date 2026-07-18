@@ -739,13 +739,13 @@
     },
     "components": {
       "CodexRestartChip": {
-        "9132779820": "閉じる",
         "c72a5fb234": "再起動",
         "9263e75f49": "Codex は前のアカウントを使用しています",
         "a4c8e1b2f7": "Codex はまだ {{value0}} としてサインインしています",
         "d3e8a1f4b2": "アカウントを切り替えました",
-        "e9b2c7d1a5": "{{value0}} を使用するにはこのセッションを再起動してください。現在のアカウントで作業を続けるには折りたたんでください。",
-        "f1a6c8e3b4": "折りたたむ"
+        "9375620cc3": "Restart this session to use {{value0}}. It stays on the previous account until you do.",
+        "6133594b12": "Keep old account",
+        "b9000fe511": "Not now"
       },
       "FirstLaunchBanner": {
         "b9e1b966c7": "通知を閉じる",

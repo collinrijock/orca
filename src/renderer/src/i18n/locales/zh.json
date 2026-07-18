@@ -739,13 +739,13 @@
     },
     "components": {
       "CodexRestartChip": {
-        "9132779820": "关闭",
         "c72a5fb234": "重新启动",
         "9263e75f49": "Codex 正在使用之前的账户",
         "a4c8e1b2f7": "Codex 仍以 {{value0}} 身份登录",
         "d3e8a1f4b2": "账户已切换",
-        "e9b2c7d1a5": "重启此会话以使用 {{value0}}。折叠以继续使用当前账户。",
-        "f1a6c8e3b4": "折叠"
+        "9375620cc3": "Restart this session to use {{value0}}. It stays on the previous account until you do.",
+        "6133594b12": "Keep old account",
+        "b9000fe511": "Not now"
       },
       "FirstLaunchBanner": {
         "b9e1b966c7": "关闭通知",
