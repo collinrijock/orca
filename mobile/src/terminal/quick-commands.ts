@@ -79,7 +79,7 @@ export function buildMobileQuickCommandLaunch(
     }
     return { agent: command.agent, options: { agentPrompt: command.prompt } }
   }
-  const body = flattenQuickCommandText(command.command)
+  const body = command.command
   if (!body.trim()) {
     return null
   }
@@ -103,20 +103,4 @@ export function getQuickCommandPreview(command: TerminalQuickCommand): string {
 
 export function getQuickCommandAgentLaunchName(agent: TuiAgent): string {
   return MOBILE_TUI_AGENT_LAUNCH_COMMANDS[agent] ?? agent
-}
-
-const LINE_BREAK_RE = /\r\n|\r|\n/
-
-// Why: a terminal-command quick command's lines are independent shell commands;
-// joining them into one command list stops a foreground program from reading
-// later lines as stdin (mirrors desktop flattenTerminalQuickCommand).
-export function flattenQuickCommandText(command: string): string {
-  if (!LINE_BREAK_RE.test(command)) {
-    return command
-  }
-  return command
-    .split(LINE_BREAK_RE)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .join('; ')
 }

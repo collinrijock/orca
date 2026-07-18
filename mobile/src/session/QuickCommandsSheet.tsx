@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
@@ -22,7 +22,7 @@ type Props = {
   client: RpcClient | null
   repoId: string | null
   repoName: string | null
-  onLaunch: (command: TerminalQuickCommand) => void
+  onLaunch: (command: TerminalQuickCommand) => boolean
 }
 
 type SheetView = 'list' | 'editor' | 'agent'
@@ -43,6 +43,7 @@ export function QuickCommandsSheet({
   const [query, setQuery] = useState('')
   const [draft, setDraft] = useState<QuickCommandDraft | null>(null)
   const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
 
   const [wasVisible, setWasVisible] = useState(visible)
   if (visible !== wasVisible) {
@@ -85,8 +86,9 @@ export function QuickCommandsSheet({
   }
 
   const handleLaunch = (command: TerminalQuickCommand) => {
-    onLaunch(command)
-    onClose()
+    if (onLaunch(command)) {
+      onClose()
+    }
   }
 
   const handleDelete = (command: TerminalQuickCommand) => {
@@ -94,24 +96,30 @@ export function QuickCommandsSheet({
   }
 
   const handleSave = async () => {
-    if (!draft) {
+    if (!draft || savingRef.current) {
       return
     }
     const built = draftToQuickCommand(draft)
     if (!built) {
       return
     }
+    // Why: state cannot lock out a second tap until React commits the disabled UI.
+    savingRef.current = true
     setSaving(true)
-    const ok = await persist((current) => {
-      const exists = current.some((entry) => entry.id === built.id)
-      return exists
-        ? current.map((entry) => (entry.id === built.id ? built : entry))
-        : [...current, built]
-    })
-    setSaving(false)
-    if (ok) {
-      setView('list')
-      setDraft(null)
+    try {
+      const ok = await persist((current) => {
+        const exists = current.some((entry) => entry.id === built.id)
+        return exists
+          ? current.map((entry) => (entry.id === built.id ? built : entry))
+          : [...current, built]
+      })
+      if (ok) {
+        setView('list')
+        setDraft(null)
+      }
+    } finally {
+      savingRef.current = false
+      setSaving(false)
     }
   }
 

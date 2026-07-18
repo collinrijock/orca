@@ -20,6 +20,21 @@ type QuickCommandsState = {
   persist: (update: (current: TerminalQuickCommand[]) => TerminalQuickCommand[]) => Promise<boolean>
 }
 
+type QuickCommandsUpdate = (current: TerminalQuickCommand[]) => TerminalQuickCommand[]
+
+type PendingMutation = {
+  id: number
+  update: QuickCommandsUpdate
+}
+
+type MutationContext = {
+  client: RpcClient
+  confirmed: TerminalQuickCommand[]
+  pending: PendingMutation[]
+  queue: Promise<void>
+  nextMutationId: number
+}
+
 function readQuickCommands(result: unknown): TerminalQuickCommand[] {
   const list = (result as { terminalQuickCommands?: unknown } | null)?.terminalQuickCommands
   return Array.isArray(list) ? (list as TerminalQuickCommand[]) : []
@@ -31,20 +46,27 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const commandsRef = useRef<TerminalQuickCommand[]>([])
-  const confirmedCommandsRef = useRef<TerminalQuickCommand[]>([])
   const operationIdRef = useRef(0)
-  const mutationQueueRef = useRef<Promise<void>>(Promise.resolve())
-  const mutationClientRef = useRef<RpcClient | null>(client)
+  const mutationContextRef = useRef<MutationContext | null>(null)
 
   useEffect(() => {
     if (!enabled || !client) {
       setReady(false)
       return
     }
-    if (mutationClientRef.current !== client) {
+    let mutationContext = mutationContextRef.current
+    if (mutationContext?.client !== client) {
       // A request for an old host must not delay or update mutations on a new one.
-      mutationClientRef.current = client
-      mutationQueueRef.current = Promise.resolve()
+      mutationContext = {
+        client,
+        confirmed: [],
+        pending: [],
+        queue: Promise.resolve(),
+        nextMutationId: 0
+      }
+      mutationContextRef.current = mutationContext
+      commandsRef.current = []
+      setCommands([])
     }
     let stale = false
     const operationId = operationIdRef.current + 1
@@ -57,12 +79,20 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
       try {
         // A close/reopen can overlap an in-flight save. Read only after that
         // save settles so an older snapshot cannot replace its canonical result.
-        await mutationQueueRef.current
-        if (stale || operationId !== operationIdRef.current) {
+        await mutationContext.queue
+        if (
+          stale ||
+          operationId !== operationIdRef.current ||
+          mutationContextRef.current !== mutationContext
+        ) {
           return
         }
         const response = await client.sendRequest('settings.getTerminalQuickCommands')
-        if (stale || operationId !== operationIdRef.current) {
+        if (
+          stale ||
+          operationId !== operationIdRef.current ||
+          mutationContextRef.current !== mutationContext
+        ) {
           return
         }
         if (!response.ok) {
@@ -70,16 +100,24 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
           return
         }
         const next = readQuickCommands((response as RpcSuccess).result)
+        mutationContext.confirmed = next
         commandsRef.current = next
-        confirmedCommandsRef.current = next
         setCommands(next)
         setReady(true)
       } catch (err) {
-        if (!stale && operationId === operationIdRef.current) {
+        if (
+          !stale &&
+          operationId === operationIdRef.current &&
+          mutationContextRef.current === mutationContext
+        ) {
           setError(err instanceof Error ? err.message : 'Failed to load quick commands')
         }
       } finally {
-        if (!stale && operationId === operationIdRef.current) {
+        if (
+          !stale &&
+          operationId === operationIdRef.current &&
+          mutationContextRef.current === mutationContext
+        ) {
           setLoading(false)
         }
       }
@@ -91,58 +129,71 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
   }, [client, enabled])
 
   const persist = useCallback(
-    async (update: (current: TerminalQuickCommand[]) => TerminalQuickCommand[]) => {
+    async (update: QuickCommandsUpdate) => {
       // Mutating before the latest remote read completes could overwrite
       // commands created by desktop while this sheet was closed.
-      if (!client || loading || !ready || mutationClientRef.current !== client) {
+      const mutationContext = mutationContextRef.current
+      if (!client || loading || !ready || mutationContext?.client !== client) {
         return false
       }
-      const previous = commandsRef.current
-      const next = update(previous)
-      const operationId = operationIdRef.current + 1
-      operationIdRef.current = operationId
-      commandsRef.current = next
-      setCommands(next)
+      const mutation: PendingMutation = {
+        id: mutationContext.nextMutationId + 1,
+        update
+      }
+      mutationContext.nextMutationId = mutation.id
+      mutationContext.pending.push(mutation)
+      const optimistic = update(commandsRef.current)
+      commandsRef.current = optimistic
+      setCommands(optimistic)
       setError(null)
 
-      const send = async () => {
-        const response = await client.sendRequest('settings.updateTerminalQuickCommands', {
-          terminalQuickCommands: next
-        })
-        if (!response.ok) {
-          throw new Error((response as RpcFailure).error.message || 'Failed to save quick command')
+      const send = async (): Promise<boolean> => {
+        let succeeded = false
+        let failureMessage: string | null = null
+        try {
+          // Why: an earlier queued save can fail or be normalized by the server.
+          // Rebase at send time so this caller's result matches what is persisted.
+          const rebased = update(mutationContext.confirmed)
+          const response = await client.sendRequest('settings.updateTerminalQuickCommands', {
+            terminalQuickCommands: rebased
+          })
+          if (!response.ok) {
+            throw new Error(
+              (response as RpcFailure).error.message || 'Failed to save quick command'
+            )
+          }
+          mutationContext.confirmed = readQuickCommands((response as RpcSuccess).result)
+          succeeded = true
+          return true
+        } catch (err) {
+          failureMessage = err instanceof Error ? err.message : 'Failed to save quick command'
+          return false
+        } finally {
+          mutationContext.pending = mutationContext.pending.filter(
+            (pending) => pending.id !== mutation.id
+          )
+          if (mutationContextRef.current === mutationContext) {
+            const next = mutationContext.pending.reduce(
+              (current, pending) => pending.update(current),
+              mutationContext.confirmed
+            )
+            commandsRef.current = next
+            setCommands(next)
+            const hasNewerMutation = mutationContext.pending.some(
+              (pending) => pending.id > mutation.id
+            )
+            if (!hasNewerMutation) {
+              setError(succeeded ? null : failureMessage)
+            }
+          }
         }
-        return response
       }
-      const request = mutationQueueRef.current.then(send, send)
-      mutationQueueRef.current = request.then(
+      const request = mutationContext.queue.then(send, send)
+      mutationContext.queue = request.then(
         () => undefined,
         () => undefined
       )
-
-      try {
-        const response = await request
-        const canonical = readQuickCommands((response as RpcSuccess).result)
-        if (mutationClientRef.current === client) {
-          confirmedCommandsRef.current = canonical
-        }
-        if (operationId === operationIdRef.current && mutationClientRef.current === client) {
-          commandsRef.current = canonical
-          setCommands(canonical)
-        }
-        return true
-      } catch (err) {
-        // An older failure must not roll back a newer optimistic mutation.
-        if (operationId === operationIdRef.current) {
-          // Why: `previous` may include an older optimistic write that also
-          // failed; roll back to the latest server-confirmed canonical list.
-          const confirmed = confirmedCommandsRef.current
-          commandsRef.current = confirmed
-          setCommands(confirmed)
-          setError(err instanceof Error ? err.message : 'Failed to save quick command')
-        }
-        return false
-      }
+      return await request
     },
     [client, loading, ready]
   )

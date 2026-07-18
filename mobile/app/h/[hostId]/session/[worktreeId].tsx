@@ -4100,17 +4100,28 @@ export default function SessionScreen() {
   // Quick commands spawn a fresh terminal tab, mirroring desktop's
   // run-quick-command-in-new-tab: agent prompts and runnable terminal commands
   // use the host's shell-ready startup path; insert-only commands stay drafts.
-  function launchQuickCommand(command: TerminalQuickCommand) {
+  function launchQuickCommand(command: TerminalQuickCommand): boolean {
+    if (
+      !client ||
+      connState !== 'connected' ||
+      creatingTerminalRef.current ||
+      creatingBrowser ||
+      creatingMarkdown
+    ) {
+      return false
+    }
     const launch = buildMobileQuickCommandLaunch(command)
     if (!launch) {
-      return
+      triggerError()
+      showToast('Edit this quick command before running it', 1800)
+      return false
     }
     const label = command.label.trim() || 'Quick command'
     void handleCreateTerminal(launch.agent, {
       ...launch.options,
-      successToast: `Ran ${label}`,
       errorToast: `Couldn't run ${label}`
     })
+    return true
   }
 
   async function handleCreateMarkdownNote() {
@@ -4772,9 +4783,12 @@ export default function SessionScreen() {
                 style={({ pressed }) => [
                   styles.newTerminalButton,
                   pressed && styles.newTerminalButtonPressed,
-                  connState !== 'connected' && styles.newTerminalButtonDisabled
+                  (creating || creatingBrowser || creatingMarkdown || connState !== 'connected') &&
+                    styles.newTerminalButtonDisabled
                 ]}
-                disabled={connState !== 'connected'}
+                disabled={
+                  creating || creatingBrowser || creatingMarkdown || connState !== 'connected'
+                }
                 onPress={() => setShowQuickCommands(true)}
                 accessibilityLabel="Quick commands"
               >

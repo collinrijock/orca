@@ -109,7 +109,7 @@ describe('useQuickCommands', () => {
     expect(client.sendRequest).toHaveBeenCalledTimes(1)
   })
 
-  it('serializes rapid mutations and ignores an older failed rollback', async () => {
+  it('rebases a later mutation after an earlier queued mutation fails', async () => {
     const firstUpdate = deferred<RpcResponse>()
     const secondUpdate = deferred<RpcResponse>()
     const updateParams: unknown[] = []
@@ -148,18 +148,103 @@ describe('useQuickCommands', () => {
     })
     expect(updateParams).toEqual([
       { terminalQuickCommands: [SECOND] },
-      { terminalQuickCommands: [] }
+      { terminalQuickCommands: [FIRST] }
     ])
-    expect(state?.commands).toEqual([])
+    expect(state?.commands).toEqual([FIRST])
 
     await act(async () => {
-      secondUpdate.resolve(success([]))
+      secondUpdate.resolve(success([FIRST]))
       await Promise.all([firstPersist, secondPersist])
     })
     expect(await firstPersist).toBe(false)
     expect(await secondPersist).toBe(true)
-    expect(state?.commands).toEqual([])
+    expect(state?.commands).toEqual([FIRST])
     expect(state?.error).toBeNull()
+  })
+
+  it('rebases queued mutations on the latest server-normalized list', async () => {
+    const normalizedFirst = { ...FIRST, label: 'Server normalized' }
+    const firstUpdate = deferred<RpcResponse>()
+    const secondUpdate = deferred<RpcResponse>()
+    const updateParams: unknown[] = []
+    const client = {
+      sendRequest: vi.fn((method: string, params?: unknown) => {
+        if (method === 'settings.getTerminalQuickCommands') {
+          return Promise.resolve(success([FIRST, SECOND]))
+        }
+        updateParams.push(params)
+        return updateParams.length === 1 ? firstUpdate.promise : secondUpdate.promise
+      })
+    } as unknown as RpcClient
+    await mount(client)
+
+    let firstPersist: Promise<boolean> = Promise.resolve(false)
+    let secondPersist: Promise<boolean> = Promise.resolve(false)
+    await act(async () => {
+      firstPersist = state!.persist((current) =>
+        current.map((command) =>
+          command.id === FIRST.id ? { ...command, label: 'Local label' } : command
+        )
+      )
+      secondPersist = state!.persist((current) =>
+        current.filter((command) => command.id !== SECOND.id)
+      )
+      await Promise.resolve()
+    })
+
+    expect(updateParams[0]).toEqual({
+      terminalQuickCommands: [{ ...FIRST, label: 'Local label' }, SECOND]
+    })
+    await act(async () => {
+      firstUpdate.resolve(success([normalizedFirst, SECOND]))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(updateParams[1]).toEqual({ terminalQuickCommands: [normalizedFirst] })
+
+    await act(async () => {
+      secondUpdate.resolve(success([normalizedFirst]))
+      await Promise.all([firstPersist, secondPersist])
+    })
+    expect(state?.commands).toEqual([normalizedFirst])
+  })
+
+  it('isolates an old client mutation from a replacement client', async () => {
+    const oldUpdate = deferred<RpcResponse>()
+    const oldClient = {
+      sendRequest: vi
+        .fn()
+        .mockResolvedValueOnce(success([FIRST]))
+        .mockReturnValueOnce(oldUpdate.promise)
+    } as unknown as RpcClient
+    const newClient = {
+      sendRequest: vi.fn().mockResolvedValue(success([SECOND]))
+    } as unknown as RpcClient
+
+    function Harness({ client }: { client: RpcClient }): null {
+      state = useQuickCommands({ client, enabled: true })
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness, { client: oldClient }))
+      await Promise.resolve()
+    })
+    let persisted: Promise<boolean> = Promise.resolve(false)
+    await act(async () => {
+      persisted = state!.persist(() => [])
+      await Promise.resolve()
+      renderer!.update(createElement(Harness, { client: newClient }))
+      await Promise.resolve()
+    })
+
+    expect(newClient.sendRequest).toHaveBeenCalledWith('settings.getTerminalQuickCommands')
+    expect(state?.commands).toEqual([SECOND])
+
+    await act(async () => {
+      oldUpdate.resolve(success([]))
+      await persisted
+    })
+    expect(state?.commands).toEqual([SECOND])
   })
 
   it('rolls back the latest optimistic mutation when persistence fails', async () => {

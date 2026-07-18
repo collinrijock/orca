@@ -15,15 +15,19 @@ function command(overrides: Partial<TerminalQuickCommand> = {}): TerminalQuickCo
 }
 
 describe('mobile quick-command launch', () => {
-  it('queues runnable terminal commands through shell-ready startup', () => {
-    expect(buildMobileQuickCommandLaunch(command({ command: 'pnpm lint\npnpm test' }))).toEqual({
-      options: { startupCommand: 'pnpm lint; pnpm test' }
+  it('preserves multiline shell syntax in runnable startup commands', () => {
+    const multiline = "cat <<'EOF'\nhello world\nEOF\nprintf '%s\\n' done"
+    expect(buildMobileQuickCommandLaunch(command({ command: multiline }))).toEqual({
+      options: { startupCommand: multiline }
     })
   })
 
   it('keeps append-enter-off commands as unsubmitted terminal input', () => {
-    expect(buildMobileQuickCommandLaunch(command({ appendEnter: false }))).toEqual({
-      options: { initialPrompt: 'pnpm test', enter: false }
+    const multiline = 'printf "first\\nsecond"\n# leave this unsubmitted'
+    expect(
+      buildMobileQuickCommandLaunch(command({ command: multiline, appendEnter: false }))
+    ).toEqual({
+      options: { initialPrompt: multiline, enter: false }
     })
   })
 
