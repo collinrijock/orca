@@ -216,12 +216,16 @@ describe('keybindings', () => {
 
   it('defines a default shortcut for adding an editor review note', () => {
     expect(getEffectiveKeybindingsForAction('editor.addReviewNote', 'darwin')).toEqual([
-      'Mod+Alt+N'
+      'Mod+Shift+A'
     ])
-    expect(getEffectiveKeybindingsForAction('editor.addReviewNote', 'linux')).toEqual(['Mod+Alt+N'])
-    expect(getEffectiveKeybindingsForAction('editor.addReviewNote', 'win32')).toEqual(['Mod+Alt+N'])
-    expect(formatKeybindingList(['Mod+Alt+N'], 'darwin')).toBe('⌘⌥N')
-    expect(formatKeybindingList(['Mod+Alt+N'], 'linux')).toBe('Ctrl+Alt+N')
+    expect(getEffectiveKeybindingsForAction('editor.addReviewNote', 'linux')).toEqual([
+      'Mod+Shift+A'
+    ])
+    expect(getEffectiveKeybindingsForAction('editor.addReviewNote', 'win32')).toEqual([
+      'Mod+Shift+A'
+    ])
+    expect(formatKeybindingList(['Mod+Shift+A'], 'darwin')).toBe('⌘⇧A')
+    expect(formatKeybindingList(['Mod+Shift+A'], 'linux')).toBe('Ctrl+Shift+A')
   })
 
   it('defines platform-native replace-in-editor shortcuts', () => {

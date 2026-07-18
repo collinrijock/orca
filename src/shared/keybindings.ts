@@ -865,7 +865,10 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Editors',
     scope: 'editor',
     searchKeywords: ['shortcut', 'editor', 'markdown', 'note', 'comment', 'annotation', 'review'],
-    defaultBindings: platformBindings(['Mod+Alt+N'])
+    // Why: avoid a Ctrl+Alt+letter default — that's AltGr on Windows/Linux, and
+    // AltGr+N types a real character on diacritic layouts (e.g. Polish `ń`), so
+    // an editor-scope chord would hijack normal typing. Mod+Shift+A is AltGr-safe.
+    defaultBindings: platformBindings(['Mod+Shift+A'])
   },
   {
     id: 'fileExplorer.undo',
