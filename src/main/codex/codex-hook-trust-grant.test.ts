@@ -19,7 +19,9 @@ import {
 import { readCodexTrustGrantLedgerHome } from './codex-trust-grant-ledger'
 import {
   computeTrustKey,
+  computeTrustedHash,
   normalizeHookTrustKeyForLookup,
+  readHookTrustEntries,
   upsertHookTrustEntries,
   type CodexTrustEntry
 } from './config-toml-trust'
@@ -131,6 +133,26 @@ describe('grantManagedCodexHookTrust', () => {
     const invocation = runner.mock.calls[0]![0]!.invocation
     expect(invocation.env?.CODEX_HOME).toBeUndefined()
     expect(invocation.envToDelete).toContain('CODEX_HOME')
+  })
+
+  it('removes equivalent Windows fallback keys before the RPC writes canonical trust', () => {
+    const entry: CodexTrustEntry = {
+      ...managedEntry('stop'),
+      sourcePath: String.raw`C:\Users\Alice\.codex\hooks.json`
+    }
+    const plan = buildPlan([entry])
+    upsertHookTrustEntries(plan.tomlPath, [entry])
+    expect(readHookTrustEntries(plan.tomlPath).get(computeTrustKey(entry))?.trustedHash).toBe(
+      computeTrustedHash(entry)
+    )
+    const runner = vi.fn(() => {
+      expect(readHookTrustEntries(plan.tomlPath).has(computeTrustKey(entry))).toBe(false)
+      return grantedSessionResult([entry])
+    })
+    _internals.setGrantSessionRunnerSync(runner)
+
+    expect(grantManagedCodexHookTrust(plan)).toMatchObject({ lane: 'rpc' })
+    expect(runner).toHaveBeenCalledTimes(1)
   })
 
   it('skips the RPC session while the ledger grant still holds, and re-grants on config drift', () => {

@@ -15,8 +15,10 @@ import {
 } from './codex-trust-grant-ledger'
 import {
   computeTrustKey,
+  computeTrustedHash,
   normalizeHookTrustKeyForLookup,
   readHookTrustEntries,
+  removeHookTrustEntries,
   type CodexTrustEntry
 } from './config-toml-trust'
 import { getCodexHookTrustSignature } from './codex-hook-identity'
@@ -149,6 +151,19 @@ function buildExpectedEntries(plan: CodexManagedTrustGrantPlan): ExpectedManaged
   }))
 }
 
+function removeSelfComputedTrustBeforeGrant(plan: CodexManagedTrustGrantPlan): void {
+  const trustStates = readHookTrustEntries(plan.tomlPath)
+  const ownedKeys = plan.managedEntries
+    .map((entry) => {
+      const key = computeTrustKey(entry)
+      return trustStates.get(key)?.trustedHash === computeTrustedHash(entry) ? key : null
+    })
+    .filter((key): key is string => key !== null)
+  if (ownedKeys.length > 0) {
+    removeHookTrustEntries(plan.tomlPath, ownedKeys)
+  }
+}
+
 function findLedgerGrant(
   plan: CodexManagedTrustGrantPlan,
   expected: ExpectedManagedEntry[],
@@ -224,6 +239,9 @@ export function grantManagedCodexHookTrust(
     const configSnapshot = captureCodexTrustConfig(plan.tomlPath)
     let result: CodexHookTrustGrantSessionResult
     try {
+      // Why: Windows fallback writes equivalent separator variants that Codex's
+      // canonical RPC key may not overwrite, leaving conflicting logical trust.
+      removeSelfComputedTrustBeforeGrant(plan)
       result = runSessionSync(
         resolvedHost.buildRequest({
           runtimeHomePath: plan.runtimeHomePath,

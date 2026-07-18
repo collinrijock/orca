@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { CodexManagedAccount, GlobalSettings } from '../../shared/types'
 import type * as NodeOs from 'node:os'
+import { readHookTrustEntries } from '../codex/config-toml-trust'
 
 const testState = { userData: '', home: '' }
 const previousEnv: Record<string, string | undefined> = {}
@@ -98,9 +99,9 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
       expect(readFileSync(join(account.managedHomePath, 'hooks.json'), 'utf8')).toContain(
         process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
       )
-      expect(readFileSync(join(account.managedHomePath, 'config.toml'), 'utf8')).toContain(
-        '[hooks.state."'
-      )
+      expect(
+        readHookTrustEntries(join(account.managedHomePath, 'config.toml')).size
+      ).toBeGreaterThan(0)
     }
 
     const discoveryHomes = service.getHostCodexHomePathsForSessionDiscovery()

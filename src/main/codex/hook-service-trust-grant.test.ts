@@ -19,6 +19,7 @@ import {
   computeTrustKey,
   computeTrustedHash,
   escapeTomlString,
+  normalizeHookTrustKeyForLookup,
   parseTrustKey,
   readHookTrustEntries,
   upsertHookTrustEntries,
@@ -214,7 +215,7 @@ describe('CodexHookService app-server trust grant lane', () => {
     writeCodexTrustGrantLedgerHome(systemHome, {
       binary: null,
       entries: {
-        [trustKey]: {
+        [normalizeHookTrustKeyForLookup(trustKey)]: {
           signature: getCodexHookTrustSignature(entry),
           trustedHash
         }
