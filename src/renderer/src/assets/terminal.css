@@ -436,8 +436,16 @@
 
 .pane-title-bar:hover .pane-title-close,
 .pane-title-bar:focus-within .pane-title-close,
-.pane-title-close:focus-visible {
+.pane-title-close:focus-visible,
+.pane-title-split-trigger:focus-visible {
   opacity: 1;
+}
+
+@media (hover: none) {
+  .pane-title-split-trigger,
+  .pane-title-close {
+    opacity: 1;
+  }
 }
 
 .pane-title-close:hover,

@@ -1,8 +1,23 @@
 import type { CSSProperties, RefObject } from 'react'
-import { MessageSquare, SquareSplitVertical, SquareTerminal, X } from 'lucide-react'
+import {
+  MessageSquare,
+  PanelBottomClose,
+  PanelRightClose,
+  SquareSplitVertical,
+  SquareTerminal,
+  X
+} from 'lucide-react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
@@ -92,10 +107,12 @@ export default function TerminalPaneHeaderOverlay({
   onRenameCancel,
   onRenameBlur
 }: TerminalPaneHeaderOverlayProps): React.JSX.Element {
-  const splitRightLabel = translate(
-    'auto.components.terminal.pane.TerminalContextMenu.20e565d865',
-    'Split Terminal Right'
+  const splitLabel = translate(
+    'auto.components.tab.bar.TerminalTabSplitMenuSection.splitTerminal',
+    'Split terminal'
   )
+  const splitRightShortcut = useShortcutLabel('terminal.splitRight')
+  const splitDownShortcut = useShortcutLabel('terminal.splitDown')
 
   return (
     <div
@@ -276,29 +293,53 @@ export default function TerminalPaneHeaderOverlay({
                     </Tooltip>
                   ) : null}
                   {showAlwaysOnHeaders && showSplitButton ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="pane-title-split-trigger"
-                          data-contextual-tour-target={
-                            isActivePane ? 'terminal-pane-split-target' : undefined
-                          }
-                          aria-label={splitRightLabel}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            onSplitPane(pane, 'vertical')
-                          }}
-                        >
-                          <SquareSplitVertical className="size-3" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" sideOffset={4}>
-                        {splitRightLabel}
-                      </TooltipContent>
-                    </Tooltip>
+                    <DropdownMenu modal={false}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              className="pane-title-split-trigger"
+                              data-contextual-tour-target={
+                                isActivePane ? 'terminal-pane-split-target' : undefined
+                              }
+                              aria-label={splitLabel}
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <SquareSplitVertical className="size-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" sideOffset={4}>
+                          {splitLabel}
+                        </TooltipContent>
+                      </Tooltip>
+                      <DropdownMenuContent
+                        align="end"
+                        sideOffset={3}
+                        className="min-w-52 rounded-md p-1"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <DropdownMenuItem onSelect={() => onSplitPane(pane, 'vertical')}>
+                          <PanelRightClose className="size-3.5" />
+                          {translate(
+                            'auto.components.tab.bar.SortableTabContextMenu.splitTerminalRight',
+                            'Split terminal right'
+                          )}
+                          <DropdownMenuShortcut>{splitRightShortcut}</DropdownMenuShortcut>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => onSplitPane(pane, 'horizontal')}>
+                          <PanelBottomClose className="size-3.5" />
+                          {translate(
+                            'auto.components.tab.bar.SortableTabContextMenu.splitTerminalDown',
+                            'Split terminal down'
+                          )}
+                          <DropdownMenuShortcut>{splitDownShortcut}</DropdownMenuShortcut>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   ) : null}
                   {title ? (
                     <Tooltip>
