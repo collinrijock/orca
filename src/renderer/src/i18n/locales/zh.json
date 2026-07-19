@@ -2839,7 +2839,18 @@
             "25dc1cd653": "打开文件",
             "7cdf8ee0c8": "打开网址",
             "b27864279e": "启动智能体",
-            "39676a184c": "打开任何文件、URL、智能体..."
+            "39676a184c": "搜索 CLI、Shell、文件或 URL…"
+          },
+          "TabBarCliPickerSections": {
+            "codingClis": "编程 CLI",
+            "default": "默认",
+            "loadingClis": "正在查找已安装的 CLI…",
+            "noClis": "未找到已安装的 CLI",
+            "noEnabledClis": "没有已启用的 CLI",
+            "refreshClis": "刷新 CLI",
+            "cliSettings": "CLI 设置…",
+            "shells": "Shell",
+            "more": "更多"
           },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "命令",
@@ -2850,7 +2861,7 @@
             "196593b6a9": "删除 {{value0}}",
             "15529ede69": "编辑 {{value0}}",
             "1d411fb6a5": "为此仓库保存快捷命令",
-            "8f1e971966": "添加快捷命令",
+            "8f1e971966": "添加命令",
             "3220e2da27": "该快捷命令将从您保存的列表中删除。",
             "e8e1a52edb": "删除“{{value0}}”？",
             "37e1bb90ce": "运行：{{value0}}",
@@ -2873,7 +2884,7 @@
                 "classifier": {
                   "42e6262ae9": "没有可用的操作。",
                   "097a982ee0": "正在加载文件...",
-                  "5a9c83c04b": "打开任何文件、URL、智能体...",
+                  "5a9c83c04b": "搜索 CLI、Shell、文件或 URL…",
                   "90eb94dc48": "输入 http:// 或 https:// URL。",
                   "5553b283ce": "输入 URL 或文件路径。",
                   "queryTooLarge": "搜索文本过长。"

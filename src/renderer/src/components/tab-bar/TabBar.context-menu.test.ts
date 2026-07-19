@@ -174,6 +174,18 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: vi.fn()
 }))
 
+vi.mock('@/components/ui/tooltip', () => ({
+  Tooltip: function Tooltip(props: { children?: unknown }) {
+    return { type: 'Tooltip', props }
+  },
+  TooltipContent: function TooltipContent(props: { children?: unknown }) {
+    return { type: 'TooltipContent', props }
+  },
+  TooltipTrigger: function TooltipTrigger(props: { children?: unknown }) {
+    return { type: 'TooltipTrigger', props }
+  }
+}))
+
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: function DropdownMenu(props: { children?: unknown }) {
     return { type: 'DropdownMenu', props }
@@ -474,10 +486,29 @@ describe('TabBar context menu wiring', () => {
       extractText(item.props.children)
     )
 
-    expect(menuLabels[0]).toContain('New Markdown')
-    expect(menuLabels[1]).toContain('Open Markdown...')
-    expect(menuLabels[2]).toContain('New Terminal')
-    expect(menuLabels[3]).toContain('New Browser Tab')
+    expect(menuLabels[0]).toContain('Blank terminal')
+    expect(menuLabels.findIndex((label) => label.includes('New Markdown'))).toBeLessThan(
+      menuLabels.findIndex((label) => label.includes('New Browser Tab'))
+    )
+    expect(menuLabels.findIndex((label) => label.includes('Open Markdown...'))).toBeLessThan(
+      menuLabels.findIndex((label) => label.includes('New Browser Tab'))
+    )
+  })
+
+  it('uses an accessible shortcut tooltip instead of a native title on the new-tab trigger', async () => {
+    const element = await renderTabBar({ tabs: [TERMINAL_TAB] })
+    const newTabTrigger = findChildrenByType(element, 'button').find(
+      (button) => button.props['aria-label'] === 'New tab'
+    )
+    const newTabTooltip = findChildrenByType(element, 'TooltipContent').find((tooltip) =>
+      extractText(tooltip.props.children).includes('New tab')
+    )
+    const shortcut = findChildrenByType(newTabTooltip, 'ShortcutKeyCombo')[0]
+
+    expect(newTabTrigger).toBeTruthy()
+    expect(newTabTrigger?.props.title).toBeUndefined()
+    expect(newTabTooltip).toBeTruthy()
+    expect(shortcut?.props.keys).toContain('T')
   })
 
   it('turns New Mobile Emulator into a go-to action when the workspace already has one', async () => {

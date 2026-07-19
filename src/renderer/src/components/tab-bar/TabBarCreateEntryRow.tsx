@@ -47,8 +47,9 @@ export function EntryActionRow({
       id={id}
       role="option"
       aria-selected={selected}
+      data-cli-picker-agent={option.kind === 'agent' ? option.option.agent : undefined}
       className={cn(
-        'flex h-6 w-full items-center gap-1.5 rounded-[7px] px-1 text-left text-[11px] leading-5 outline-none',
+        'flex min-h-8 w-full items-center gap-2 rounded-sm px-2 text-left text-[11px] leading-5 outline-none focus-visible:ring-1 focus-visible:ring-ring',
         selected
           ? 'bg-black/8 text-accent-foreground dark:bg-white/14'
           : 'text-muted-foreground hover:bg-black/8 hover:text-accent-foreground dark:hover:bg-white/14'
@@ -64,8 +65,20 @@ export function EntryActionRow({
           <span className="text-muted-foreground/70" aria-hidden="true">
             ·
           </span>
-          <span className="min-w-0 truncate">{presentation.detail}</span>
+          <span
+            className={cn(
+              'min-w-0 truncate',
+              presentation.detailMonospace && 'font-mono text-[10px]'
+            )}
+          >
+            {presentation.detail}
+          </span>
         </>
+      ) : null}
+      {presentation.isDefault ? (
+        <span className="ml-auto shrink-0 rounded-sm border border-border/80 px-1 text-[9px] font-medium uppercase tracking-[0.05em] text-muted-foreground">
+          {translate('auto.components.tab.bar.TabBarCliPickerSections.default', 'Default')}
+        </span>
       ) : null}
     </button>
   )
@@ -73,7 +86,9 @@ export function EntryActionRow({
 
 function getActionPresentation(option: ActiveOption): {
   detail: string
+  detailMonospace: boolean
   icon: React.ReactNode
+  isDefault: boolean
   label: string
   showDetail: boolean
 } {
@@ -92,16 +107,20 @@ function getActionPresentation(option: ActiveOption): {
       )
     return {
       detail: '',
+      detailMonospace: false,
       icon,
+      isDefault: false,
       label: option.option.label,
       showDetail: false
     }
   }
   if (option.kind === 'agent') {
     return {
-      detail: option.option.label,
+      detail: option.option.command,
+      detailMonospace: true,
       icon: <AgentIcon agent={option.option.agent} size={14} />,
-      label: translate('auto.components.tab.bar.TabBarCreateEntry.b27864279e', 'Launch agent'),
+      isDefault: option.option.isDefault,
+      label: option.option.label,
       showDetail: true
     }
   }
@@ -109,7 +128,9 @@ function getActionPresentation(option: ActiveOption): {
   if (classification.kind === 'explicit-url' || classification.kind === 'host-url') {
     return {
       detail: classification.url,
+      detailMonospace: false,
       icon: <Globe className="size-3.5 shrink-0" aria-hidden="true" />,
+      isDefault: false,
       label: translate('auto.components.tab.bar.TabBarCreateEntry.7cdf8ee0c8', 'Open URL'),
       showDetail: true
     }
@@ -117,14 +138,18 @@ function getActionPresentation(option: ActiveOption): {
   if (classification.kind === 'existing-file') {
     return {
       detail: classification.relativePath,
+      detailMonospace: false,
       icon: <FileText className="size-3.5 shrink-0" aria-hidden="true" />,
+      isDefault: false,
       label: translate('auto.components.tab.bar.TabBarCreateEntry.25dc1cd653', 'Open file'),
       showDetail: true
     }
   }
   return {
     detail: classification.relativePath,
+    detailMonospace: false,
     icon: <FilePlus className="size-3.5 shrink-0" aria-hidden="true" />,
+    isDefault: false,
     label: translate('auto.components.tab.bar.TabBarCreateEntry.d62d63b807', 'Create file'),
     showDetail: true
   }

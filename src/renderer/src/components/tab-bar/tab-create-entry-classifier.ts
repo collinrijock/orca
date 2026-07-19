@@ -73,7 +73,7 @@ export function getTabEntryOptions(
           kind: 'empty',
           message: translate(
             'auto.components.tab.bar.tab.create.entry.classifier.5a9c83c04b',
-            'Open any file, URL, agent, ...'
+            'Search CLI, shell, file, or URL…'
           )
         }
       }

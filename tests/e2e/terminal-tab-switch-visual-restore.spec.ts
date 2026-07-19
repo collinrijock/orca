@@ -104,7 +104,7 @@ async function ensureTwoTerminalTabs(
   if ((await page.locator('[data-testid="sortable-tab"]').count()) < 2) {
     await page.getByRole('button', { name: 'New tab' }).click({ force: true })
     await page
-      .getByRole('menuitem', { name: /New Terminal/i })
+      .getByRole('menuitem', { name: /Blank Terminal/i })
       .first()
       .click({ force: true })
     await expect

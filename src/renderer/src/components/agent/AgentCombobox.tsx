@@ -289,7 +289,7 @@ export default function AgentCombobox({
               <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
                 <Terminal className="size-3.5" />
                 <span className="truncate">
-                  {translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
+                  {translate('auto.components.agent.AgentCombobox.986f946354', 'Blank terminal')}
                 </span>
               </span>
             )}
@@ -336,7 +336,7 @@ export default function AgentCombobox({
                     icon: <Terminal className="size-3.5" />,
                     label: translate(
                       'auto.components.agent.AgentCombobox.986f946354',
-                      'Blank Terminal'
+                      'Blank terminal'
                     )
                   })
                 : null}

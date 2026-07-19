@@ -153,7 +153,13 @@ describe('TabBarCreateEntry keyboard navigation', () => {
 
   it('launches a matched agent when its highlighted row is selected', () => {
     const agentOptions: TabAgentLaunchOption[] = [
-      { agent: 'gemini', aliases: ['gemini'], label: 'Gemini' }
+      {
+        agent: 'gemini',
+        aliases: ['gemini'],
+        command: 'gemini',
+        isDefault: false,
+        label: 'Gemini'
+      }
     ]
     const onLaunchAgent = vi.fn()
     mount(

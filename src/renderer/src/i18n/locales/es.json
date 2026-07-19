@@ -2839,10 +2839,21 @@
             "25dc1cd653": "Abrir archivo",
             "7cdf8ee0c8": "Abrir URL",
             "b27864279e": "Iniciar agente",
-            "39676a184c": "Abrir cualquier archivo, URL, agente, ..."
+            "39676a184c": "Buscar CLI, shell, archivo o URL…"
+          },
+          "TabBarCliPickerSections": {
+            "codingClis": "CLI de programación",
+            "default": "Predeterminado",
+            "loadingClis": "Buscando CLI instaladas…",
+            "noClis": "No se encontraron CLI instaladas",
+            "noEnabledClis": "No hay CLI habilitadas",
+            "refreshClis": "Actualizar CLI",
+            "cliSettings": "Configuración de CLI…",
+            "shells": "Intérpretes",
+            "more": "Más"
           },
           "TabBarQuickCommandsButton": {
-            "a2c7a33831": "Comando",
+            "a2c7a33831": "Comandos",
             "20bbd75896": "Sin comandos",
             "b82e237a4b": "Más comandos rápidos",
             "85482c57bc": "Ejecutar comando rápido",
@@ -2850,7 +2861,7 @@
             "196593b6a9": "Quitar {{value0}}",
             "15529ede69": "Editar {{value0}}",
             "1d411fb6a5": "Guarda un comando rápido para este repositorio",
-            "8f1e971966": "Agregar comando rápido",
+            "8f1e971966": "Agregar comando",
             "3220e2da27": "Este comando rápido se eliminará de tu lista guardada.",
             "e8e1a52edb": "¿Eliminar \"{{value0}}\"?",
             "37e1bb90ce": "Ejecutar: {{value0}}",
@@ -2873,7 +2884,7 @@
                 "classifier": {
                   "42e6262ae9": "No hay acción disponible.",
                   "097a982ee0": "Cargando archivos...",
-                  "5a9c83c04b": "Abrir cualquier archivo, URL, agente, ...",
+                  "5a9c83c04b": "Buscar CLI, shell, archivo o URL…",
                   "90eb94dc48": "Introduce una URL http:// o https://.",
                   "5553b283ce": "Introduce una URL o ruta de archivo.",
                   "queryTooLarge": "El texto de búsqueda es demasiado grande."
