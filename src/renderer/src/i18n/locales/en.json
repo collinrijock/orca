@@ -2862,7 +2862,8 @@
             "25dc1cd653": "Open file",
             "7cdf8ee0c8": "Open URL",
             "b27864279e": "Launch agent",
-            "39676a184c": "Search CLI, shell, file, or URL…"
+            "39676a184c": "Search CLI, shell, file, or URL…",
+            "keyboardConfirm": "Enter"
           },
           "TabBarCliPickerSections": {
             "codingClis": "Coding CLIs",

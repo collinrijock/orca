@@ -93,8 +93,11 @@ import {
   TabBarCliPickerFooter,
   TabBarCliPickerSectionLabel
 } from './TabBarCliPickerSections'
+import { MobileEmulatorTabIntroCallout } from '../emulator-pane/MobileEmulatorTabIntroCallout'
+import { shouldShowMobileEmulatorTabIntro } from '../emulator-pane/mobile-emulator-tab-intro-visibility'
 
 const isWindows = navigator.userAgent.includes('Windows')
+const isMacOs = navigator.userAgent.includes('Mac')
 const NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS = 50
 const NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS = 5000
 type GitStatusEntries = ReturnType<typeof useAppStore.getState>['gitStatusByWorktree'][string]
@@ -291,6 +294,14 @@ function TabBarInner({
   const newTerminalShortcutDetails = useShortcutKeyDetails('tab.newTerminal')
   const generatedTabTitlesEnabled = useAppStore((s) => s.settings?.tabAutoGenerateTitle === true)
   const mobileEmulatorEnabled = useAppStore((s) => s.settings?.mobileEmulatorEnabled !== false)
+  const persistedUIReady = useAppStore((s) => s.persistedUIReady)
+  const mobileEmulatorTabIntroDismissed = useAppStore((s) => s.mobileEmulatorTabIntroDismissed)
+  const showMobileEmulatorIntroCallout = shouldShowMobileEmulatorTabIntro({
+    persistedUIReady,
+    mobileEmulatorTabIntroDismissed,
+    mobileEmulatorEnabled,
+    isMacOs
+  })
   const gitStatusEntries = useAppStore(
     (s) => s.gitStatusByWorktree[worktreeId] ?? EMPTY_GIT_STATUS_ENTRIES
   )
@@ -712,11 +723,13 @@ function TabBarInner({
         queueNewActiveTerminalFocusAfterNewTabMenuClose()
         onNewTerminalTab()
       }}
-      className="min-h-9 gap-2 rounded-sm px-2 py-1 text-[12px] leading-tight font-medium"
+      className="group min-h-9 gap-2 rounded-sm px-2 py-1 text-[12px] leading-tight font-medium focus:[&_svg]:text-foreground"
     >
       <TerminalSquare className="size-4 text-muted-foreground" />
       {translate('auto.components.agent.AgentCombobox.986f946354', 'Blank terminal')}
-      <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
+      <DropdownMenuShortcut className="text-muted-foreground group-focus:text-foreground">
+        {newTerminalShortcut}
+      </DropdownMenuShortcut>
     </DropdownMenuItem>
   )
   const shellMenuItems =
@@ -736,7 +749,7 @@ function TabBarInner({
                 )
               )
             }}
-            className="min-h-8 gap-2 rounded-sm px-2 py-1 text-[12px] leading-tight"
+            className="group min-h-8 gap-2 rounded-sm px-2 py-1 text-[12px] leading-tight focus:[&_svg]:text-foreground"
           >
             <ShellIcon shell={entry.shell} size={14} />
             <span className="flex-1">{entry.label}</span>
@@ -746,11 +759,13 @@ function TabBarInner({
   const newBrowserMenuItem = !terminalOnly ? (
     <DropdownMenuItem
       onSelect={onNewBrowserTab}
-      className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+      className="group gap-2 rounded-sm px-2 py-1.5 text-[12px] leading-5 font-medium focus:[&_svg]:text-foreground"
     >
       <Globe className="size-4 text-muted-foreground" />
       {translate('auto.components.tab.bar.TabBar.4833fb2cbe', 'New Browser Tab')}
-      <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
+      <DropdownMenuShortcut className="text-muted-foreground group-focus:text-foreground">
+        {newBrowserShortcut}
+      </DropdownMenuShortcut>
     </DropdownMenuItem>
   ) : null
   const newSimulatorMenuItem =
@@ -760,11 +775,13 @@ function TabBarInner({
           <TooltipTrigger asChild>
             <DropdownMenuItem
               onSelect={onNewSimulatorTab}
-              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+              className="group gap-2 rounded-sm px-2 py-1.5 text-[12px] leading-5 font-medium focus:[&_svg]:text-foreground"
             >
               <Smartphone className="size-4 text-muted-foreground" />
               {translate('auto.components.tab.bar.TabBar.b426bb2615', 'Go to Mobile Emulator')}
-              <DropdownMenuShortcut>{newSimulatorShortcut}</DropdownMenuShortcut>
+              <DropdownMenuShortcut className="text-muted-foreground group-focus:text-foreground">
+                {newSimulatorShortcut}
+              </DropdownMenuShortcut>
             </DropdownMenuItem>
           </TooltipTrigger>
           <TooltipContent side="right" sideOffset={8} className="z-[80]">
@@ -777,11 +794,13 @@ function TabBarInner({
       ) : (
         <DropdownMenuItem
           onSelect={onNewSimulatorTab}
-          className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+          className="group gap-2 rounded-sm px-2 py-1.5 text-[12px] leading-5 font-medium focus:[&_svg]:text-foreground"
         >
           <Smartphone className="size-4 text-muted-foreground" />
           {translate('auto.components.tab.bar.TabBar.fd2b42aaa3', 'New Mobile Emulator')}
-          <DropdownMenuShortcut>{newSimulatorShortcut}</DropdownMenuShortcut>
+          <DropdownMenuShortcut className="text-muted-foreground group-focus:text-foreground">
+            {newSimulatorShortcut}
+          </DropdownMenuShortcut>
         </DropdownMenuItem>
       )
     ) : null
@@ -789,40 +808,58 @@ function TabBarInner({
     !terminalOnly && onNewFileTab ? (
       <DropdownMenuItem
         onSelect={onNewFileTab}
-        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+        className="group gap-2 rounded-sm px-2 py-1.5 text-[12px] leading-5 font-medium focus:[&_svg]:text-foreground"
       >
         <FilePlus className="size-4 text-muted-foreground" />
         {translate('auto.components.tab.bar.TabBar.3d5d6c960d', 'New Markdown')}
-        <DropdownMenuShortcut>{newFileShortcut}</DropdownMenuShortcut>
+        <DropdownMenuShortcut className="text-muted-foreground group-focus:text-foreground">
+          {newFileShortcut}
+        </DropdownMenuShortcut>
       </DropdownMenuItem>
     ) : null
   const openMarkdownMenuItem =
     !terminalOnly && onOpenFileTab ? (
       <DropdownMenuItem
         onSelect={onOpenFileTab}
-        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+        className="group gap-2 rounded-sm px-2 py-1.5 text-[12px] leading-5 font-medium focus:[&_svg]:text-foreground"
       >
         <FileText className="size-4 text-muted-foreground" />
         {translate('auto.components.tab.bar.TabBar.4f327c8b3d', 'Open Markdown...')}
         {openMarkdownShortcut ? (
-          <DropdownMenuShortcut>{openMarkdownShortcut}</DropdownMenuShortcut>
+          <DropdownMenuShortcut className="text-muted-foreground group-focus:text-foreground">
+            {openMarkdownShortcut}
+          </DropdownMenuShortcut>
         ) : null}
       </DropdownMenuItem>
     ) : null
+  const mobileEmulatorIntroMenuBlock =
+    showMobileEmulatorIntroCallout &&
+    !terminalOnly &&
+    isMacOs &&
+    mobileEmulatorEnabled &&
+    onNewSimulatorTab ? (
+      <MobileEmulatorTabIntroCallout />
+    ) : null
+  const simulatorMenuBlock = (
+    <>
+      {newSimulatorMenuItem}
+      {mobileEmulatorIntroMenuBlock}
+    </>
+  )
   const moreCreateMenuItems =
     newTabMenuOrder === 'markdown-first' ? (
       <>
         {newMarkdownMenuItem}
         {openMarkdownMenuItem}
         {newBrowserMenuItem}
-        {newSimulatorMenuItem}
+        {simulatorMenuBlock}
       </>
     ) : (
       <>
         {newBrowserMenuItem}
         {newMarkdownMenuItem}
         {openMarkdownMenuItem}
-        {newSimulatorMenuItem}
+        {simulatorMenuBlock}
       </>
     )
 
@@ -1279,15 +1316,17 @@ function TabBarInner({
       >
         <Tooltip>
           <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none hover:bg-accent/50 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
-                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                aria-label={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
-            </DropdownMenuTrigger>
+            <span className="ml-2 my-auto inline-flex shrink-0">
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground outline-none hover:bg-accent/50 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
+                  style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                  aria-label={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+            </span>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6} className="flex items-center gap-2">
             <span>{translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}</span>
@@ -1302,7 +1341,7 @@ function TabBarInner({
         <DropdownMenuContent
           align="start"
           sideOffset={6}
-          className="max-h-[min(32rem,calc(100vh-3rem))] w-96 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-md border-border/80 p-1 shadow-sm"
+          className="max-h-[min(38rem,calc(100vh-3rem))] w-96 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-md border-border bg-popover p-1 text-popover-foreground shadow-sm backdrop-blur-none"
           onCloseAutoFocus={(e) => {
             // Why: terminal-producing menu actions activate a freshly-mounted
             // xterm. Radix's default focus restore sends focus back to the "+"
@@ -1329,13 +1368,15 @@ function TabBarInner({
                 onSelectMenuOption={handleSelectCreateMenuOption}
                 onDidOpenEntry={() => setNewTabMenuOpen(false)}
               />
-              {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
+              {showStaticCreateMenuItems ? (
+                <DropdownMenuSeparator className="bg-muted-foreground/75" />
+              ) : null}
             </>
           ) : null}
           {showStaticCreateMenuItems ? blankTerminalMenuItem : null}
           {showStaticCreateMenuItems && showAgentLaunchItems ? (
             <>
-              <DropdownMenuSeparator />
+              <DropdownMenuSeparator className="bg-muted-foreground/75" />
               <TabBarCliPickerAgentSection
                 agentOptions={agentLaunchOptions}
                 hasDetectedAgents={(detectedIds?.length ?? 0) > 0}
@@ -1346,7 +1387,7 @@ function TabBarInner({
           ) : null}
           {showStaticCreateMenuItems && shellMenuItems ? (
             <>
-              <DropdownMenuSeparator />
+              <DropdownMenuSeparator className="bg-muted-foreground/75" />
               <TabBarCliPickerSectionLabel>
                 {translate('auto.components.tab.bar.TabBarCliPickerSections.shells', 'Shells')}
               </TabBarCliPickerSectionLabel>
@@ -1355,7 +1396,7 @@ function TabBarInner({
           ) : null}
           {showStaticCreateMenuItems && !terminalOnly ? (
             <>
-              <DropdownMenuSeparator />
+              <DropdownMenuSeparator className="bg-muted-foreground/75" />
               <TabBarCliPickerSectionLabel>
                 {translate('auto.components.tab.bar.TabBarCliPickerSections.more', 'More')}
               </TabBarCliPickerSectionLabel>

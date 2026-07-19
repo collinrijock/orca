@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../shared/types'
 
@@ -7,9 +7,8 @@ export type UseDetectedAgentsResult = {
   detectedIds: TuiAgent[] | null
   isLoading: boolean
   isRefreshing: boolean
-  /** Re-runs `preflight.refreshAgents` and updates every subscribed surface in
-   *  the same tick. Idempotent while in flight: concurrent callers receive the
-   *  same pending promise. */
+  /** Forces fresh detection on the selected local, SSH, or runtime host.
+   *  Idempotent while in flight: concurrent callers receive the same promise. */
   refresh: () => Promise<TuiAgent[]>
 }
 
@@ -75,9 +74,9 @@ export function useDetectedAgents(
     }
     return s.detectedAgentIds
   })
-  const isLoading = useAppStore((s) => {
+  const detectionInFlight = useAppStore((s) => {
     if (isUnknown) {
-      return true
+      return false
     }
     if (targetKind === 'ssh' && targetId) {
       return s.isDetectingRemoteAgents[targetId] ?? false
@@ -87,11 +86,32 @@ export function useDetectedAgents(
     }
     return s.isDetectingAgents
   })
-  const isRefreshing = useAppStore((s) => (targetKind === 'local' ? s.isRefreshingAgents : false))
+  const localRefreshInFlight = useAppStore((s) => s.isRefreshingAgents)
+  const isLoading =
+    isUnknown ||
+    (targetKind === 'local' ? detectionInFlight : detectedIds === null && detectionInFlight)
+  const isRefreshing =
+    targetKind === 'local'
+      ? localRefreshInFlight
+      : !isUnknown && detectedIds !== null && detectionInFlight
   const ensureLocal = useAppStore((s) => s.ensureDetectedAgents)
   const ensureRemote = useAppStore((s) => s.ensureRemoteDetectedAgents)
   const ensureRuntime = useAppStore((s) => s.ensureRuntimeDetectedAgents)
-  const refresh = useAppStore((s) => s.refreshDetectedAgents)
+  const refreshLocal = useAppStore((s) => s.refreshDetectedAgents)
+  const refresh = useCallback((): Promise<TuiAgent[]> => {
+    if (targetKind === 'ssh' && targetId) {
+      retriedEmptyTargetRef.current = `ssh:${targetId}`
+      return ensureRemote(targetId, { force: true })
+    }
+    if (targetKind === 'runtime' && targetId) {
+      retriedEmptyTargetRef.current = `runtime:${targetId}`
+      return ensureRuntime(targetId, { force: true })
+    }
+    if (targetKind === 'local') {
+      return refreshLocal()
+    }
+    return Promise.resolve([])
+  }, [ensureRemote, ensureRuntime, refreshLocal, targetId, targetKind])
 
   useEffect(() => {
     if (isUnknown) {

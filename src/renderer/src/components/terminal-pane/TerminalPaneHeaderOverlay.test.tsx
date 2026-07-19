@@ -180,7 +180,12 @@ describe('TerminalPaneHeaderOverlay', () => {
       paneTitles: { 1: '', 2: '' }
     })
 
-    expect(container.querySelector('button[aria-label="Split terminal"]')).not.toBeNull()
+    const splitTrigger = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Split terminal"]'
+    )
+    expect(splitTrigger).not.toBeNull()
+    expect(splitTrigger?.parentElement?.tagName).toBe('SPAN')
+    expect(splitTrigger?.parentElement?.className).toContain('inline-flex')
     const splitRight = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
       button.textContent?.includes('Split terminal right')
     )

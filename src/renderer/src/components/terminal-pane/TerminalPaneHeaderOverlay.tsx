@@ -296,21 +296,23 @@ export default function TerminalPaneHeaderOverlay({
                     <DropdownMenu modal={false}>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-xs"
-                              className="pane-title-split-trigger"
-                              data-contextual-tour-target={
-                                isActivePane ? 'terminal-pane-split-target' : undefined
-                              }
-                              aria-label={splitLabel}
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              <SquareSplitVertical className="size-3" />
-                            </Button>
-                          </DropdownMenuTrigger>
+                          <span className="inline-flex shrink-0">
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-xs"
+                                className="pane-title-split-trigger"
+                                data-contextual-tour-target={
+                                  isActivePane ? 'terminal-pane-split-target' : undefined
+                                }
+                                aria-label={splitLabel}
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <SquareSplitVertical className="size-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                          </span>
                         </TooltipTrigger>
                         <TooltipContent side="bottom" sideOffset={4}>
                           {splitLabel}
@@ -328,7 +330,9 @@ export default function TerminalPaneHeaderOverlay({
                             'auto.components.tab.bar.SortableTabContextMenu.splitTerminalRight',
                             'Split terminal right'
                           )}
-                          <DropdownMenuShortcut>{splitRightShortcut}</DropdownMenuShortcut>
+                          <DropdownMenuShortcut className="text-muted-foreground">
+                            {splitRightShortcut}
+                          </DropdownMenuShortcut>
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => onSplitPane(pane, 'horizontal')}>
                           <PanelBottomClose className="size-3.5" />
@@ -336,7 +340,9 @@ export default function TerminalPaneHeaderOverlay({
                             'auto.components.tab.bar.SortableTabContextMenu.splitTerminalDown',
                             'Split terminal down'
                           )}
-                          <DropdownMenuShortcut>{splitDownShortcut}</DropdownMenuShortcut>
+                          <DropdownMenuShortcut className="text-muted-foreground">
+                            {splitDownShortcut}
+                          </DropdownMenuShortcut>
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>

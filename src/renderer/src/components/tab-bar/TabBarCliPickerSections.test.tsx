@@ -25,8 +25,10 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
       {children}
     </button>
   ),
-  DropdownMenuLabel: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  DropdownMenuSeparator: () => <hr />
+  DropdownMenuLabel: ({ children, ...props }: { children?: ReactNode; className?: string }) => (
+    <div {...props}>{children}</div>
+  ),
+  DropdownMenuSeparator: (props: { className?: string }) => <hr {...props} />
 }))
 
 vi.mock('@/lib/agent-catalog', () => ({
@@ -76,6 +78,15 @@ describe('TabBarCliPickerSections', () => {
     expect(container.textContent).toContain('codex-beta')
     expect(container.textContent).toContain('Default')
     expect(container.querySelector('[data-cli-picker-agent="codex"]')).not.toBeNull()
+    const iconChip = container.querySelector('[data-agent-icon="codex"]')?.parentElement
+    expect(iconChip?.className).toContain('bg-foreground/80')
+    expect(iconChip?.className).toContain('dark:bg-foreground/10')
+    expect(container.querySelector('code')?.className).toContain('group-focus:text-foreground')
+    const sectionLabel = [...container.querySelectorAll('div')].find(
+      (element) => element.textContent === 'Coding CLIs'
+    )
+    expect(sectionLabel?.className).toContain('text-muted-foreground')
+    expect(sectionLabel?.className).not.toContain('text-muted-foreground/80')
   })
 
   it('distinguishes detection loading from no installed CLIs', () => {
@@ -126,6 +137,9 @@ describe('TabBarCliPickerSections', () => {
     )
 
     const buttons = container.querySelectorAll('button')
+    expect(buttons[0]?.parentElement?.className).toContain('flex-col')
+    expect(buttons[0]?.className).toContain('text-muted-foreground')
+    expect(buttons[0]?.className).not.toMatch(/opacity-(?!50)/)
     act(() => buttons[0]?.click())
     act(() => buttons[1]?.click())
     expect(onRefresh).toHaveBeenCalledOnce()

@@ -2839,7 +2839,8 @@
             "25dc1cd653": "Abrir archivo",
             "7cdf8ee0c8": "Abrir URL",
             "b27864279e": "Iniciar agente",
-            "39676a184c": "Buscar CLI, shell, archivo o URL…"
+            "39676a184c": "Buscar CLI, shell, archivo o URL…",
+            "keyboardConfirm": "Intro"
           },
           "TabBarCliPickerSections": {
             "codingClis": "CLI de programación",

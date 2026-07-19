@@ -1,9 +1,9 @@
 import React from 'react'
 import { FilePlus, FileText, Globe, Loader2, Smartphone, TerminalSquare } from 'lucide-react'
-import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { ActiveOption } from './tab-create-entry-active-option'
+import { CliPickerAgentIcon } from './CliPickerAgentIcon'
 
 export const RESULT_LISTBOX_ID = 'tab-create-entry-results'
 
@@ -62,9 +62,7 @@ export function EntryActionRow({
       </span>
       {presentation.showDetail ? (
         <>
-          <span className="text-muted-foreground/70" aria-hidden="true">
-            ·
-          </span>
+          <span aria-hidden="true">·</span>
           <span
             className={cn(
               'min-w-0 truncate',
@@ -76,7 +74,14 @@ export function EntryActionRow({
         </>
       ) : null}
       {presentation.isDefault ? (
-        <span className="ml-auto shrink-0 rounded-sm border border-border/80 px-1 text-[9px] font-medium uppercase tracking-[0.05em] text-muted-foreground">
+        <span
+          className={cn(
+            'ml-auto shrink-0 rounded-sm border px-1 text-[9px] font-medium uppercase tracking-[0.05em]',
+            selected
+              ? 'border-foreground/25 text-foreground'
+              : 'border-border text-muted-foreground'
+          )}
+        >
           {translate('auto.components.tab.bar.TabBarCliPickerSections.default', 'Default')}
         </span>
       ) : null}
@@ -118,7 +123,7 @@ function getActionPresentation(option: ActiveOption): {
     return {
       detail: option.option.command,
       detailMonospace: true,
-      icon: <AgentIcon agent={option.option.agent} size={14} />,
+      icon: <CliPickerAgentIcon agent={option.option.agent} />,
       isDefault: option.option.isDefault,
       label: option.option.label,
       showDetail: true

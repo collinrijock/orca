@@ -1,6 +1,5 @@
 import type React from 'react'
 import { Loader2, RefreshCw, Settings } from 'lucide-react'
-import { AgentIcon } from '@/lib/agent-catalog'
 import {
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -8,9 +7,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
+import { CliPickerAgentIcon } from './CliPickerAgentIcon'
 
 const SECTION_LABEL_CLASSES =
-  'px-2 pb-1 pt-2 text-[10px] font-semibold uppercase leading-none tracking-[0.05em] text-muted-foreground/80'
+  'px-2 pb-1 pt-2 text-[10px] font-semibold uppercase leading-none tracking-[0.05em] text-muted-foreground'
 
 export function TabBarCliPickerAgentSection({
   agentOptions,
@@ -34,17 +34,17 @@ export function TabBarCliPickerAgentSection({
             key={option.agent}
             data-cli-picker-agent={option.agent}
             onSelect={() => onLaunchAgent(option)}
-            className="min-h-9 gap-2 rounded-sm px-2 py-1 text-[12px] leading-tight"
+            className="group min-h-9 gap-2 rounded-sm px-2 py-1 text-[12px] leading-tight focus:[&_svg]:text-foreground"
           >
-            <AgentIcon agent={option.agent} size={14} />
+            <CliPickerAgentIcon agent={option.agent} />
             <span className="flex min-w-0 flex-1 items-baseline gap-2">
               <span className="truncate font-medium text-foreground">{option.label}</span>
-              <code className="truncate font-mono text-[11px] text-muted-foreground">
+              <code className="truncate font-mono text-[11px] text-muted-foreground group-focus:text-foreground">
                 {option.command}
               </code>
             </span>
             {option.isDefault ? (
-              <span className="shrink-0 rounded-sm border border-border/80 px-1 py-0.5 text-[9px] font-medium uppercase tracking-[0.05em] text-muted-foreground">
+              <span className="shrink-0 rounded-sm border border-border px-1 py-0.5 text-[9px] font-medium uppercase tracking-[0.05em] text-muted-foreground group-focus:text-foreground">
                 {translate('auto.components.tab.bar.TabBarCliPickerSections.default', 'Default')}
               </span>
             ) : null}
@@ -95,15 +95,15 @@ export function TabBarCliPickerFooter({
 }): React.JSX.Element {
   return (
     <>
-      <DropdownMenuSeparator />
-      <div className="grid grid-cols-2 gap-1 p-1">
+      <DropdownMenuSeparator className="bg-muted-foreground/75" />
+      <div className="flex flex-col gap-0.5 p-1">
         <DropdownMenuItem
           disabled={isRefreshing}
           onSelect={(event) => {
             event.preventDefault()
             onRefresh()
           }}
-          className="min-h-8 justify-center gap-1.5 rounded-sm px-2 text-[11px] text-muted-foreground"
+          className="min-h-8 justify-start gap-1.5 rounded-sm px-2 text-[11px] text-muted-foreground focus:text-foreground focus:[&_svg]:text-foreground"
         >
           <RefreshCw
             className={isRefreshing ? 'size-3 animate-spin' : 'size-3'}
@@ -113,7 +113,7 @@ export function TabBarCliPickerFooter({
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={onOpenSettings}
-          className="min-h-8 justify-center gap-1.5 rounded-sm px-2 text-[11px] text-muted-foreground"
+          className="min-h-8 justify-start gap-1.5 rounded-sm px-2 text-[11px] text-muted-foreground focus:text-foreground focus:[&_svg]:text-foreground"
         >
           <Settings className="size-3" aria-hidden="true" />
           {translate(

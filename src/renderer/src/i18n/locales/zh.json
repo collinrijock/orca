@@ -2839,7 +2839,8 @@
             "25dc1cd653": "打开文件",
             "7cdf8ee0c8": "打开网址",
             "b27864279e": "启动智能体",
-            "39676a184c": "搜索 CLI、Shell、文件或 URL…"
+            "39676a184c": "搜索 CLI、Shell、文件或 URL…",
+            "keyboardConfirm": "回车"
           },
           "TabBarCliPickerSections": {
             "codingClis": "编程 CLI",
@@ -2849,7 +2850,7 @@
             "noEnabledClis": "没有已启用的 CLI",
             "refreshClis": "刷新 CLI",
             "cliSettings": "CLI 设置…",
-            "shells": "Shell",
+            "shells": "命令行环境",
             "more": "更多"
           },
           "TabBarQuickCommandsButton": {

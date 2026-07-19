@@ -2839,7 +2839,8 @@
             "25dc1cd653": "ファイルを開く",
             "7cdf8ee0c8": "URLを開く",
             "b27864279e": "agent を起動",
-            "39676a184c": "CLI、シェル、ファイル、URLを検索…"
+            "39676a184c": "CLI、シェル、ファイル、URLを検索…",
+            "keyboardConfirm": "Enter"
           },
           "TabBarCliPickerSections": {
             "codingClis": "コーディングCLI",

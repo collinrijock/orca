@@ -2839,7 +2839,8 @@
             "25dc1cd653": "파일 열기",
             "7cdf8ee0c8": "URL 열기",
             "b27864279e": "agent 실행",
-            "39676a184c": "CLI, 셸, 파일 또는 URL 검색…"
+            "39676a184c": "CLI, 셸, 파일 또는 URL 검색…",
+            "keyboardConfirm": "Enter"
           },
           "TabBarCliPickerSections": {
             "codingClis": "코딩 CLI",
