@@ -79,9 +79,9 @@ test.describe('Tabs', () => {
    * Why: asserting on a new `[data-testid="sortable-tab"]` in the DOM (not
    * `tabsByWorktree.length` in the store) is the guard that would have caught
    * a tab-bar render regression. Clicking the real "+" button and then "New
-   * Terminal" drives the same code path a user takes.
+   * Blank Terminal" drives the same code path a user takes.
    */
-  test('clicking "+" then "New Terminal" creates a new terminal tab', async ({ orcaPage }) => {
+  test('clicking "+" then "Blank Terminal" creates a new terminal tab', async ({ orcaPage }) => {
     const tabsBefore = await countRenderedTabs(orcaPage)
 
     // Why: hidden-window Electron can keep the animated terminal surface
@@ -90,7 +90,7 @@ test.describe('Tabs', () => {
     await orcaPage.getByRole('button', { name: 'New tab' }).click({ force: true })
     // Why: the "+" dropdown uses Radix <DropdownMenuItem>, which exposes the
     // label text as the accessible name once the menu is open.
-    const newTerminalMenuItem = orcaPage.getByRole('menuitem', { name: /New Terminal/i }).first()
+    const newTerminalMenuItem = orcaPage.getByRole('menuitem', { name: /Blank Terminal/i }).first()
     await newTerminalMenuItem.click({ force: true })
     await expect(newTerminalMenuItem).toBeHidden({ timeout: 3_000 })
 
@@ -99,7 +99,7 @@ test.describe('Tabs', () => {
     await expect
       .poll(() => countRenderedTabs(orcaPage), {
         timeout: 5_000,
-        message: 'Clicking + → New Terminal did not render a new tab in the tab bar'
+        message: 'Clicking + → Blank Terminal did not render a new tab in the tab bar'
       })
       .toBeGreaterThan(tabsBefore)
 
@@ -116,6 +116,42 @@ test.describe('Tabs', () => {
         message: 'Menu-created terminal tab did not receive keyboard focus'
       })
       .toBe(storeActiveId)
+  })
+
+  test('searching a detected CLI launches it into a focused terminal', async ({ orcaPage }) => {
+    await orcaPage.getByRole('button', { name: 'New tab' }).click({ force: true })
+    const detectedCli = orcaPage.locator('[role="menuitem"][data-cli-picker-agent]').first()
+    test.skip(
+      (await detectedCli.count()) === 0,
+      'No detected and enabled coding CLI is available on this runner'
+    )
+
+    const agent = await detectedCli.getAttribute('data-cli-picker-agent')
+    expect(agent).toBeTruthy()
+    const search = orcaPage.getByRole('combobox', {
+      name: 'Search CLI, shell, file, or URL…'
+    })
+    await search.fill(agent!)
+    const result = orcaPage.locator(`[role="option"][data-cli-picker-agent="${agent}"]`).first()
+    await expect(result).toBeVisible()
+    await search.press('Enter')
+    await expect(result).toBeHidden({ timeout: 3_000 })
+
+    const activeTabId = await getActiveTabId(orcaPage)
+    expect(activeTabId).not.toBeNull()
+    await expect
+      .poll(
+        () =>
+          orcaPage.evaluate((tabId) => {
+            const state = window.__store?.getState()
+            return Object.values(state?.tabsByWorktree ?? {})
+              .flat()
+              .find((tab) => tab.id === tabId)?.launchAgent
+          }, activeTabId),
+        { timeout: 5_000 }
+      )
+      .toBe(agent)
+    await expect.poll(() => getFocusedTerminalTabId(orcaPage), { timeout: 5_000 }).toBe(activeTabId)
   })
 
   /**
@@ -174,7 +210,7 @@ test.describe('Tabs', () => {
     if ((await countRenderedTabs(orcaPage)) < 2) {
       await orcaPage.getByRole('button', { name: 'New tab' }).click()
       await orcaPage
-        .getByRole('menuitem', { name: /New Terminal/i })
+        .getByRole('menuitem', { name: /Blank Terminal/i })
         .first()
         .click()
       await expect
@@ -220,7 +256,7 @@ test.describe('Tabs', () => {
     if ((await countRenderedTabs(orcaPage)) < 2) {
       await orcaPage.getByRole('button', { name: 'New tab' }).click()
       await orcaPage
-        .getByRole('menuitem', { name: /New Terminal/i })
+        .getByRole('menuitem', { name: /Blank Terminal/i })
         .first()
         .click()
       await expect

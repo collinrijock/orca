@@ -4,6 +4,7 @@
 import { act, createRef, type ReactNode, type RefObject } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import path from 'node:path'
+import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
@@ -13,6 +14,21 @@ vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children?: ReactNode }) => children,
   TooltipTrigger: ({ children }: { children?: ReactNode }) => children,
   TooltipContent: ({ children }: { children?: ReactNode }) => <span>{children}</span>
+}))
+
+vi.mock('@/components/ui/dropdown-menu', () => ({
+  DropdownMenu: ({ children }: { children?: ReactNode }) => children,
+  DropdownMenuTrigger: ({ children }: { children?: ReactNode }) => children,
+  DropdownMenuContent: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  DropdownMenuItem: ({ children, onSelect }: { children?: ReactNode; onSelect?: () => void }) => (
+    <button onClick={onSelect}>{children}</button>
+  ),
+  DropdownMenuShortcut: ({ children }: { children?: ReactNode }) => <span>{children}</span>
+}))
+
+vi.mock('@/hooks/useShortcutLabel', () => ({
+  useShortcutLabel: (id: string) =>
+    id === 'terminal.splitRight' ? '⌘D' : id === 'terminal.splitDown' ? '⌘⇧D' : ''
 }))
 
 vi.mock('@/i18n/i18n', () => ({
@@ -45,6 +61,7 @@ function renderOverlay({
   paneCount = 2,
   showAlwaysOnHeaders = true,
   showSplitButton = true,
+  onSplitPane = vi.fn(),
   onClosePane = vi.fn(),
   onRemoveTitle = vi.fn(),
   onRenameSubmit = vi.fn(),
@@ -55,6 +72,7 @@ function renderOverlay({
   paneCount?: number
   showAlwaysOnHeaders?: boolean
   showSplitButton?: boolean
+  onSplitPane?: ReturnType<typeof vi.fn>
   onClosePane?: ReturnType<typeof vi.fn>
   onRemoveTitle?: ReturnType<typeof vi.fn>
   onRenameSubmit?: ReturnType<typeof vi.fn>
@@ -65,6 +83,7 @@ function renderOverlay({
   onClosePane: ReturnType<typeof vi.fn>
   onRemoveTitle: ReturnType<typeof vi.fn>
   onRenameSubmit: ReturnType<typeof vi.fn>
+  onSplitPane: ReturnType<typeof vi.fn>
 } {
   const panes = [makePane(1), makePane(2)]
   const container = document.createElement('div')
@@ -95,7 +114,9 @@ function renderOverlay({
         hiddenStartupStyle={{}}
         managerRef={{ current: null } as RefObject<PaneManager | null>}
         paneTransportsRef={{ current: new Map() } as RefObject<Map<number, PtyTransport>>}
-        onSplitPane={vi.fn()}
+        onSplitPane={
+          onSplitPane as (pane: ManagedPane, direction: 'vertical' | 'horizontal') => void
+        }
         onBeginPaneDrag={vi.fn()}
         onActivatePaneTitleInteraction={vi.fn()}
         onPaneTitleContextMenu={vi.fn()}
@@ -110,7 +131,7 @@ function renderOverlay({
     )
   })
   mounted.push({ container, root })
-  return { container, onClosePane, onRemoveTitle, onRenameSubmit }
+  return { container, onClosePane, onRemoveTitle, onRenameSubmit, onSplitPane }
 }
 
 function pressInputKey(
@@ -155,11 +176,28 @@ describe('TerminalPaneHeaderOverlay', () => {
   })
 
   it('keeps split and close-pane controls available for untitled split pane headers', () => {
-    const { container, onClosePane, onRemoveTitle } = renderOverlay({
+    const { container, onClosePane, onRemoveTitle, onSplitPane } = renderOverlay({
       paneTitles: { 1: '', 2: '' }
     })
 
-    expect(container.querySelector('button[aria-label="Split Terminal Right"]')).not.toBeNull()
+    const splitTrigger = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Split terminal"]'
+    )
+    expect(splitTrigger).not.toBeNull()
+    expect(splitTrigger?.parentElement?.tagName).toBe('SPAN')
+    expect(splitTrigger?.parentElement?.className).toContain('inline-flex')
+    const splitRight = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      button.textContent?.includes('Split terminal right')
+    )
+    const splitDown = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      button.textContent?.includes('Split terminal down')
+    )
+    expect(splitRight?.textContent).toContain('⌘D')
+    expect(splitDown?.textContent).toContain('⌘⇧D')
+    act(() => splitRight?.click())
+    act(() => splitDown?.click())
+    expect(onSplitPane).toHaveBeenNthCalledWith(1, expect.objectContaining({ id: 1 }), 'vertical')
+    expect(onSplitPane).toHaveBeenNthCalledWith(2, expect.objectContaining({ id: 1 }), 'horizontal')
     expect(container.querySelector('.pane-title-drag-handle')).toBeNull()
     const closePane = container.querySelector<HTMLButtonElement>('button[aria-label="Close Pane"]')
     expect(closePane).not.toBeNull()
@@ -177,7 +215,16 @@ describe('TerminalPaneHeaderOverlay', () => {
       showSplitButton: false
     })
 
-    expect(container.querySelector('button[aria-label="Split Terminal Right"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Split terminal"]')).toBeNull()
+  })
+
+  it('keeps pane controls visible on hover-none touch surfaces', () => {
+    const css = readFileSync(
+      path.join(process.cwd(), 'src/renderer/src/assets/terminal.css'),
+      'utf8'
+    )
+    expect(css).toContain('@media (hover: none)')
+    expect(css).toMatch(/\.pane-title-split-trigger,\s*\.pane-title-close\s*\{\s*opacity:\s*1;/)
   })
 
   it('ignores IME composition Enter before submitting a pane title rename', () => {

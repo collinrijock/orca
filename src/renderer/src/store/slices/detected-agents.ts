@@ -31,14 +31,20 @@ export type DetectedAgentsSlice = {
   // separate map keyed by SSH connectionId.
   remoteDetectedAgentIds: Record<string, TuiAgent[] | null>
   isDetectingRemoteAgents: Record<string, boolean>
-  ensureRemoteDetectedAgents: (connectionId: string) => Promise<TuiAgent[]>
+  ensureRemoteDetectedAgents: (
+    connectionId: string,
+    options?: { force?: boolean }
+  ) => Promise<TuiAgent[]>
   clearRemoteDetectedAgents: (connectionId: string) => void
 
   // Why: remote runtime hosts are not SSH connections, but their tab-bar
   // launch menu still has to probe the host where the workspace actually runs.
   runtimeDetectedAgentIds: Record<string, TuiAgent[] | null>
   isDetectingRuntimeAgents: Record<string, boolean>
-  ensureRuntimeDetectedAgents: (environmentId: string) => Promise<TuiAgent[]>
+  ensureRuntimeDetectedAgents: (
+    environmentId: string,
+    options?: { force?: boolean }
+  ) => Promise<TuiAgent[]>
   clearRuntimeDetectedAgents: (environmentId: string) => void
   /** Drops runtime detected-agent caches for environments not in the kept set.
    *  Wired into setRuntimeEnvironments so removed environments don't leak their
@@ -183,12 +189,12 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
   runtimeDetectedAgentIds: {},
   isDetectingRuntimeAgents: {},
 
-  ensureRemoteDetectedAgents: (connectionId: string) => {
+  ensureRemoteDetectedAgents: (connectionId: string, options) => {
     const existing = get().remoteDetectedAgentIds[connectionId]
     // Why: an empty result ([]) is truthy, so a prior "no agents found" detection
     // must not be treated as cached — re-detect so a later install / PATH fix is
     // picked up without a reconnect. Non-empty results still short-circuit.
-    if (existing?.length) {
+    if (!options?.force && existing?.length) {
       return Promise.resolve(existing)
     }
     const inflight = remoteDetectPromises.get(connectionId)
@@ -243,12 +249,12 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
     })
   },
 
-  ensureRuntimeDetectedAgents: (environmentId: string) => {
+  ensureRuntimeDetectedAgents: (environmentId: string, options) => {
     const existing = get().runtimeDetectedAgentIds[environmentId]
     // Why: an empty result ([]) is truthy, so a prior "no agents found" detection
     // must not be treated as cached — re-detect so a later install / PATH fix is
     // picked up without a reconnect. Non-empty results still short-circuit.
-    if (existing?.length) {
+    if (!options?.force && existing?.length) {
       return Promise.resolve(existing)
     }
     const inflight = runtimeDetectPromises.get(environmentId)

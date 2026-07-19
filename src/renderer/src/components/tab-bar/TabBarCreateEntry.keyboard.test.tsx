@@ -88,6 +88,22 @@ afterEach(() => {
 })
 
 describe('TabBarCreateEntry keyboard navigation', () => {
+  it('shows compact keyboard guidance without duplicating screen-reader instructions', () => {
+    mount(
+      <TabBarCreateEntry
+        worktreeId="wt"
+        groupId="g"
+        menuOpen
+        onOpenEntry={vi.fn().mockResolvedValue(undefined)}
+      />
+    )
+
+    const guide = container.querySelector('[data-cli-picker-keyboard-guide]')
+    expect(guide?.textContent).toContain('↑↓')
+    expect(guide?.textContent).toContain('Enter')
+    expect(guide?.getAttribute('aria-hidden')).toBe('true')
+  })
+
   it('publishes the query from the typing event without an extra effect commit', () => {
     const onQueryChange = vi.fn()
     mount(
@@ -153,7 +169,13 @@ describe('TabBarCreateEntry keyboard navigation', () => {
 
   it('launches a matched agent when its highlighted row is selected', () => {
     const agentOptions: TabAgentLaunchOption[] = [
-      { agent: 'gemini', aliases: ['gemini'], label: 'Gemini' }
+      {
+        agent: 'gemini',
+        aliases: ['gemini'],
+        command: 'gemini',
+        isDefault: false,
+        label: 'Gemini'
+      }
     ]
     const onLaunchAgent = vi.fn()
     mount(
@@ -195,6 +217,7 @@ describe('TabBarCreateEntry keyboard navigation', () => {
     const active = document.getElementById('tab-create-entry-result-1')
     expect(active?.getAttribute('role')).toBe('option')
     expect(active?.getAttribute('aria-selected')).toBe('true')
+    expect(active?.className).toContain('bg-black/8')
   })
 
   it('routes ArrowDown into the enclosing menu when there are no result rows', () => {

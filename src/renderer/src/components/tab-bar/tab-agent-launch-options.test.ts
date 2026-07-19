@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildTabAgentLaunchOptions,
   findMatchingTabAgentLaunchOptions,
+  getAvailableTabAgentLaunchOptions,
   orderTabLaunchAgents
 } from './tab-agent-launch-options'
 
@@ -12,6 +13,24 @@ describe('tab agent launch options', () => {
       'claude',
       'gemini'
     ])
+  })
+
+  it('uses one enabled, detected, default-first list for static rows and search', () => {
+    const options = getAvailableTabAgentLaunchOptions({
+      commandOverrides: { codex: 'codex-beta' },
+      defaultAgent: 'codex',
+      detectedAgents: ['claude', 'codex', 'gemini'],
+      disabledAgents: ['claude']
+    })
+
+    expect(options.map((option) => option.agent)).toEqual(['codex', 'gemini'])
+    expect(options[0]).toMatchObject({
+      agent: 'codex',
+      command: 'codex-beta',
+      isDefault: true
+    })
+    expect(findMatchingTabAgentLaunchOptions('claude', options)).toEqual([])
+    expect(findMatchingTabAgentLaunchOptions('codex-beta', options)[0]?.agent).toBe('codex')
   })
 
   it('matches detected agents by id, label, command, and command override', () => {

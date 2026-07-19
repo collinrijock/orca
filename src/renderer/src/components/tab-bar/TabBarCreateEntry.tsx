@@ -159,7 +159,10 @@ export default function TabBarCreateEntry({
   const statusMessage =
     statusOption?.classification.kind === 'empty' || statusOption?.classification.kind === 'blocked'
       ? statusOption.classification.message
-      : 'Open any file, URL, agent, ...'
+      : translate(
+          'auto.components.tab.bar.TabBarCreateEntry.39676a184c',
+          'Search CLI, shell, file, or URL…'
+        )
 
   const submitOption = (option?: ActiveOption) => {
     if (disabled || pending) {
@@ -262,15 +265,26 @@ export default function TabBarCreateEntry({
           }
           aria-label={translate(
             'auto.components.tab.bar.TabBarCreateEntry.39676a184c',
-            'Open any file, URL, agent, ...'
+            'Search CLI, shell, file, or URL…'
           )}
           aria-invalid={error ? true : undefined}
           placeholder={translate(
             'auto.components.tab.bar.TabBarCreateEntry.39676a184c',
-            'Open any file, URL, agent, ...'
+            'Search CLI, shell, file, or URL…'
           )}
-          className="h-9 rounded-none border-0 bg-transparent px-0 text-xs font-normal text-foreground shadow-none placeholder:font-normal placeholder:text-muted-foreground focus-visible:border-0 focus-visible:ring-0 aria-invalid:border-0 aria-invalid:ring-0 md:text-xs dark:bg-transparent"
+          className="h-9 min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-xs font-normal text-foreground shadow-none placeholder:font-normal placeholder:text-muted-foreground focus-visible:border-0 focus-visible:ring-0 aria-invalid:border-0 aria-invalid:ring-0 md:text-xs dark:bg-transparent"
         />
+        <span
+          data-cli-picker-keyboard-guide
+          aria-hidden="true"
+          className="ml-3 flex shrink-0 items-center gap-1.5 font-mono text-[10px] leading-none text-muted-foreground"
+        >
+          <kbd>↑↓</kbd>
+          <span>·</span>
+          <kbd>
+            {translate('auto.components.tab.bar.TabBarCreateEntry.keyboardConfirm', 'Enter')}
+          </kbd>
+        </span>
       </div>
       {error || activeOptions.length > 0 || hasQuery ? (
         <div

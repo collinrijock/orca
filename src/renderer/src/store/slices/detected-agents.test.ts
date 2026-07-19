@@ -495,6 +495,21 @@ describe('createDetectedAgentsSlice remote detection', () => {
     expect(store.getState().remoteDetectedAgentIds['ssh-1']).toEqual(['kilo'])
   })
 
+  it('force-refreshes a cached non-empty SSH result', async () => {
+    const store = createTestStore()
+    detectRemoteAgents.mockResolvedValueOnce(['claude']).mockResolvedValueOnce(['codex'])
+
+    await expect(store.getState().ensureRemoteDetectedAgents('ssh-1')).resolves.toEqual(['claude'])
+    await expect(store.getState().ensureRemoteDetectedAgents('ssh-1')).resolves.toEqual(['claude'])
+    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
+
+    await expect(
+      store.getState().ensureRemoteDetectedAgents('ssh-1', { force: true })
+    ).resolves.toEqual(['codex'])
+    expect(detectRemoteAgents).toHaveBeenCalledTimes(2)
+    expect(store.getState().remoteDetectedAgentIds['ssh-1']).toEqual(['codex'])
+  })
+
   it('detects runtime environment agents through the owning runtime', async () => {
     const store = createTestStore()
 
@@ -560,5 +575,29 @@ describe('createDetectedAgentsSlice remote detection', () => {
     await expect(store.getState().ensureRuntimeDetectedAgents('env-1')).resolves.toEqual(['kilo'])
     expect(store.getState().runtimeDetectedAgentIds['env-1']).toEqual(['kilo'])
     expect(detectCalls).toBe(2)
+  })
+
+  it('force-refreshes a cached non-empty runtime result', async () => {
+    const store = createTestStore()
+
+    await expect(store.getState().ensureRuntimeDetectedAgents('env-1')).resolves.toEqual(['codex'])
+    const callsAfterInitialDetection = runtimeEnvironmentCall.mock.calls.length
+
+    await expect(store.getState().ensureRuntimeDetectedAgents('env-1')).resolves.toEqual(['codex'])
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(callsAfterInitialDetection)
+
+    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) =>
+      Promise.resolve({
+        id: method,
+        ok: true,
+        result: method === 'status.get' ? {} : ['kilo'],
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    )
+    await expect(
+      store.getState().ensureRuntimeDetectedAgents('env-1', { force: true })
+    ).resolves.toEqual(['kilo'])
+    expect(store.getState().runtimeDetectedAgentIds['env-1']).toEqual(['kilo'])
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(callsAfterInitialDetection + 1)
   })
 })

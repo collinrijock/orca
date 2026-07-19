@@ -393,7 +393,7 @@ export function TabBarQuickCommandsMenu({
                 <Play className="size-3.5" />
                 {translate(
                   'auto.components.tab.bar.TabBarQuickCommandsButton.a2c7a33831',
-                  'Command'
+                  'Commands'
                 )}
               </button>
             </div>

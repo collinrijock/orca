@@ -4,7 +4,11 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { useDetectedAgents, type AgentDetectionTarget } from './useDetectedAgents'
+import {
+  useDetectedAgents,
+  type AgentDetectionTarget,
+  type UseDetectedAgentsResult
+} from './useDetectedAgents'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
@@ -14,9 +18,10 @@ const detectRemoteAgents = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const initialAppState = useAppStore.getInitialState()
 const roots: Root[] = []
+let latestResult: UseDetectedAgentsResult | null = null
 
 function HookProbe({ target }: { target: AgentDetectionTarget }): null {
-  useDetectedAgents(target)
+  latestResult = useDetectedAgents(target)
   return null
 }
 
@@ -41,6 +46,7 @@ async function renderProbe(target: AgentDetectionTarget): Promise<Root> {
 
 beforeEach(() => {
   useAppStore.setState(initialAppState, true)
+  latestResult = null
   detectRemoteAgents.mockReset().mockResolvedValue([])
   runtimeEnvironmentCall.mockReset().mockImplementation(({ method }: { method: string }) => {
     const result =
@@ -113,6 +119,55 @@ describe('useDetectedAgents (ssh call site)', () => {
     expect(detectRemoteAgents).toHaveBeenCalledTimes(2)
     expect(useAppStore.getState().remoteDetectedAgentIds['ssh-1']).toEqual(['kilo'])
   })
+
+  it('force-refreshes the active SSH target without mutating local detection', async () => {
+    let resolveRefresh: (ids: string[]) => void = () => {}
+    detectRemoteAgents.mockReturnValue(
+      new Promise<string[]>((resolve) => {
+        resolveRefresh = resolve
+      })
+    )
+    useAppStore.setState({
+      detectedAgentIds: ['claude'],
+      remoteDetectedAgentIds: { 'ssh-1': ['codex'] }
+    })
+    await renderProbe({ kind: 'ssh', connectionId: 'ssh-1' })
+
+    let pending: Promise<unknown> = Promise.resolve()
+    act(() => {
+      pending = latestResult?.refresh() ?? Promise.resolve()
+    })
+
+    expect(detectRemoteAgents).toHaveBeenCalledWith({ connectionId: 'ssh-1' })
+    expect(latestResult?.isLoading).toBe(false)
+    expect(latestResult?.isRefreshing).toBe(true)
+    expect(useAppStore.getState().detectedAgentIds).toEqual(['claude'])
+
+    resolveRefresh(['kilo'])
+    await act(async () => {
+      await pending
+    })
+
+    expect(latestResult?.isRefreshing).toBe(false)
+    expect(useAppStore.getState().remoteDetectedAgentIds['ssh-1']).toEqual(['kilo'])
+    expect(useAppStore.getState().detectedAgentIds).toEqual(['claude'])
+  })
+
+  it('does not immediately retry an empty manual SSH refresh result', async () => {
+    detectRemoteAgents.mockResolvedValue([])
+    useAppStore.setState({
+      remoteDetectedAgentIds: { 'ssh-1': ['codex'] }
+    })
+    await renderProbe({ kind: 'ssh', connectionId: 'ssh-1' })
+
+    await act(async () => {
+      await latestResult?.refresh()
+    })
+    await flushEffects()
+
+    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
+    expect(useAppStore.getState().remoteDetectedAgentIds['ssh-1']).toEqual([])
+  })
 })
 
 describe('useDetectedAgents (runtime call site)', () => {
@@ -157,5 +212,61 @@ describe('useDetectedAgents (runtime call site)', () => {
 
     expect(detectCalls).toBe(2)
     expect(useAppStore.getState().runtimeDetectedAgentIds['env-1']).toEqual(['kilo'])
+  })
+
+  it('force-refreshes a cached runtime target and exposes refresh state', async () => {
+    let resolveRefresh: (ids: string[]) => void = () => {}
+    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
+      if (method === 'status.get') {
+        return Promise.resolve({
+          id: method,
+          ok: true,
+          result: {
+            runtimeId: 'remote-runtime',
+            rendererGraphEpoch: 1,
+            graphStatus: 'ready',
+            authoritativeWindowId: null,
+            liveTabCount: 0,
+            liveLeafCount: 0,
+            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+          },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      return new Promise((resolve) => {
+        resolveRefresh = (ids) =>
+          resolve({
+            id: method,
+            ok: true,
+            result: ids,
+            _meta: { runtimeId: 'remote-runtime' }
+          })
+      })
+    })
+    useAppStore.setState({
+      detectedAgentIds: ['claude'],
+      runtimeDetectedAgentIds: { 'env-1': ['codex'] }
+    })
+    await renderProbe({ kind: 'runtime', environmentId: 'env-1' })
+
+    let pending: Promise<unknown> = Promise.resolve()
+    act(() => {
+      pending = latestResult?.refresh() ?? Promise.resolve()
+    })
+    await flushEffects()
+
+    expect(latestResult?.isLoading).toBe(false)
+    expect(latestResult?.isRefreshing).toBe(true)
+    expect(useAppStore.getState().detectedAgentIds).toEqual(['claude'])
+
+    resolveRefresh(['kilo'])
+    await act(async () => {
+      await pending
+    })
+
+    expect(latestResult?.isRefreshing).toBe(false)
+    expect(useAppStore.getState().runtimeDetectedAgentIds['env-1']).toEqual(['kilo'])
+    expect(useAppStore.getState().detectedAgentIds).toEqual(['claude'])
   })
 })

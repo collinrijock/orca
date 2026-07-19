@@ -2839,7 +2839,19 @@
             "25dc1cd653": "파일 열기",
             "7cdf8ee0c8": "URL 열기",
             "b27864279e": "agent 실행",
-            "39676a184c": "모든 파일, URL, agent를 엽니다..."
+            "39676a184c": "CLI, 셸, 파일 또는 URL 검색…",
+            "keyboardConfirm": "Enter"
+          },
+          "TabBarCliPickerSections": {
+            "codingClis": "코딩 CLI",
+            "default": "기본값",
+            "loadingClis": "설치된 CLI 찾는 중…",
+            "noClis": "설치된 CLI를 찾을 수 없음",
+            "noEnabledClis": "활성화된 CLI 없음",
+            "refreshClis": "CLI 새로 고침",
+            "cliSettings": "CLI 설정…",
+            "shells": "셸",
+            "more": "더 보기"
           },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "명령",
@@ -2850,7 +2862,7 @@
             "196593b6a9": "{{value0}} 제거",
             "15529ede69": "{{value0}} 편집",
             "1d411fb6a5": "이 repo에 대한 빠른 명령 저장",
-            "8f1e971966": "빠른 명령 추가",
+            "8f1e971966": "명령 추가",
             "3220e2da27": "이 빠른 명령은 저장된 목록에서 제거됩니다.",
             "e8e1a52edb": "'{{value0}}'을 삭제하시겠습니까?",
             "37e1bb90ce": "실행: {{value0}}",
@@ -2873,7 +2885,7 @@
                 "classifier": {
                   "42e6262ae9": "사용할 수 있는 작업이 없습니다.",
                   "097a982ee0": "파일 로드 중...",
-                  "5a9c83c04b": "모든 파일, URL, agent를 엽니다...",
+                  "5a9c83c04b": "CLI, 셸, 파일 또는 URL 검색…",
                   "90eb94dc48": "http:// 또는 https:// URL을 입력하세요.",
                   "5553b283ce": "URL 또는 파일 경로를 입력하세요.",
                   "queryTooLarge": "검색 텍스트가 너무 큽니다."
@@ -12771,7 +12783,7 @@
       "agent": {
         "AgentCombobox": {
           "19522e25ee": "agents 관리",
-          "986f946354": "빈 Terminal",
+          "986f946354": "빈 터미널",
           "579c768bde": "검색어와 일치하는 agents가 없습니다.",
           "48c6a5a9b4": "agents 검색...",
           "9c6b59fe58": "기본값으로 설정",

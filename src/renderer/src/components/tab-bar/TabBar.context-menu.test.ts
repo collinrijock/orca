@@ -5,11 +5,15 @@ const appStoreSnapshot: {
   activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator' | null
   unifiedTabsByWorktree: Record<string, unknown[]>
   activeGroupIdByWorktree: Record<string, string>
+  persistedUIReady: boolean
+  mobileEmulatorTabIntroDismissed: boolean
 } = {
   activeTabId: 'old-terminal',
   activeTabType: 'terminal',
   unifiedTabsByWorktree: {},
-  activeGroupIdByWorktree: {}
+  activeGroupIdByWorktree: {},
+  persistedUIReady: true,
+  mobileEmulatorTabIntroDismissed: false
 }
 const pinTabMock: (tabId: string) => void = vi.fn()
 const unpinTabMock: (tabId: string) => void = vi.fn()
@@ -26,9 +30,12 @@ const useAppStoreMock = vi.fn(
       activeGroupIdByWorktree: Record<string, string>
       pinTab: typeof pinTabMock
       unpinTab: typeof unpinTabMock
+      persistedUIReady: boolean
+      mobileEmulatorTabIntroDismissed: boolean
       settings: {
         terminalWindowsShell: 'powershell.exe' | 'cmd.exe' | 'wsl.exe' | 'git-bash'
         terminalWindowsPowerShellImplementation: 'auto' | 'powershell.exe' | 'pwsh.exe'
+        mobileEmulatorEnabled: boolean
       }
     }) => unknown
   ) =>
@@ -42,9 +49,12 @@ const useAppStoreMock = vi.fn(
       activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
       pinTab: pinTabMock,
       unpinTab: unpinTabMock,
+      persistedUIReady: appStoreSnapshot.persistedUIReady,
+      mobileEmulatorTabIntroDismissed: appStoreSnapshot.mobileEmulatorTabIntroDismissed,
       settings: {
         terminalWindowsShell: 'powershell.exe',
-        terminalWindowsPowerShellImplementation: 'auto'
+        terminalWindowsPowerShellImplementation: 'auto',
+        mobileEmulatorEnabled: true
       }
     })
 )
@@ -117,9 +127,12 @@ useAppStoreExport.getState = vi.fn(() => ({
   activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
   pinTab: pinTabMock,
   unpinTab: unpinTabMock,
+  persistedUIReady: appStoreSnapshot.persistedUIReady,
+  mobileEmulatorTabIntroDismissed: appStoreSnapshot.mobileEmulatorTabIntroDismissed,
   settings: {
     terminalWindowsShell: 'powershell.exe',
-    terminalWindowsPowerShellImplementation: 'auto'
+    terminalWindowsPowerShellImplementation: 'auto',
+    mobileEmulatorEnabled: true
   }
 }))
 
@@ -172,6 +185,18 @@ vi.mock('./shell-icons', () => ({
 
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: vi.fn()
+}))
+
+vi.mock('@/components/ui/tooltip', () => ({
+  Tooltip: function Tooltip(props: { children?: unknown }) {
+    return { type: 'Tooltip', props }
+  },
+  TooltipContent: function TooltipContent(props: { children?: unknown }) {
+    return { type: 'TooltipContent', props }
+  },
+  TooltipTrigger: function TooltipTrigger(props: { children?: unknown }) {
+    return { type: 'TooltipTrigger', props }
+  }
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
@@ -311,6 +336,8 @@ describe('TabBar context menu wiring', () => {
     appStoreSnapshot.activeTabType = 'terminal'
     appStoreSnapshot.unifiedTabsByWorktree = {}
     appStoreSnapshot.activeGroupIdByWorktree = {}
+    appStoreSnapshot.persistedUIReady = true
+    appStoreSnapshot.mobileEmulatorTabIntroDismissed = false
     vi.stubGlobal('navigator', { userAgent: 'Mac' })
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0)
@@ -474,10 +501,36 @@ describe('TabBar context menu wiring', () => {
       extractText(item.props.children)
     )
 
-    expect(menuLabels[0]).toContain('New Markdown')
-    expect(menuLabels[1]).toContain('Open Markdown...')
-    expect(menuLabels[2]).toContain('New Terminal')
-    expect(menuLabels[3]).toContain('New Browser Tab')
+    expect(menuLabels[0]).toContain('Blank terminal')
+    expect(menuLabels.findIndex((label) => label.includes('New Markdown'))).toBeLessThan(
+      menuLabels.findIndex((label) => label.includes('New Browser Tab'))
+    )
+    expect(menuLabels.findIndex((label) => label.includes('Open Markdown...'))).toBeLessThan(
+      menuLabels.findIndex((label) => label.includes('New Browser Tab'))
+    )
+  })
+
+  it('uses an accessible shortcut tooltip instead of a native title on the new-tab trigger', async () => {
+    const element = await renderTabBar({ tabs: [TERMINAL_TAB] })
+    const newTabTrigger = findChildrenByType(element, 'button').find(
+      (button) => button.props['aria-label'] === 'New tab'
+    )
+    const newTabTooltip = findChildrenByType(element, 'TooltipContent').find((tooltip) =>
+      extractText(tooltip.props.children).includes('New tab')
+    )
+    const shortcut = findChildrenByType(newTabTooltip, 'ShortcutKeyCombo')[0]
+
+    expect(newTabTrigger).toBeTruthy()
+    expect(newTabTrigger?.props.title).toBeUndefined()
+    expect(newTabTooltip).toBeTruthy()
+    expect(shortcut?.props.keys).toContain('T')
+    const composedTrigger = findChildrenByType(element, 'TooltipTrigger').find((trigger) =>
+      findChildrenByType(trigger.props.children, 'button').some(
+        (button) => button.props['aria-label'] === 'New tab'
+      )
+    )
+    const tooltipChild = composedTrigger?.props.children as ReactElementLike | undefined
+    expect(tooltipChild?.type).toBe('span')
   })
 
   it('turns New Mobile Emulator into a go-to action when the workspace already has one', async () => {
@@ -521,6 +574,7 @@ describe('TabBar context menu wiring', () => {
       extractText(item.props.children).includes('Open the existing emulator tab.')
     )
     expect(tooltip).toBeTruthy()
+    expect(findChildrenByType(element, 'MobileEmulatorTabIntroCallout')).toHaveLength(1)
   })
 
   it('cancels delayed menu focus when the tab bar root unmounts', async () => {

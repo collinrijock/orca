@@ -1,10 +1,13 @@
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { normalizeMatchQuery, tokenizeMatchValue } from './query-token-match'
 import type { TuiAgent } from '../../../../shared/types'
+import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
 
 export type TabAgentLaunchOption = {
   agent: TuiAgent
   aliases: readonly string[]
+  command: string
+  isDefault: boolean
   label: string
 }
 
@@ -35,11 +38,14 @@ export function orderTabLaunchAgents(
 
 export function buildTabAgentLaunchOptions(
   agents: readonly TuiAgent[],
-  commandOverrides: Partial<Record<TuiAgent, string>> = {}
+  commandOverrides: Partial<Record<TuiAgent, string>> = {},
+  defaultAgent?: TuiAgent | 'blank' | null
 ): TabAgentLaunchOption[] {
   return agents.map((agent) => {
     const entry = getCatalogEntry(agent)
     const label = entry?.label ?? agent
+    const commandOverride = commandOverrides[agent]?.trim()
+    const command = commandOverride || entry?.cmd || agent
     const aliases = new Set<string>([
       normalizeAgentAlias(agent),
       normalizeAgentAlias(label),
@@ -50,13 +56,31 @@ export function buildTabAgentLaunchOptions(
       aliases.add(normalizeAgentAlias(entry.cmd))
       aliases.add(compactAgentAlias(entry.cmd))
     }
-    const commandOverride = commandOverrides[agent]?.trim()
     if (commandOverride) {
       aliases.add(normalizeAgentAlias(commandOverride))
       aliases.add(compactAgentAlias(commandOverride))
     }
-    return { agent, aliases: [...aliases], label }
+    return { agent, aliases: [...aliases], command, isDefault: agent === defaultAgent, label }
   })
+}
+
+export function getAvailableTabAgentLaunchOptions({
+  commandOverrides = {},
+  defaultAgent,
+  detectedAgents,
+  disabledAgents
+}: {
+  commandOverrides?: Partial<Record<TuiAgent, string>>
+  defaultAgent?: TuiAgent | 'blank' | null
+  detectedAgents: readonly TuiAgent[]
+  disabledAgents?: Iterable<unknown> | null
+}): TabAgentLaunchOption[] {
+  const enabledAgents = filterEnabledTuiAgents(detectedAgents, disabledAgents)
+  return buildTabAgentLaunchOptions(
+    orderTabLaunchAgents(defaultAgent, enabledAgents),
+    commandOverrides,
+    defaultAgent
+  )
 }
 
 // Scores how well a query matches an agent. Exact alias equality is the

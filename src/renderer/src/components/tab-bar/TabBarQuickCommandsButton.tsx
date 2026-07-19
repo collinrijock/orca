@@ -148,14 +148,14 @@ export function TabBarQuickCommandsButton({
               className="my-auto flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               aria-label={translate(
                 'auto.components.tab.bar.TabBarQuickCommandsButton.8f1e971966',
-                'Add quick command'
+                'Add command'
               )}
             >
               <Play className="size-3.5" />
               <span className="text-[12px] font-medium">
                 {translate(
                   'auto.components.tab.bar.TabBarQuickCommandsButton.a2c7a33831',
-                  'Command'
+                  'Commands'
                 )}
               </span>
             </button>

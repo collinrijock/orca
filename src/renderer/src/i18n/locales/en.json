@@ -2862,10 +2862,22 @@
             "25dc1cd653": "Open file",
             "7cdf8ee0c8": "Open URL",
             "b27864279e": "Launch agent",
-            "39676a184c": "Open any file, URL, agent, ..."
+            "39676a184c": "Search CLI, shell, file, or URL…",
+            "keyboardConfirm": "Enter"
+          },
+          "TabBarCliPickerSections": {
+            "codingClis": "Coding CLIs",
+            "default": "Default",
+            "loadingClis": "Looking for installed CLIs…",
+            "noClis": "No installed CLIs found",
+            "noEnabledClis": "No enabled CLIs",
+            "refreshClis": "Refresh CLIs",
+            "cliSettings": "CLI settings…",
+            "shells": "Shells",
+            "more": "More"
           },
           "TabBarQuickCommandsButton": {
-            "a2c7a33831": "Command",
+            "a2c7a33831": "Commands",
             "20bbd75896": "No commands",
             "b82e237a4b": "More quick commands",
             "85482c57bc": "Run quick command",
@@ -2873,7 +2885,7 @@
             "196593b6a9": "Remove {{value0}}",
             "15529ede69": "Edit {{value0}}",
             "1d411fb6a5": "Save a quick command for this repo",
-            "8f1e971966": "Add quick command",
+            "8f1e971966": "Add command",
             "3220e2da27": "This quick command will be removed from your saved list.",
             "e8e1a52edb": "Delete \"{{value0}}\"?",
             "37e1bb90ce": "Run: {{value0}}",
@@ -2896,7 +2908,7 @@
                 "classifier": {
                   "42e6262ae9": "No action available.",
                   "097a982ee0": "Loading files...",
-                  "5a9c83c04b": "Open any file, URL, agent, ...",
+                  "5a9c83c04b": "Search CLI, shell, file, or URL…",
                   "90eb94dc48": "Enter an http:// or https:// URL.",
                   "5553b283ce": "Enter a URL or file path.",
                   "queryTooLarge": "Search text is too large."
@@ -12794,7 +12806,7 @@
       "agent": {
         "AgentCombobox": {
           "19522e25ee": "Manage agents",
-          "986f946354": "Blank Terminal",
+          "986f946354": "Blank terminal",
           "579c768bde": "No agents match your search.",
           "48c6a5a9b4": "Search agents...",
           "9c6b59fe58": "Set as default",
